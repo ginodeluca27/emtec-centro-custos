@@ -418,12 +418,12 @@ function atualizarTudo() {
   if (kpiSaldoFinal) kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
 
   if (isEmAndamento) {
-    if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido da Obra";
+    if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido";
     if (kpiMargemPerc) {
       kpiMargemPerc.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada`;
     }
     if (kpiSaldoSub) {
-      kpiSaldoSub.textContent = `Receita Líquida Recebida − Custos Realizados da Obra | Empreitas pendentes: ${formatBRL(m.saldoEmpreitasPendente)} | EAC: ${formatBRL(m.custoTotalProjetado)}`;
+      kpiSaldoSub.textContent = `Receita Líquida − Custos da Obra`;
     }
 
     if (m.saldoProjetadoFinal < 0) {

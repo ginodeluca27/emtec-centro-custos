@@ -297,7 +297,7 @@
         </div>
 
         <!-- Indicador Real de Nuvem (Desktop) — separado em status + hora -->
-        <div id="cloudBadge" class="hidden md:flex flex-col items-start gap-0.5 ml-1">
+        <div id="cloudBadge" class="hidden md:flex flex-col items-start gap-0.5 px-3 py-1 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
           <span id="cloudBadgeStatus" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A]">
             <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
           </span>
@@ -422,7 +422,7 @@
         <div class="flex flex-wrap items-center gap-3 no-print">
           <button onclick="abrirModalLancamentoRapido()" class="ed-btn font-extrabold shadow-lg">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-            <span>+ Lançar Despesa</span>
+            <span>Registrar Despesa</span>
           </button>
           <button onclick="mudarAba('medicoes')" class="px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-[#4395D8]/40 transition">
             Gerenciar Medições
@@ -454,12 +454,12 @@
 
         <!-- KPI 3: Saldo / Margem -->
         <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs" id="cardSaldoBox">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#86EFAC]" id="cardSaldoLabel">Saldo de Caixa Atual</span>
-            <span class="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]" id="kpiMargemPerc">0% margem</span>
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#86EFAC] whitespace-nowrap" id="cardSaldoLabel">Resultado Líquido</span>
+            <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] shrink-0" id="kpiMargemPerc">0% margem</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiSaldoFinal">R$ 0,00</div>
-          <div class="text-[11px] text-emerald-200/90 mt-1 truncate" id="kpiSaldoSub">Em caixa no momento</div>
+          <div class="text-[11px] text-emerald-200/90 mt-1" id="kpiSaldoSub">Receita Líquida − Custos da Obra</div>
         </div>
 
         <!-- KPI 4 -->
