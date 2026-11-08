@@ -252,6 +252,13 @@
       box-shadow: 0 0 0 3px rgba(67, 149, 216, 0.2);
     }
 
+    /* Mobile: Home mostra só resumo executivo; analíticos ficam em Relatórios */
+    @media (max-width: 767px) {
+      body:not(.mob-rel) #miniCardsCategorias,
+      body:not(.mob-rel) #blocoAnalitico { display: none; }
+      body.mob-rel #heroMobile { display: none; }
+    }
+
     @media print {
       .no-print { display: none !important; }
       body { background-color: #fff; padding-bottom: 0 !important; }
@@ -262,43 +269,9 @@
 <body class="min-h-screen flex flex-col">
 
   <!-- ===================================================================== -->
-  <!-- MODAL DE ACESSO RESTRITO POR PIN (SEGURANÇA EM NUVEM) -->
+  <!-- PIN GATE DESATIVADO — autenticação adiada para próxima versão -->
   <!-- ===================================================================== -->
-  <div id="pinGateModal" class="fixed inset-0 bg-[#0F172A]/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-sm w-full p-7 border border-[#E2E8F0] shadow-2xl text-center space-y-5">
-      <!-- Ícone EMTEC -->
-      <div class="mx-auto w-14 h-14 rounded-2xl bg-[#23396B] flex items-center justify-center shadow-lg">
-        <svg width="30" height="30" viewBox="0 0 40 40" fill="none">
-          <path d="M10 13H28M10 20H22M10 27H28" stroke="#4395D8" stroke-width="3" stroke-linecap="round"/>
-          <rect x="25.5" y="17.5" width="5.5" height="5.5" rx="1" fill="#FF8C00"/>
-        </svg>
-      </div>
-      <div>
-        <h3 class="font-display text-xl font-extrabold text-[#23396B]">EMTEC Engenharia</h3>
-        <p class="text-xs text-[#64748B] mt-1 font-medium">Controle Financeiro de Obras — Gestão Melo</p>
-      </div>
-
-      <form onsubmit="autenticarPIN(event)" class="space-y-4">
-        <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-2">Digite o PIN de Segurança</label>
-          <input type="password" id="inputPinAcesso" maxlength="6" inputmode="numeric" placeholder="••••" required autofocus
-            class="w-full text-center tracking-[0.5em] text-2xl font-extrabold rounded-2xl border-2 border-[#CBD5E1] focus:border-[#4395D8] py-3 bg-[#F8FAFC] text-[#23396B] focus:outline-none transition" />
-          <p id="pinErroMsg" class="hidden text-xs text-rose-600 font-bold mt-2">PIN incorreto. Tente novamente.</p>
-        </div>
-
-        <label class="flex items-center justify-center gap-2 text-xs text-[#475569] cursor-pointer select-none">
-          <input type="checkbox" id="checkLembrarPin" checked class="rounded border-slate-300 text-[#FF8C00] focus:ring-[#FF8C00]" />
-          <span>Lembrar neste aparelho</span>
-        </label>
-
-        <button type="submit" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-md">
-          <span>Acessar Sistema</span>
-        </button>
-
-        <p class="text-[11px] text-[#64748B]">PIN padrão: <strong class="text-[#23396B]">1234</strong></p>
-      </form>
-    </div>
-  </div>
+  <div id="pinGateModal" class="hidden"></div>
 
   <!-- ===================================================================== -->
   <!-- TOP HEADER -->
@@ -323,11 +296,13 @@
           </div>
         </div>
 
-        <!-- Indicador Real de Nuvem (Desktop) -->
-        <span id="cloudBadge" class="hidden md:inline-flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-full bg-[#F8FAFC] text-[#23396B] border border-[#CBD5E1] font-semibold">
-          <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>
-          Nuvem Conectada
-        </span>
+        <!-- Indicador Real de Nuvem (Desktop) — separado em status + hora -->
+        <div id="cloudBadge" class="hidden md:flex flex-col items-start gap-0.5 ml-1">
+          <span id="cloudBadgeStatus" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A]">
+            <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
+          </span>
+          <span id="cloudBadgeHora" class="text-[10px] text-[#64748B] font-medium leading-none hidden"></span>
+        </div>
       </div>
 
       <!-- Obra Selector & Botões de Ação -->
@@ -354,10 +329,8 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
         </button>
 
-        <!-- Logout -->
-        <button onclick="logout()" class="p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-rose-600 hover:text-white text-[#64748B] transition shrink-0" title="Sair do Sistema">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        </button>
+        <!-- Logout removido — PIN desativado nesta versão -->
+        <!-- botão de sincronização permanece -->
       </div>
     </div>
   </header>
@@ -370,20 +343,23 @@
     <!-- =================================================================== -->
     <!-- CARD RESUMO EXECUTIVO MOBILE (PRIORIDADE NÚMERO 1: CELULAR) -->
     <!-- =================================================================== -->
-    <section class="md:hidden ed-card p-5 border-2 border-[#23396B]/20 bg-gradient-to-b from-white to-[#F8FAFC] space-y-4">
+    <section id="heroMobile" class="md:hidden ed-card p-5 border-2 border-[#23396B]/20 bg-gradient-to-b from-white to-[#F8FAFC] space-y-4">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span>
           <span id="mobObraNome" class="font-display font-extrabold text-sm text-[#23396B]">Reforma Piscina</span>
         </div>
-        <span id="cloudBadgeMobile" class="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full bg-[#F1F5F9] text-[#23396B] font-bold">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span> Nuvem Ativa
+        <span id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0 text-right">
+          <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-[10px] font-bold text-[#16A34A]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>Conectado
+          </span>
+          <span id="cloudBadgeMobHora" class="text-[9px] text-[#64748B] font-medium leading-none hidden"></span>
         </span>
       </div>
 
       <!-- Saldo Atual da Obra -->
       <div>
-        <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] block">Saldo Atual da Obra (Caixa)</span>
+        <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] block">Resultado Líquido da Obra</span>
         <div id="mobSaldoAtual" class="font-display text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5">
           R$ 20.835,81
         </div>
@@ -414,7 +390,7 @@
       <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) -->
       <button onclick="abrirModalLancamentoRapido()" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-lg">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-        <span>Lançar Despesa em 5 Segundos</span>
+        <span>Registrar Despesa</span>
       </button>
     </section>
 
@@ -549,7 +525,7 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5" id="miniCardsCategorias">
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Gráfico de Rosca -->
         <div class="lg:col-span-5 ed-card p-6 flex flex-col justify-between">
           <div class="border-b border-slate-100 pb-3">
@@ -903,7 +879,7 @@
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
         <div>
           <span class="text-[10px] font-extrabold uppercase tracking-wider text-[#FF8C00]">FLUXO RÁPIDO</span>
-          <h3 class="font-display text-lg font-extrabold text-[#23396B]">Lançar Despesa em 5 Segundos</h3>
+          <h3 class="font-display text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
         </div>
         <button onclick="fecharModalLancamentoRapido()" class="w-8 h-8 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-lg flex items-center justify-center">✕</button>
       </div>

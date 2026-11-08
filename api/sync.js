@@ -78,8 +78,83 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Formato de dados inválido: esperava { obras: [...] }' });
       }
 
-      // Salvar ou sobrescrever no Vercel Blob
-      const blob = await put(BLOB_NAME, JSON.stringify(payload), {
+      // -----------------------------------------------------------------------
+      // MERGE SEGURO: buscar estado atual da nuvem e mesclar por ID
+      // Evita perda de dados em salvamentos simultâneos de dois dispositivos
+      // -----------------------------------------------------------------------
+      let estadoMesclado = payload;
+      try {
+        const { blobs } = await list({ prefix: BLOB_NAME, limit: 1 });
+        const targetBlob = blobs.find((b) => b.pathname === BLOB_NAME) || blobs[0];
+        if (targetBlob) {
+          const resCloud = await fetch(targetBlob.url, { cache: 'no-store' });
+          if (resCloud.ok) {
+            const cloudData = await resCloud.json();
+            if (cloudData && Array.isArray(cloudData.obras)) {
+              // Para cada obra do payload, mesclar com a versão da nuvem
+              const obrasCloud = cloudData.obras;
+              const obrasMescladas = payload.obras.map(obraPayload => {
+                const obraCloud = obrasCloud.find(o => o.id === obraPayload.id);
+                if (!obraCloud) return obraPayload; // Obra nova — aceitar direto
+
+                // Mesclar lancamentos por id (payload ganha se mesmo id; cloud preserva ids ausentes no payload)
+                const lancCloud = obraCloud.lancamentos || [];
+                const lancPayload = obraPayload.lancamentos || [];
+                const lancMapPayload = new Map(lancPayload.map(l => [l.id, l]));
+                const lancMapCloud = new Map(lancCloud.map(l => [l.id, l]));
+                // União: todos os IDs, payload tem prioridade quando há conflito
+                const idsUniao = new Set([...lancMapCloud.keys(), ...lancMapPayload.keys()]);
+                const lancamentosMesclados = Array.from(idsUniao).map(id =>
+                  lancMapPayload.has(id) ? lancMapPayload.get(id) : lancMapCloud.get(id)
+                );
+
+                // Mesclar medicoes por id
+                const medCloud = obraCloud.medicoes || [];
+                const medPayload = obraPayload.medicoes || [];
+                const medMapPayload = new Map(medPayload.map(m => [m.id, m]));
+                const medMapCloud = new Map(medCloud.map(m => [m.id, m]));
+                const medIds = new Set([...medMapCloud.keys(), ...medMapPayload.keys()]);
+                const medicoesMescladas = Array.from(medIds).map(id =>
+                  medMapPayload.has(id) ? medMapPayload.get(id) : medMapCloud.get(id)
+                );
+
+                // Mesclar empreitas por id
+                const empCloud = obraCloud.empreitas || [];
+                const empPayload = obraPayload.empreitas || [];
+                const empMapPayload = new Map(empPayload.map(e => [e.id, e]));
+                const empMapCloud = new Map(empCloud.map(e => [e.id, e]));
+                const empIds = new Set([...empMapCloud.keys(), ...empMapPayload.keys()]);
+                const empreitasMescladas = Array.from(empIds).map(id =>
+                  empMapPayload.has(id) ? empMapPayload.get(id) : empMapCloud.get(id)
+                );
+
+                return {
+                  ...obraCloud,       // base da nuvem
+                  ...obraPayload,     // campos escalares do payload têm prioridade
+                  lancamentos: lancamentosMesclados,
+                  medicoes: medicoesMescladas,
+                  empreitas: empreitasMescladas
+                };
+              });
+
+              // Preservar obras da nuvem que não estão no payload (não excluir)
+              const idsPayload = new Set(payload.obras.map(o => o.id));
+              const obrasApenasNaNuvem = obrasCloud.filter(o => !idsPayload.has(o.id));
+
+              estadoMesclado = {
+                ...payload,
+                obras: [...obrasMescladas, ...obrasApenasNaNuvem]
+              };
+            }
+          }
+        }
+      } catch (mergeErr) {
+        // Se o merge falhar, usar o payload diretamente (fallback seguro)
+        console.warn('Merge com nuvem falhou, usando payload direto:', mergeErr.message);
+        estadoMesclado = payload;
+      }
+
+      const blob = await put(BLOB_NAME, JSON.stringify(estadoMesclado), {
         access: 'public',
         addRandomSuffix: false,
         contentType: 'application/json'
@@ -87,7 +162,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        message: 'Dados sincronizados com a nuvem Vercel Blob com sucesso.',
+        message: 'Dados mesclados e sincronizados com a nuvem Vercel Blob.',
         url: blob.url,
         timestamp: new Date().toISOString()
       });
