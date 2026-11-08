@@ -22,8 +22,10 @@ function salvarEstado() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
   const badge = document.getElementById("cloudBadge");
   if (badge) {
-    badge.textContent = "✓ Salvo agora";
-    setTimeout(() => { badge.textContent = "Salvo Automaticamente"; }, 2000);
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34b442]"></span> Salvo agora`;
+    setTimeout(() => {
+      badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34b442]"></span> Sincronizado`;
+    }, 2000);
   }
 }
 
@@ -137,7 +139,7 @@ function inicializarApp() {
 function renderizarSeletorObras() {
   const sel = document.getElementById("obraSelect");
   sel.innerHTML = estado.obras.map(o =>
-    `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>🏗️ ${o.nome}</option>`
+    `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>${o.nome}</option>`
   ).join("");
 }
 
@@ -152,25 +154,21 @@ function atualizarTudo() {
   if (!obra) return;
   const m = calcularMetricasObra(obra);
 
-  // Header da Obra
   document.getElementById("obraTitulo").textContent = obra.nome;
-  document.getElementById("obraClienteTag").textContent = `${obra.cliente || "Contrato"} • Início: ${formatDataBR(obra.dataInicio)}`;
+  document.getElementById("obraClienteTag").textContent = `${obra.cliente || "CONTRATO"} • INÍCIO ${formatDataBR(obra.dataInicio)}`;
   document.getElementById("kpiDescNotaTag").textContent = `-${obra.aliquotaImposto || 7.5}% NF`;
 
-  // KPI 1: Medições
   document.getElementById("kpiMedicaoLiquida").textContent = formatBRL(m.medLiquidaRecebida);
   document.getElementById("kpiMedicaoSub").textContent =
     m.medLiquidaTotalContrato > m.medLiquidaRecebida
-      ? `Bruto: ${formatBRL(m.medBrutaRecebida)} | Previsto Total Líq: ${formatBRL(m.medLiquidaTotalContrato)}`
-      : `Valor Bruto Atestado: ${formatBRL(m.medBrutaRecebida)}`;
+      ? `Bruto: ${formatBRL(m.medBrutaRecebida)} | Contrato Líq: ${formatBRL(m.medLiquidaTotalContrato)}`
+      : `Faturamento Bruto Atestado: ${formatBRL(m.medBrutaRecebida)}`;
 
-  // KPI 2: Custo Total
   document.getElementById("kpiCustoTotal").textContent = formatBRL(m.custoTotal);
-  document.getElementById("kpiQtdLancamentos").textContent = `${m.qtdSaidas} lançamentos`;
+  document.getElementById("kpiQtdLancamentos").textContent = `${m.qtdSaidas} registros`;
   document.getElementById("kpiCustoSub").textContent =
     `MAT: ${formatBRL(m.porTipoOficial.MAT)} | MO: ${formatBRL(m.porTipoOficial.MO)}`;
 
-  // KPI 3: Saldo / Viabilidade
   const badgeViab = document.getElementById("viabilidadeBadge");
   const cardSaldoBox = document.getElementById("cardSaldoBox");
   const kpiSaldoFinal = document.getElementById("kpiSaldoFinal");
@@ -183,64 +181,56 @@ function atualizarTudo() {
   kpiMargemPerc.textContent = `${margem.toFixed(1)}% margem`;
 
   if (m.saldoAtual >= 0) {
-    badgeViab.className = "text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-100 text-emerald-800";
-    badgeViab.textContent = "✅ OBRA VIÁVEL • SALDO POSITIVO";
-    cardSaldoBox.className = "rounded-xl p-4 bg-emerald-50/70 border border-emerald-200";
-    kpiSaldoFinal.className = "text-2xl font-extrabold text-emerald-700 mt-1.5";
+    badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#a3e635]/20 text-[#a3e635] border border-[#a3e635]/40";
+    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#a3e635]"></span> Obra Viável • Saldo Positivo`;
+    cardSaldoBox.className = "rounded-2xl p-4 bg-[#a3e635]/10 border border-[#a3e635]/40 backdrop-blur-xs";
   } else {
-    badgeViab.className = "text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-rose-100 text-rose-800";
-    badgeViab.textContent = "🚨 ATENÇÃO • CUSTO ACIMA DO RECEBIDO";
-    cardSaldoBox.className = "rounded-xl p-4 bg-rose-50/70 border border-rose-200";
-    kpiSaldoFinal.className = "text-2xl font-extrabold text-rose-700 mt-1.5";
+    badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40";
+    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Atenção • Custo Acima do Recebido`;
+    cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
   }
 
-  // KPI 4: Teto de Custo
   const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
   document.getElementById("kpiTetoValor").textContent = formatBRL(m.tetoTotal);
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   const barTeto = document.getElementById("kpiTetoBar");
-  badgeTeto.textContent = `${percTeto.toFixed(1)}% usado`;
+  badgeTeto.textContent = `${percTeto.toFixed(1)}% utilizado`;
   barTeto.style.width = `${Math.min(percTeto, 100)}%`;
 
   if (percTeto < 80) {
-    badgeTeto.className = "text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800";
-    barTeto.className = "bg-emerald-500 h-2 rounded-full transition-all duration-300";
+    barTeto.className = "bg-[#a3e635] h-1.5 rounded-full transition-all duration-300";
   } else if (percTeto <= 100) {
-    badgeTeto.className = "text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800";
-    barTeto.className = "bg-amber-500 h-2 rounded-full transition-all duration-300";
+    barTeto.className = "bg-amber-400 h-1.5 rounded-full transition-all duration-300";
   } else {
-    badgeTeto.className = "text-xs font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800";
-    barTeto.className = "bg-rose-600 h-2 rounded-full transition-all duration-300";
+    barTeto.className = "bg-rose-400 h-1.5 rounded-full transition-all duration-300";
   }
 
   const restanteTeto = m.tetoTotal - m.custoTotal;
   document.getElementById("kpiTetoSub").textContent =
     restanteTeto >= 0
-      ? `Fôlego restante no orçamento: ${formatBRL(restanteTeto)}`
-      : `⚠️ Teto ultrapassado em ${formatBRL(Math.abs(restanteTeto))}`;
+      ? `Saldo disponível no teto: ${formatBRL(restanteTeto)}`
+      : `Excedente sobre o limite: ${formatBRL(Math.abs(restanteTeto))}`;
 
-  // Banner de Auditoria específico das duas obras da planilha
   const bannerAud = document.getElementById("alertaAuditoriaBanner");
   if (obra.id === "obra-piscina") {
     bannerAud.classList.remove("hidden");
-    document.getElementById("alertaAuditoriaTitulo").textContent = "Auditoria da Planilha Reforma Piscina:";
+    document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Reforma Piscina:";
     document.getElementById("alertaAuditoriaTexto").textContent =
-      "No seu Excel, a linha EQUIPAMENTO estava com R$ 0,00 e ignorava 5 compras (R$ 1.123,00). O custo real é R$ 68.704,19 (e não R$ 67.581,19) e o lucro líquido real é R$ 20.835,81.";
+      "Os 5 lançamentos de Equipamento (R$ 1.123,00) ignorados na fórmula do Excel original foram somados. Custo real: R$ 68.704,19 | Saldo líquido: R$ 20.835,81.";
   } else if (obra.id === "obra-caixa-forro") {
     bannerAud.classList.remove("hidden");
-    document.getElementById("alertaAuditoriaTitulo").textContent = "Auditoria da Planilha Caixa Obra:";
+    document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Caixa Obra:";
     document.getElementById("alertaAuditoriaTexto").textContent =
-      "No seu Excel, o quadro RESUMO marcava apenas R$ 790,00 de custo, mas a soma real das saídas lançadas já é R$ 3.270,26.";
+      "O resumo da planilha original exibia R$ 790,00 de custo, porém o somatório real de saídas lançadas totaliza R$ 3.270,26.";
   } else {
     bannerAud.classList.add("hidden");
   }
 
-  // Atualizar select de empreitas no form
   const selEmp = document.getElementById("lancEmpreitaId");
-  selEmp.innerHTML = `<option value="">— Não vinculado a contrato de empreita —</option>` +
+  selEmp.innerHTML = `<option value="">Não vinculado a contrato de empreita</option>` +
     (obra.empreitas || []).map(e => {
       const falta = Math.max(0, Number(e.valorContratado) - Number(e.valorPago));
-      return `<option value="${e.id}">👷 ${e.fornecedor} (Falta pagar: ${formatBRL(falta)})</option>`;
+      return `<option value="${e.id}">${e.fornecedor} (Saldo a pagar: ${formatBRL(falta)})</option>`;
     }).join("");
 
   renderizarMiniCards(m);
@@ -252,19 +242,22 @@ function atualizarTudo() {
 
 function renderizarMiniCards(m) {
   const cards = [
-    { label: "🧱 Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos de obra", cor: "border-blue-200 bg-blue-50/50 text-blue-900" },
-    { label: "👷 Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Pura: ${formatBRL(m.porSubtipoReal.MO)}`, cor: "border-purple-200 bg-purple-50/50 text-purple-900" },
-    { label: "🛠️ Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Contêiner / Ferram.", cor: "border-amber-200 bg-amber-50/60 text-amber-900" },
-    { label: "📋 Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, Comissões, etc.", cor: "border-slate-200 bg-white text-slate-900" },
-    { label: "🍱 Só Alimentação", val: m.porSubtipoReal.ALIM, sub: "Almoços, Jantas, Café", cor: "border-orange-200 bg-orange-50/50 text-orange-900" },
-    { label: "⛽ Só Combustível/Uber", val: m.porSubtipoReal.TRANSP, sub: "Gasolina, S10, Passagens", cor: "border-cyan-200 bg-cyan-50/50 text-cyan-900" }
+    { label: "Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos e materiais", dot: "bg-[#5F0DA0]" },
+    { label: "Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)}`, dot: "bg-[#380C5B]" },
+    { label: "Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Locação e ferramentas", dot: "bg-[#8d1dd3]" },
+    { label: "Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, ART e comissões", dot: "bg-[#686869]" },
+    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#34b442]" },
+    { label: "Combustível / Transp.", val: m.porSubtipoReal.TRANSP, sub: "Abastecimento e deslocamento", dot: "bg-[#230236]" }
   ];
 
   document.getElementById("miniCardsCategorias").innerHTML = cards.map(c => `
-    <div class="rounded-xl p-3 border ${c.cor} card-shadow">
-      <div class="text-[11px] font-bold uppercase opacity-80">${c.label}</div>
-      <div class="text-base sm:text-lg font-extrabold mt-0.5">${formatBRL(c.val)}</div>
-      <div class="text-[10px] opacity-75 mt-0.5">${c.sub}</div>
+    <div class="ed-card p-4 hover:border-[#5F0DA0] transition">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full ${c.dot}"></span>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-[#686869]">${c.label}</span>
+      </div>
+      <div class="font-display text-base sm:text-lg font-extrabold text-[#230236] mt-1.5">${formatBRL(c.val)}</div>
+      <div class="text-[11px] text-[#686869] mt-0.5">${c.sub}</div>
     </div>
   `).join("");
 }
@@ -296,59 +289,58 @@ function renderizarTabelaLancamentos() {
     return true;
   });
 
-  // Ordenar mais recentes primeiro (ou manter ordem da planilha)
   const totalFiltrado = filtrados.reduce((acc, i) => {
     return acc + (i.movimento === "ENTRADA_CAIXA" ? 0 : Number(i.valor || 0));
   }, 0);
   document.getElementById("totalFiltradoValor").textContent = `${formatBRL(totalFiltrado)} (${filtrados.length} itens)`;
 
   const badgeTipo = {
-    MAT: `<span class="px-2 py-0.5 rounded font-bold text-[11px] bg-blue-100 text-blue-800">MAT</span>`,
-    MO: `<span class="px-2 py-0.5 rounded font-bold text-[11px] bg-purple-100 text-purple-800">MO</span>`,
-    EQUIP: `<span class="px-2 py-0.5 rounded font-bold text-[11px] bg-amber-100 text-amber-900">EQUIP</span>`,
-    OUTROS: `<span class="px-2 py-0.5 rounded font-bold text-[11px] bg-slate-200 text-slate-800">OUTROS</span>`
+    MAT: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#faf6fd] text-[#5F0DA0] border border-[#deb2ff]">MAT</span>`,
+    MO: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#230236] text-white">MO</span>`,
+    EQUIP: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#8d1dd3]/15 text-[#5F0DA0] border border-[#8d1dd3]/30">EQUIP</span>`,
+    OUTROS: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#F4F4F4] text-[#3e3e40]">OUTROS</span>`
   };
 
   const badgeSub = {
-    MAT: `<span class="text-xs text-blue-700 font-medium">🧱 Material</span>`,
-    MO: `<span class="text-xs text-purple-700 font-medium">👷 Mão de Obra</span>`,
-    EQUIP: `<span class="text-xs text-amber-800 font-medium">🛠️ Equipamento</span>`,
-    ALIM: `<span class="text-xs text-orange-700 font-semibold">🍱 Alimentação</span>`,
-    TRANSP: `<span class="text-xs text-cyan-700 font-semibold">⛽ Transporte/Comb.</span>`,
-    OUTROS: `<span class="text-xs text-slate-600">📋 Outros/Taxas</span>`,
-    CAIXA: `<span class="text-xs text-emerald-700 font-bold">💵 Entrada Caixa (+)</span>`
+    MAT: `<span class="text-xs text-[#230236] font-medium">Material</span>`,
+    MO: `<span class="text-xs text-[#5F0DA0] font-semibold">Mão de Obra</span>`,
+    EQUIP: `<span class="text-xs text-[#8d1dd3] font-semibold">Equipamento</span>`,
+    ALIM: `<span class="text-xs text-[#34b442] font-semibold">Alimentação</span>`,
+    TRANSP: `<span class="text-xs text-[#380C5B] font-semibold">Transporte / Comb.</span>`,
+    OUTROS: `<span class="text-xs text-[#686869]">Outros / Taxas</span>`,
+    CAIXA: `<span class="text-xs text-[#34b442] font-bold">Entrada de Caixa (+)</span>`
   };
 
   const tbody = document.getElementById("tbodyLancamentos");
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400">Nenhum lançamento encontrado para este filtro.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-[#686869]">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtrados.map(item => {
     const isEntrada = item.movimento === "ENTRADA_CAIXA";
     const dataCorrigidaTag = item.dataOriginal && item.dataOriginal !== item.data
-      ? `<span class="block text-[10px] text-amber-700 font-semibold" title="Na planilha estava ${item.dataOriginal}">⚡ Corrigido (${item.dataOriginal})</span>`
+      ? `<span class="block text-[10px] text-[#5F0DA0] font-semibold">Corrigido (${item.dataOriginal})</span>`
       : "";
 
     return `
-      <tr class="hover:bg-slate-50 transition ${isEntrada ? "bg-emerald-50/40" : ""}">
-        <td class="py-2.5 px-3 whitespace-nowrap font-medium text-slate-700">
+      <tr class="hover:bg-[#faf6fd]/80 transition ${isEntrada ? "bg-[#34b442]/5" : ""}">
+        <td class="py-3 px-3.5 whitespace-nowrap font-medium text-[#3e3e40]">
           ${formatDataBR(item.data)}
           ${dataCorrigidaTag}
         </td>
-        <td class="py-2.5 px-3 font-semibold text-slate-900">${item.descricao}</td>
-        <td class="py-2.5 px-3">${isEntrada ? `<span class="px-2 py-0.5 rounded font-bold text-[11px] bg-emerald-100 text-emerald-800">ENTRADA</span>` : (badgeTipo[item.tipo] || item.tipo)}</td>
-        <td class="py-2.5 px-3">${badgeSub[item.subtipo] || item.subtipo}</td>
-        <td class="py-2.5 px-3 text-slate-600 text-xs">${item.pagamento || "-"}</td>
-        <td class="py-2.5 px-3">
-          <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800">${item.titular || "-"}</span>
+        <td class="py-3 px-3.5 font-semibold text-[#230236]">${item.descricao}</td>
+        <td class="py-3 px-3.5">${isEntrada ? `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-[#34b442]/15 text-[#34b442]">ENTRADA</span>` : (badgeTipo[item.tipo] || item.tipo)}</td>
+        <td class="py-3 px-3.5">${badgeSub[item.subtipo] || item.subtipo}</td>
+        <td class="py-3 px-3.5 text-[#686869] text-xs">${item.pagamento || "-"}</td>
+        <td class="py-3 px-3.5">
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F4F4F4] text-[#230236]">${item.titular || "-"}</span>
         </td>
-        <td class="py-2.5 px-3 text-right font-extrabold whitespace-nowrap ${isEntrada ? "text-emerald-700" : "text-slate-900"}">
+        <td class="py-3 px-3.5 text-right font-display font-bold whitespace-nowrap ${isEntrada ? "text-[#34b442]" : "text-[#230236]"}">
           ${isEntrada ? "+ " : ""}${formatBRL(item.valor)}
         </td>
-        <td class="py-2.5 px-3 text-center whitespace-nowrap no-print">
-          <button onclick="editarLancamento('${item.id}')" class="text-xs text-blue-600 hover:underline font-semibold mr-2">Editar</button>
+        <td class="py-3 px-3.5 text-center whitespace-nowrap no-print">
+          <button onclick="editarLancamento('${item.id}')" class="text-xs text-[#5F0DA0] hover:underline font-semibold mr-3">Editar</button>
           <button onclick="excluirLancamento('${item.id}')" class="text-xs text-rose-600 hover:underline font-semibold">Excluir</button>
         </td>
       </tr>
@@ -427,8 +419,8 @@ function editarLancamento(id) {
   document.getElementById("lancTitular").value = item.titular;
   document.getElementById("lancPagamento").value = item.pagamento;
 
-  document.getElementById("formLancTitulo").textContent = "✏️ Editando Lançamento: " + item.descricao;
-  document.getElementById("btnSalvarLancTexto").textContent = "💾 Atualizar Lançamento";
+  document.getElementById("formLancTitulo").textContent = "Editando Registro: " + item.descricao;
+  document.getElementById("btnSalvarLancTexto").textContent = "Atualizar Registro";
   document.getElementById("btnCancelarEdicao").classList.remove("hidden");
   document.getElementById("boxFormLancamento").scrollIntoView({ behavior: "smooth" });
 }
@@ -438,13 +430,13 @@ function limparFormLancamento() {
   document.getElementById("lancDescricao").value = "";
   document.getElementById("lancValor").value = "";
   document.getElementById("lancEmpreitaId").value = "";
-  document.getElementById("formLancTitulo").textContent = "Novo Lançamento de Custo na Obra";
-  document.getElementById("btnSalvarLancTexto").textContent = "✅ Salvar Lançamento na Obra";
+  document.getElementById("formLancTitulo").textContent = "Lançar Custo na Obra";
+  document.getElementById("btnSalvarLancTexto").textContent = "Registrar Lançamento";
   document.getElementById("btnCancelarEdicao").classList.add("hidden");
 }
 
 function excluirLancamento(id) {
-  if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
+  if (!confirm("Confirma a exclusão deste lançamento?")) return;
   const obra = getObraAtual();
   obra.lancamentos = obra.lancamentos.filter(l => l.id !== id);
   salvarEstado();
@@ -453,12 +445,12 @@ function excluirLancamento(id) {
 
 function renderizarAbaResumo(obra, m) {
   const cats = [
-    { key: "MAT", nome: "🧱 Material de Construção (MAT)", gasto: m.porSubtipoReal.MAT },
-    { key: "MO", nome: "👷 Mão de Obra Direta / Empreitas (MO)", gasto: m.porSubtipoReal.MO },
-    { key: "EQUIP", nome: "🛠️ Equipamentos & Locação (EQUIP)", gasto: m.porSubtipoReal.EQUIP },
-    { key: "ALIM", nome: "🍱 Alimentação (Almoços / Jantas / Café)", gasto: m.porSubtipoReal.ALIM },
-    { key: "TRANSP", nome: "⛽ Combustível / Uber / Passagens", gasto: m.porSubtipoReal.TRANSP },
-    { key: "OUTROS", nome: "📋 Outros (Comissões / ART / Taxas)", gasto: m.porSubtipoReal.OUTROS }
+    { key: "MAT", nome: "Material de Construção (MAT)", gasto: m.porSubtipoReal.MAT },
+    { key: "MO", nome: "Mão de Obra Direta / Empreitas (MO)", gasto: m.porSubtipoReal.MO },
+    { key: "EQUIP", nome: "Equipamentos & Locação (EQUIP)", gasto: m.porSubtipoReal.EQUIP },
+    { key: "ALIM", nome: "Alimentação (Almoços / Jantas / Café)", gasto: m.porSubtipoReal.ALIM },
+    { key: "TRANSP", nome: "Combustível / Uber / Passagens", gasto: m.porSubtipoReal.TRANSP },
+    { key: "OUTROS", nome: "Outros (Comissões / ART / Taxas)", gasto: m.porSubtipoReal.OUTROS }
   ];
 
   const orc = obra.orcamentoPrevisto || {};
@@ -467,51 +459,49 @@ function renderizarAbaResumo(obra, m) {
   container.innerHTML = cats.map(c => {
     const teto = Number(orc[c.key] || 0);
     const perc = teto > 0 ? (c.gasto / teto) * 100 : 0;
-    const corBarra = perc < 80 ? "bg-emerald-500" : perc <= 100 ? "bg-amber-500" : "bg-rose-600";
+    const corBarra = perc < 80 ? "bg-[#5F0DA0]" : perc <= 100 ? "bg-amber-500" : "bg-rose-600";
     const saldoCat = teto - c.gasto;
 
     return `
-      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+      <div class="p-4 rounded-2xl bg-[#faf6fd] border border-[#deb2ff]">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs sm:text-sm font-bold text-slate-900">${c.nome}</span>
+          <span class="text-xs sm:text-sm font-bold text-[#230236]">${c.nome}</span>
           <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500">Teto Previsto R$:</span>
+            <span class="text-[11px] font-semibold uppercase text-[#686869]">Teto R$:</span>
             <input type="number" step="100" data-orc-key="${c.key}" value="${teto}"
-              class="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-right bg-white" />
+              class="w-28 rounded-xl border border-[#deb2ff] px-2.5 py-1 text-xs font-bold text-right bg-white text-[#230236]" />
           </div>
         </div>
         <div class="flex items-center justify-between text-xs mt-2">
-          <span>Gasto Real: <strong class="text-slate-900">${formatBRL(c.gasto)}</strong> (${perc.toFixed(1)}%)</span>
-          <span class="${saldoCat >= 0 ? "text-emerald-700" : "text-rose-600 font-bold"}">
-            ${saldoCat >= 0 ? `Disponível: ${formatBRL(saldoCat)}` : `Estourado em: ${formatBRL(Math.abs(saldoCat))}`}
+          <span class="text-[#686869]">Realizado: <strong class="text-[#230236]">${formatBRL(c.gasto)}</strong> (${perc.toFixed(1)}%)</span>
+          <span class="${saldoCat >= 0 ? "text-[#34b442] font-semibold" : "text-rose-600 font-bold"}">
+            ${saldoCat >= 0 ? `Disponível: ${formatBRL(saldoCat)}` : `Excedido: ${formatBRL(Math.abs(saldoCat))}`}
           </span>
         </div>
-        <div class="w-full bg-slate-200 h-2.5 rounded-full mt-1.5 overflow-hidden">
-          <div class="${corBarra} h-2.5 rounded-full" style="width: ${Math.min(perc, 100)}%"></div>
+        <div class="w-full bg-[#e9d5ff] h-2 rounded-full mt-2 overflow-hidden">
+          <div class="${corBarra} h-2 rounded-full" style="width: ${Math.min(perc, 100)}%"></div>
         </div>
       </div>
     `;
   }).join("");
 
-  // Resumo comparativo lateral
   document.getElementById("resumoComparativoBox").innerHTML = `
-    <div class="flex justify-between"><span>Total Mão de Obra (Oficial Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
-    <div class="flex justify-between"><span>Total Material (Oficial Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
-    <div class="flex justify-between"><span>Total Equipamento (Corrigido):</span><strong class="text-amber-700">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
-    <div class="flex justify-between"><span>Total Outros (Oficial Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
-    <div class="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold text-slate-900">
+    <div class="flex justify-between text-[#3e3e40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
+    <div class="flex justify-between text-[#3e3e40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
+    <div class="flex justify-between text-[#3e3e40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#5F0DA0]">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
+    <div class="flex justify-between text-[#3e3e40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
+    <div class="flex justify-between pt-2.5 border-t border-[#deb2ff] font-display text-sm font-extrabold text-[#230236]">
       <span>CUSTO TOTAL AUDITADO:</span><span>${formatBRL(m.custoTotal)}</span>
     </div>
   `;
 
-  // Gráfico Chart.js
   const ctx = document.getElementById("chartCategorias");
   if (ctx) {
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
       type: "doughnut",
       data: {
-        labels: ["Material", "Mão de Obra Pura", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Comissões"],
+        labels: ["Material", "Mão de Obra Direta", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Taxas"],
         datasets: [{
           data: [
             m.porSubtipoReal.MAT,
@@ -521,14 +511,16 @@ function renderizarAbaResumo(obra, m) {
             m.porSubtipoReal.TRANSP,
             m.porSubtipoReal.OUTROS
           ],
-          backgroundColor: ["#2563eb", "#7c3aed", "#d97706", "#ea580c", "#0891b2", "#475569"]
+          backgroundColor: ["#5F0DA0", "#230236", "#8d1dd3", "#34b442", "#380C5B", "#deb2ff"],
+          borderWidth: 2,
+          borderColor: "#ffffff"
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } }
+          legend: { position: "bottom", labels: { boxWidth: 12, font: { family: "Plus Jakarta Sans", size: 11 } } }
         }
       }
     });
@@ -544,7 +536,7 @@ function salvarTetosOrcamento() {
   });
   salvarEstado();
   atualizarTudo();
-  alert("Previsão de teto de custos atualizada com sucesso!");
+  alert("Limites orçamentários atualizados.");
 }
 
 function renderizarAbaMedicoes(obra, m) {
@@ -558,20 +550,20 @@ function renderizarAbaMedicoes(obra, m) {
     const isRec = med.status === "Recebida";
 
     return `
-      <tr class="hover:bg-slate-50">
-        <td class="py-3 px-3 font-bold text-slate-900">
+      <tr class="hover:bg-[#faf6fd]/60">
+        <td class="py-3.5 px-4 font-bold text-[#230236]">
           ${med.titulo}
-          <span class="block text-xs text-slate-400 font-normal">${med.observacao || ""}</span>
+          <span class="block text-xs text-[#686869] font-normal">${med.observacao || ""}</span>
         </td>
-        <td class="py-3 px-3">
-          <button onclick="alternarStatusMedicao('${med.id}')" class="px-2.5 py-1 rounded-full text-xs font-bold ${isRec ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}">
-            ${isRec ? "✅ Atestada / Recebida" : "⏳ Prevista (Clique p/ Atestar)"}
+        <td class="py-3.5 px-4">
+          <button onclick="alternarStatusMedicao('${med.id}')" class="px-3 py-1 rounded-full text-xs font-bold ${isRec ? "bg-[#34b442]/15 text-[#34b442]" : "bg-[#faf6fd] text-[#5F0DA0] border border-[#deb2ff]"}">
+            ${isRec ? "Atestada / Recebida" : "Prevista (Alterar para Atestada)"}
           </button>
         </td>
-        <td class="py-3 px-3 text-right font-semibold">${formatBRL(bruto)}</td>
-        <td class="py-3 px-3 text-right text-slate-500">-${desc}%</td>
-        <td class="py-3 px-3 text-right font-extrabold text-emerald-700">${formatBRL(liq)}</td>
-        <td class="py-3 px-3 text-center no-print">
+        <td class="py-3.5 px-4 text-right font-semibold text-[#230236]">${formatBRL(bruto)}</td>
+        <td class="py-3.5 px-4 text-right text-[#686869]">-${desc}%</td>
+        <td class="py-3.5 px-4 text-right font-display font-extrabold text-[#34b442]">${formatBRL(liq)}</td>
+        <td class="py-3.5 px-4 text-center no-print">
           <button onclick="excluirMedicao('${med.id}')" class="text-xs text-rose-600 font-semibold hover:underline">Excluir</button>
         </td>
       </tr>
@@ -597,7 +589,7 @@ function salvarMedicao(e) {
     descontoNotaPerc,
     valorLiquido,
     status,
-    observacao: "Lançada no sistema"
+    observacao: "Medição registrada no sistema"
   });
 
   document.getElementById("medTitulo").value = "";
@@ -635,39 +627,38 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
     const perc = contratado > 0 ? Math.min(100, (pago / contratado) * 100) : 0;
 
     return `
-      <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
-        <div class="flex items-center justify-between">
+      <div class="p-4 rounded-2xl border border-[#deb2ff] bg-[#faf6fd]">
+        <div class="flex items-center justify-between gap-2">
           <div>
-            <h4 class="font-bold text-slate-900 text-sm">${e.fornecedor}</h4>
-            <p class="text-xs text-slate-500">${e.servico || ""} ${e.observacao ? "• " + e.observacao : ""}</p>
+            <h4 class="font-display font-bold text-[#230236] text-sm">${e.fornecedor}</h4>
+            <p class="text-xs text-[#686869]">${e.servico || ""} ${e.observacao ? "• " + e.observacao : ""}</p>
           </div>
-          <span class="px-2.5 py-1 rounded-full text-xs font-extrabold ${falta === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}">
-            ${falta === 0 ? "✅ QUITADO" : `FALTA PAGAR: ${formatBRL(falta)}`}
+          <span class="px-3 py-1 rounded-full text-xs font-extrabold ${falta === 0 ? "bg-[#34b442]/15 text-[#34b442]" : "bg-[#230236] text-white"}">
+            ${falta === 0 ? "QUITADO" : `SALDO A PAGAR: ${formatBRL(falta)}`}
           </span>
         </div>
-        <div class="grid grid-cols-3 gap-2 text-xs mt-3 pt-2 border-t border-slate-200/80">
-          <div>Combinado: <strong class="text-slate-900">${formatBRL(contratado)}</strong></div>
-          <div>Já Pago: <strong class="text-emerald-700">${formatBRL(pago)}</strong></div>
-          <div class="text-right">Progresso: <strong>${perc.toFixed(0)}%</strong></div>
+        <div class="grid grid-cols-3 gap-2 text-xs mt-3 pt-2.5 border-t border-[#e9d5ff]">
+          <div class="text-[#686869]">Contratado: <strong class="text-[#230236]">${formatBRL(contratado)}</strong></div>
+          <div class="text-[#686869]">Pago: <strong class="text-[#34b442]">${formatBRL(pago)}</strong></div>
+          <div class="text-right text-[#686869]">Execução Financeira: <strong class="text-[#5F0DA0]">${perc.toFixed(0)}%</strong></div>
         </div>
       </div>
     `;
   }).join("");
 
-  // Titulares
   const divTit = document.getElementById("listaTitulares");
   const titularesEntries = Object.entries(m.porTitular).sort((a, b) => b[1] - a[1]);
 
   let htmlTit = titularesEntries.map(([tit, val]) => {
     const perc = m.custoTotal > 0 ? (val / m.custoTotal) * 100 : 0;
     return `
-      <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div class="p-4 rounded-2xl border border-[#deb2ff] bg-[#faf6fd] flex items-center justify-between">
         <div>
-          <span class="text-xs font-extrabold px-2 py-0.5 rounded bg-slate-900 text-white">${tit}</span>
-          <p class="text-xs text-slate-500 mt-1">${perc.toFixed(1)}% dos pagamentos da obra</p>
+          <span class="text-xs font-extrabold px-3 py-0.5 rounded-full bg-[#230236] text-white">${tit}</span>
+          <p class="text-xs text-[#686869] mt-1.5">${perc.toFixed(1)}% de participação nos desembolsos</p>
         </div>
         <div class="text-right">
-          <p class="text-base font-extrabold text-slate-900">${formatBRL(val)}</p>
+          <p class="font-display text-base font-extrabold text-[#230236]">${formatBRL(val)}</p>
         </div>
       </div>
     `;
@@ -676,12 +667,12 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
   if (obra.enviosCaixa && obra.enviosCaixa.length > 0) {
     const totalEnvios = obra.enviosCaixa.reduce((a, b) => a + Number(b.valor || 0), 0);
     htmlTit += `
-      <div class="p-4 rounded-xl bg-blue-50 border border-blue-200 mt-3 text-xs space-y-1">
-        <div class="font-extrabold text-blue-950 uppercase">💵 Controle de Caixa Enviado (Adiantamentos)</div>
-        <div class="flex justify-between"><span>Total Enviado / Entradas Caixa:</span><strong>${formatBRL(totalEnvios)}</strong></div>
-        <div class="flex justify-between"><span>Total Saídas Lançadas na Obra:</span><strong>${formatBRL(m.custoTotal)}</strong></div>
-        <div class="flex justify-between pt-1 border-t border-blue-200 font-bold text-blue-950">
-          <span>Diferença (Caixa - Saídas):</span><span>${formatBRL(totalEnvios - m.custoTotal)}</span>
+      <div class="p-4 rounded-2xl bg-[#230236] text-white mt-3 text-xs space-y-1.5">
+        <div class="font-bold text-[#a3e635] uppercase tracking-wider">Controle de Adiantamentos (Caixa Obra)</div>
+        <div class="flex justify-between text-white/80"><span>Total Enviado / Entradas:</span><strong class="text-white">${formatBRL(totalEnvios)}</strong></div>
+        <div class="flex justify-between text-white/80"><span>Total Saídas Registradas:</span><strong class="text-white">${formatBRL(m.custoTotal)}</strong></div>
+        <div class="flex justify-between pt-1.5 border-t border-white/15 font-bold text-[#deb2ff]">
+          <span>Saldo de Caixa (Entradas - Saídas):</span><span>${formatBRL(totalEnvios - m.custoTotal)}</span>
         </div>
       </div>
     `;
@@ -721,7 +712,6 @@ function mudarAba(aba) {
     if (btn) btn.classList.toggle("active", a === aba);
   });
   if (aba === "resumo") {
-    const obra = getObraAtual();
     atualizarTudo();
   }
 }
@@ -821,7 +811,7 @@ function importarBackupJSON(e) {
         renderizarSeletorObras();
         atualizarTudo();
         fecharModalNuvem();
-        alert("Backup importado com sucesso!");
+        alert("Base importada com sucesso.");
       }
     } catch (err) {
       alert("Arquivo de backup inválido.");
@@ -831,7 +821,7 @@ function importarBackupJSON(e) {
 }
 
 function resetarDadosOriginais() {
-  if (!confirm("Restaurar os dados originais corrigidos da planilha do Melo?")) return;
+  if (!confirm("Restaurar os dados originais corrigidos da planilha?")) return;
   localStorage.removeItem(STORAGE_KEY);
   estado = JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA));
   obraAtualId = estado.obras[0].id;
