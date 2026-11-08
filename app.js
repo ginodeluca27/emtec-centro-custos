@@ -642,9 +642,9 @@ function renderizarUltimasDespesasHome(obra) {
 
         <div class="text-right shrink-0">
           <div class="font-display text-sm sm:text-base font-extrabold text-[#23396B]">${formatBRL(item.valor)}</div>
-          <div class="flex items-center justify-end gap-2.5 mt-0.5">
-            <button onclick="abrirEdicaoRapida('${item.id}')" class="text-[11px] font-bold text-[#4395D8] hover:text-[#23396B] transition">Editar</button>
-            <button onclick="excluirLancamento('${item.id}')" class="text-[11px] font-semibold text-rose-600 hover:text-rose-800 transition">Excluir</button>
+          <div class="flex items-center justify-end gap-2 mt-1">
+            <button onclick="abrirEdicaoRapida('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">Editar</button>
+            <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition">Excluir</button>
           </div>
         </div>
       </div>
@@ -823,9 +823,9 @@ function renderizarTabelaLancamentos() {
                 </div>
                 <div class="text-right shrink-0">
                   <div class="font-display text-lg font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"}">${isEntrada ? "+" : ""}${formatBRL(item.valor)}</div>
-                  <div class="flex gap-2 mt-1 justify-end">
-                    <button onclick="editarLancamento('${item.id}')" class="text-[11px] font-semibold text-[#4395D8]">Editar</button>
-                    <button onclick="excluirLancamento('${item.id}')" class="text-[11px] font-semibold text-rose-600">Excluir</button>
+                  <div class="flex gap-2 mt-2 justify-end">
+                    <button onclick="editarLancamento('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2.5 py-1 rounded-xl bg-blue-50 active:bg-blue-100 transition">Editar</button>
+                    <button onclick="excluirLancamento('${item.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-xl bg-rose-50 active:bg-rose-100 transition">Excluir</button>
                   </div>
                 </div>
               </div>
@@ -1322,11 +1322,11 @@ function renderizarAbaMedicoes(obra, m) {
                 </div>
               </div>
               ${med.observacao ? `<div class="text-[11px] text-[#64748B] italic">${med.observacao}</div>` : ""}
-              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                <button onclick="alternarStatusMedicao('${med.id}')" class="text-[11px] font-bold text-[#4395D8]">
+              <div class="flex items-center justify-between pt-1.5 border-t border-slate-100 text-xs">
+                <button onclick="alternarStatusMedicao('${med.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-1 rounded-lg bg-blue-50 active:bg-blue-100 transition">
                   ${isRec ? "Marcar como pendente" : "Marcar como recebida"}
                 </button>
-                <button onclick="excluirMedicao('${med.id}')" class="text-[11px] text-rose-600 font-semibold">Excluir</button>
+                <button onclick="excluirMedicao('${med.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-lg bg-rose-50 active:bg-rose-100 transition">Excluir</button>
               </div>
             </div>
           `;
@@ -1579,7 +1579,7 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
                 <h4 class="font-display font-bold text-sm text-[#23396B]">${e.fornecedor}</h4>
                 <p class="text-xs text-[#6C757D]">${e.servico || ""}</p>
               </div>
-              <button onclick="excluirEmpreita('${e.id}')" class="text-xs text-rose-600 hover:underline">Excluir</button>
+              <button onclick="excluirEmpreita('${e.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-lg bg-rose-50 active:bg-rose-100 transition">Excluir</button>
             </div>
             <div class="grid grid-cols-3 gap-2 text-xs pt-1">
               <div><span class="text-[#6C757D] block">Contratado</span><strong class="text-[#23396B]">${formatBRL(contratado)}</strong></div>

@@ -252,11 +252,9 @@
       box-shadow: 0 0 0 3px rgba(67, 149, 216, 0.2);
     }
 
-    /* Mobile: Home mostra só resumo executivo; analíticos ficam em Relatórios */
-    @media (max-width: 767px) {
-      body:not(.mob-rel) #miniCardsCategorias,
-      body:not(.mob-rel) #blocoAnalitico { display: none; }
-      body.mob-rel #heroMobile { display: none; }
+    /* Safe area padding e suporte nativo */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
     }
 
     @media print {
@@ -350,17 +348,17 @@
       </div>
 
       <!-- Obra Selector & Botões de Ação -->
-      <div class="flex items-center gap-2">
-        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-3 py-1.5 max-w-[200px] sm:max-w-xs">
-          <span class="text-[10px] uppercase tracking-wider text-[#64748B] mr-1.5 font-bold shrink-0">Obra:</span>
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 max-w-[130px] xs:max-w-[170px] sm:max-w-xs">
+          <span class="text-[10px] uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
           <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1">
           </select>
         </div>
 
         <!-- Perfil do Usuário Ativo (Melo / Pilar) -->
-        <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B]" title="Clique para alternar entre Melo e Pilar">
+        <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B]" title="Clique para alternar entre Melo e Pilar">
           <span id="avatarUsuarioPill" class="w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-[10px] flex items-center justify-center">P</span>
-          <span id="nomeUsuarioPill">Pilar</span>
+          <span id="nomeUsuarioPill" class="hidden sm:inline">Pilar</span>
         </button>
 
         <!-- Botão Sincronizar Agora -->
@@ -374,8 +372,8 @@
           <span class="hidden xs:inline sm:inline">Nova Obra</span>
         </button>
 
-        <!-- Botão Backup / Nuvem -->
-        <button onclick="abrirModalNuvem()" class="p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Backup e Nuvem">
+        <!-- Botão Backup / Nuvem (Desktop - no mobile fica no menu Mais) -->
+        <button onclick="abrirModalNuvem()" class="hidden sm:inline-flex p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Backup e Nuvem">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
         </button>
       </div>
@@ -385,7 +383,7 @@
   <!-- ===================================================================== -->
   <!-- MAIN WORKSPACE -->
   <!-- ===================================================================== -->
-  <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex-1 space-y-6">
+  <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4 pb-24 sm:py-6 flex-1 space-y-6">
 
     <!-- =================================================================== -->
     <!-- HERO EXECUTIVE PANEL (DESKTOP) -->
@@ -643,7 +641,7 @@
 
             <div class="sm:col-span-2">
               <label class="block text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-1">Valor (R$) *</label>
-              <input type="number" step="0.01" id="lancValor" required placeholder="0,00" class="ed-input font-bold text-[#23396B]" />
+              <input type="number" step="0.01" id="lancValor" required placeholder="0,00" inputmode="decimal" class="ed-input font-bold text-[#23396B]" />
             </div>
 
             <div class="sm:col-span-2">
@@ -777,10 +775,10 @@
             <input type="text" id="medTitulo" required placeholder="Ex: 1ª Medição / Entrada..." class="ed-input text-xs" />
           </div>
           <div class="sm:col-span-3">
-            <input type="number" step="0.01" id="medValorBruto" required placeholder="Valor Bruto R$" class="ed-input text-xs" />
+            <input type="number" step="0.01" id="medValorBruto" required placeholder="Valor Bruto R$" inputmode="decimal" class="ed-input text-xs" />
           </div>
           <div class="sm:col-span-2">
-            <input type="number" step="0.1" id="medDescPerc" value="7.5" placeholder="Desc. NF %" class="ed-input text-xs" />
+            <input type="number" step="0.1" id="medDescPerc" value="7.5" placeholder="Desc. NF %" inputmode="decimal" class="ed-input text-xs" />
           </div>
           <div class="sm:col-span-2">
             <select id="medStatus" class="ed-input text-xs">
@@ -838,10 +836,10 @@
               <input type="text" id="empServico" placeholder="Serviço (ex: Revestimento, Pintura...)" class="ed-input text-xs" />
             </div>
             <div class="sm:col-span-6">
-              <input type="number" step="0.01" id="empContratado" required placeholder="Valor Contratado R$" class="ed-input text-xs" />
+              <input type="number" step="0.01" id="empContratado" required placeholder="Valor Contratado R$" inputmode="decimal" class="ed-input text-xs" />
             </div>
             <div class="sm:col-span-6">
-              <input type="number" step="0.01" id="empPago" required placeholder="Valor Já Pago R$" class="ed-input text-xs" />
+              <input type="number" step="0.01" id="empPago" required placeholder="Valor Já Pago R$" inputmode="decimal" class="ed-input text-xs" />
             </div>
             <div class="sm:col-span-12 flex justify-end">
               <button type="submit" class="ed-btn text-xs font-bold py-2">Cadastrar Empreiteiro</button>
@@ -1063,7 +1061,7 @@
           <span class="text-[10px] font-extrabold uppercase tracking-wider text-[#FF8C00]">FLUXO RÁPIDO</span>
           <h3 id="modalLancRapidoTitulo" class="font-display text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
         </div>
-        <button onclick="fecharModalLancamentoRapido()" class="w-8 h-8 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-lg flex items-center justify-center">✕</button>
+        <button onclick="fecharModalLancamentoRapido()" class="w-10 h-10 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-lg flex items-center justify-center transition">✕</button>
       </div>
 
       <form onsubmit="salvarLancamentoRapido(event)" class="space-y-4">
@@ -1199,7 +1197,7 @@
   <!-- ===================================================================== -->
   <!-- BOTTOM NAVIGATION BAR (FIXO NO CELULAR - 5 AÇÕES OBJETIVAS) -->
   <!-- ===================================================================== -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#23396B] border-t border-[#4395D8]/30 px-3 py-2 flex items-center justify-around shadow-2xl backdrop-blur-md no-print">
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#23396B] border-t border-[#4395D8]/30 px-3 pt-2 pb-safe flex items-center justify-around shadow-2xl backdrop-blur-md no-print">
     <button onclick="mudarAba('resumo')" id="navMobResumo" class="flex flex-col items-center gap-1 text-[#FF8C00] font-bold transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
       <span class="text-[10px] font-bold uppercase tracking-wider">Obra</span>
@@ -1243,7 +1241,7 @@
           <span class="ed-eyebrow">CENTRO DE CUSTO</span>
           <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Cadastrar Nova Obra</h3>
         </div>
-        <button onclick="fecharModalNovaObra()" class="text-[#64748B] hover:text-[#23396B] font-bold text-lg">✕</button>
+        <button onclick="fecharModalNovaObra()" class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-[#64748B] hover:text-[#23396B] font-bold text-base transition">✕</button>
       </div>
 
       <form onsubmit="criarNovaObra(event)" class="space-y-3.5">
@@ -1258,17 +1256,17 @@
           </div>
           <div>
             <label class="block text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-1">Imposto NF (%)</label>
-            <input type="number" step="0.1" id="novaObraImposto" value="7.5" class="ed-input" />
+            <input type="number" step="0.1" id="novaObraImposto" value="7.5" inputmode="decimal" class="ed-input" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-1">Valor Contrato Bruto R$</label>
-            <input type="number" step="100" id="novaObraValorContrato" placeholder="Ex: 50000" class="ed-input" />
+            <input type="number" step="100" id="novaObraValorContrato" placeholder="Ex: 50000" inputmode="decimal" class="ed-input" />
           </div>
           <div>
             <label class="block text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-1">Teto Máximo Custo R$</label>
-            <input type="number" step="100" id="novaObraTetoCusto" placeholder="Ex: 35000" class="ed-input" />
+            <input type="number" step="100" id="novaObraTetoCusto" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -1289,7 +1287,7 @@
           <span class="ed-eyebrow">BANCO DE DADOS & NUVEM</span>
           <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Sincronização e Backup</h3>
         </div>
-        <button onclick="fecharModalNuvem()" class="text-[#64748B] hover:text-[#23396B] font-bold text-lg">✕</button>
+        <button onclick="fecharModalNuvem()" class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-[#64748B] hover:text-[#23396B] font-bold text-base transition">✕</button>
       </div>
 
       <p class="text-xs text-[#475569] leading-relaxed">
