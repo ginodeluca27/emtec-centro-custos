@@ -630,22 +630,23 @@ function renderizarUltimasDespesasHome(obra) {
       : `<span class="text-[10px] text-[#64748B]">${item.titular || "EMTEC"}</span>`;
 
     return `
-      <div class="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#4395D8] transition shadow-xs flex items-center justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
+      <div class="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#4395D8] transition shadow-xs space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap min-w-0">
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${tagBg}">${item.tipo}</span>
             <span class="text-[11px] text-[#64748B] font-semibold">${formatDataBR(item.data)}</span>
             ${titularTag}
           </div>
-          <div class="font-bold text-xs sm:text-sm text-[#23396B] truncate mt-1">${item.descricao}</div>
+          <span class="font-display text-base font-extrabold text-[#23396B] shrink-0">${formatBRL(item.valor)}</span>
         </div>
 
-        <div class="text-right shrink-0">
-          <div class="font-display text-sm sm:text-base font-extrabold text-[#23396B]">${formatBRL(item.valor)}</div>
-          <div class="flex items-center justify-end gap-2 mt-1">
-            <button onclick="abrirEdicaoRapida('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">Editar</button>
-            <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition">Excluir</button>
-          </div>
+        <div class="font-bold text-xs sm:text-sm text-[#0F172A] leading-snug break-words">
+          ${item.descricao}
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+          <button onclick="abrirEdicaoRapida('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">Editar</button>
+          <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition">Excluir</button>
         </div>
       </div>
     `;
@@ -778,63 +779,83 @@ function renderizarTabelaLancamentos() {
   const elTotalFiltrado = document.getElementById("totalFiltradoValor");
   if (elTotalFiltrado) elTotalFiltrado.textContent = formatBRL(totalFiltrado);
 
+  const containerMob = document.getElementById("cardsLancamentosMobile");
   const tbody = document.getElementById("tbodyLancamentos");
-  if (!tbody) return;
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="7" class="py-8 text-center text-sm text-[#6C757D]">
-          Nenhuma despesa encontrada para os filtros selecionados.
-        </td>
-      </tr>
+    const emptyHtml = `
+      <div class="py-8 text-center text-xs text-[#64748B] bg-slate-50 rounded-2xl border border-slate-100">
+        Nenhuma despesa encontrada para os filtros selecionados.
+      </div>
     `;
+    if (containerMob) containerMob.innerHTML = emptyHtml;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-[#64748B]">${emptyHtml}</td></tr>`;
     return;
   }
 
-  const isMobile = window.innerWidth < 768;
+  // 1. Renderização Exclusiva para Mobile (Cards Nativos com Zero Overflow)
+  if (containerMob) {
+    containerMob.innerHTML = filtrados.map(item => {
+      const isEntrada = item.movimento === "ENTRADA_CAIXA";
+      const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
 
-  if (isMobile) {
-    // ---- Renderização em CARDS para mobile ----
-    // O tbody fica dentro de uma tabela — usamos um truque: colspan + div
-    tbody.innerHTML = `<tr><td colspan="5" class="p-0 border-0">
-      <div class="space-y-3 py-2">
-        ${filtrados.map(item => {
-          const isEntrada = item.movimento === "ENTRADA_CAIXA";
-          const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+      let tagBg = "bg-[#23396B]/10 text-[#23396B]";
+      if (item.tipo === "MO") tagBg = "bg-[#4395D8]/15 text-[#23396B]";
+      if (item.tipo === "MAT") tagBg = "bg-[#23396B]/15 text-[#23396B]";
+      if (item.tipo === "EQUIP") tagBg = "bg-[#FF8C00]/20 text-[#0F172A] font-bold";
+      if (sub === "ALIM") tagBg = "bg-[#16A34A]/15 text-[#16A34A]";
+      if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
+      if (isEntrada) tagBg = "bg-[#16A34A]/20 text-[#14532D] font-bold";
 
-          let tagBg = "bg-[#23396B]/10 text-[#23396B]";
-          if (item.tipo === "MO") tagBg = "bg-[#4395D8]/15 text-[#23396B]";
-          if (item.tipo === "MAT") tagBg = "bg-[#23396B]/15 text-[#23396B]";
-          if (item.tipo === "EQUIP") tagBg = "bg-[#FF8C00]/20 text-[#0F172A] font-bold";
-          if (sub === "ALIM") tagBg = "bg-[#16A34A]/15 text-[#16A34A]";
-          if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
-          if (isEntrada) tagBg = "bg-[#16A34A]/20 text-[#14532D] font-bold";
+      const labelTipo = isEntrada ? "ENTRADA" : `${item.tipo}${sub !== item.tipo ? ` (${sub})` : ""}`;
 
-          const labelTipo = isEntrada ? "ENTRADA" : `${item.tipo}${sub !== item.tipo ? ` (${sub})` : ""}`;
+      const titularTag = item.titular === "PILAR" || item.titular === "MELO"
+        ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FF8C00]/15 text-[#B45309]">Bolso ${item.titular}</span>`
+        : `<span class="text-[#64748B] font-semibold">${item.titular || "EMTEC"}</span>`;
 
-          return `
-            <div class="bg-white border border-[#E2E8F0] rounded-2xl px-4 py-3 shadow-sm">
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex-1 min-w-0">
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${tagBg} inline-block mb-1">${labelTipo}</span>
-                  <div class="font-bold text-sm text-[#23396B] leading-snug">${item.descricao}</div>
-                  <div class="text-[11px] text-[#6C757D] mt-0.5">${formatDataBR(item.data)} · ${item.pagamento || "PIX"} · ${item.titular || "EMTEC"}</div>
-                </div>
-                <div class="text-right shrink-0">
-                  <div class="font-display text-lg font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"}">${isEntrada ? "+" : ""}${formatBRL(item.valor)}</div>
-                  <div class="flex gap-2 mt-2 justify-end">
-                    <button onclick="editarLancamento('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2.5 py-1 rounded-xl bg-blue-50 active:bg-blue-100 transition">Editar</button>
-                    <button onclick="excluirLancamento('${item.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-xl bg-rose-50 active:bg-rose-100 transition">Excluir</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    </td></tr>`;
-    return;
+      return `
+        <div class="bg-white border border-[#E2E8F0] rounded-2xl p-4 shadow-xs space-y-2.5">
+          <!-- Linha 1: Categoria na Esquerda | VALOR COMPLETO em Destaque na Direita -->
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${tagBg} uppercase tracking-wide shrink-0">
+              ${labelTipo}
+            </span>
+            <span class="font-display text-base sm:text-lg font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"} tracking-tight shrink-0">
+              ${isEntrada ? "+" : ""}${formatBRL(item.valor)}
+            </span>
+          </div>
+
+          <!-- Linha 2: Descrição com 100% de Largura (Nunca Trunca) -->
+          <div class="font-bold text-sm text-[#0F172A] leading-snug break-words">
+            ${item.descricao}
+          </div>
+
+          <!-- Linha 3: Metadados (Data, Pagamento, Titular) -->
+          <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-[#64748B]">
+            <span>${formatDataBR(item.data)}</span>
+            <span>•</span>
+            <span>${item.pagamento || "PIX"}</span>
+            <span>•</span>
+            ${titularTag}
+            ${item.empreitaId ? `<span class="text-[#FF8C00] font-bold">• Empreita</span>` : ""}
+          </div>
+
+          <!-- Linha 4: Botões de Ação com Área de Toque Touch -->
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button onclick="editarLancamento('${item.id}')"
+              class="inline-flex items-center gap-1 text-xs font-bold text-[#4395D8] px-3 py-1.5 rounded-xl bg-blue-50 active:bg-blue-100 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+              <span>Editar</span>
+            </button>
+            <button onclick="excluirLancamento('${item.id}')"
+              class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 px-3 py-1.5 rounded-xl bg-rose-50 active:bg-rose-100 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>Excluir</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
   }
 
   // ---- Renderização em TABELA para desktop ----
@@ -1278,62 +1299,62 @@ function excluirLancamento(id) {
 // 8. MEDIÇÕES E CONTRATOS (Cards Mobile / Tabela Desktop)
 // --------------------------------------------------------------------------
 function renderizarAbaMedicoes(obra, m) {
+  const containerMob = document.getElementById("cardsMedicoesMobile");
   const tbody = document.getElementById("tbodyMedicoes");
-  if (!tbody) return;
   const lista = (obra.medicoes || []).filter(med => !med.deletado);
-  const isMobile = window.innerWidth < 768;
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-sm text-[#6C757D]">Nenhuma medição cadastrada.</td></tr>`;
+    const emptyHtml = `<div class="py-6 text-center text-sm text-[#6C757D]">Nenhuma medição cadastrada.</div>`;
+    if (containerMob) containerMob.innerHTML = emptyHtml;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6">${emptyHtml}</td></tr>`;
     return;
   }
 
-  if (isMobile) {
-    tbody.innerHTML = `<tr><td colspan="6" class="p-0 border-0">
-      <div class="space-y-3 py-2">
-        ${lista.map(med => {
-          const bruto = Number(med.valorBruto || 0);
-          const desc = Number(med.descontoNotaPerc ?? 7.5);
-          const liq = med.valorLiquido ? Number(med.valorLiquido) : bruto * (1 - desc / 100);
-          const isRec = med.status === "Recebida";
-          return `
-            <div class="bg-white border border-[#E2E8F0] rounded-2xl px-4 py-3.5 shadow-sm space-y-2.5">
-              <div class="flex items-center justify-between">
-                <div class="font-bold text-sm text-[#23396B]">${med.titulo}</div>
-                <button onclick="alternarStatusMedicao('${med.id}')"
-                  class="px-3 py-1 rounded-full text-[11px] font-bold ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E] border border-amber-300"}">
-                  ${isRec ? "Recebida na Conta" : "A Receber (Prevista)"}
-                </button>
-              </div>
-              <div class="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-slate-100">
-                <div>
-                  <span class="text-[#64748B] block text-[10px] font-bold uppercase">Bruto Faturado</span>
-                  <span class="font-bold text-[#23396B]">${formatBRL(bruto)}</span>
-                </div>
-                <div>
-                  <span class="text-[#64748B] block text-[10px] font-bold uppercase">Retenção NF</span>
-                  <span class="font-semibold text-[#64748B]">-${desc}%</span>
-                </div>
-                <div>
-                  <span class="text-[10px] font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
-                    ${isRec ? "Líquido Recebido" : "Líquido a Receber"}
-                  </span>
-                  <span class="font-display font-extrabold ${isRec ? "text-[#16A34A]" : "text-amber-600"}">${formatBRL(liq)}</span>
-                </div>
-              </div>
-              ${med.observacao ? `<div class="text-[11px] text-[#64748B] italic">${med.observacao}</div>` : ""}
-              <div class="flex items-center justify-between pt-1.5 border-t border-slate-100 text-xs">
-                <button onclick="alternarStatusMedicao('${med.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-1 rounded-lg bg-blue-50 active:bg-blue-100 transition">
-                  ${isRec ? "Marcar como pendente" : "Marcar como recebida"}
-                </button>
-                <button onclick="excluirMedicao('${med.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-lg bg-rose-50 active:bg-rose-100 transition">Excluir</button>
-              </div>
+  // 1. Renderização Mobile (Cards)
+  if (containerMob) {
+    containerMob.innerHTML = lista.map(med => {
+      const bruto = Number(med.valorBruto || 0);
+      const desc = Number(med.descontoNotaPerc ?? 7.5);
+      const liq = med.valorLiquido ? Number(med.valorLiquido) : bruto * (1 - desc / 100);
+      const isRec = med.status === "Recebida";
+      return `
+        <div class="bg-white border border-[#E2E8F0] rounded-2xl p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-bold text-sm text-[#23396B] leading-snug">${med.titulo}</span>
+            <button onclick="alternarStatusMedicao('${med.id}')"
+              class="px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E] border border-amber-300"}">
+              ${isRec ? "Recebida na Conta" : "A Receber (Prevista)"}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 xs:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+            <div>
+              <span class="text-[#64748B] block text-[10px] font-bold uppercase">Bruto Faturado</span>
+              <span class="font-bold text-[#23396B]">${formatBRL(bruto)}</span>
             </div>
-          `;
-        }).join("")}
-      </div>
-    </td></tr>`;
-    return;
+            <div>
+              <span class="text-[#64748B] block text-[10px] font-bold uppercase">Retenção NF</span>
+              <span class="font-semibold text-[#64748B]">-${desc}%</span>
+            </div>
+            <div class="col-span-2 xs:col-span-1">
+              <span class="text-[10px] font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
+                ${isRec ? "Líquido Recebido" : "Líquido a Receber"}
+              </span>
+              <span class="font-display text-base font-extrabold ${isRec ? "text-[#16A34A]" : "text-amber-600"}">${formatBRL(liq)}</span>
+            </div>
+          </div>
+
+          ${med.observacao ? `<div class="text-[11px] text-[#64748B] italic">${med.observacao}</div>` : ""}
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+            <button onclick="alternarStatusMedicao('${med.id}')" class="text-xs font-bold text-[#4395D8] px-2.5 py-1 rounded-xl bg-blue-50 active:bg-blue-100 transition">
+              ${isRec ? "Marcar como pendente" : "Marcar como recebida"}
+            </button>
+            <button onclick="excluirMedicao('${med.id}')" class="text-xs font-bold text-rose-600 px-2.5 py-1 rounded-xl bg-rose-50 active:bg-rose-100 transition">Excluir</button>
+          </div>
+        </div>
+      `;
+    }).join("");
   }
 
   // Desktop — tabela padrão

@@ -349,9 +349,9 @@
 
       <!-- Obra Selector & Botões de Ação -->
       <div class="flex items-center gap-1.5 sm:gap-2">
-        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 max-w-[130px] xs:max-w-[170px] sm:max-w-xs">
-          <span class="text-[10px] uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
-          <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1">
+        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 min-w-[130px] max-w-[190px] sm:max-w-xs">
+          <span class="hidden sm:inline text-[10px] uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
+          <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1 w-full">
           </select>
         </div>
 
@@ -383,7 +383,7 @@
   <!-- ===================================================================== -->
   <!-- MAIN WORKSPACE -->
   <!-- ===================================================================== -->
-  <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4 pb-24 sm:py-6 flex-1 space-y-6">
+  <main class="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-3 pb-24 sm:py-6 flex-1 space-y-4 sm:space-y-6">
 
     <!-- =================================================================== -->
     <!-- HERO EXECUTIVE PANEL (DESKTOP) -->
@@ -697,8 +697,8 @@
         </form>
       </div>
 
-      <!-- Tabela de Lançamentos -->
-      <div class="ed-card p-5 sm:p-6 space-y-4">
+      <!-- Tabela e Lista de Lançamentos -->
+      <div class="ed-card p-3.5 sm:p-6 space-y-4">
         <!-- Topo Mobile: Título Direto + Botão Lançar -->
         <div class="md:hidden flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
@@ -710,41 +710,51 @@
           </button>
         </div>
 
-        <!-- Filtros Rápidos -->
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div class="flex flex-wrap items-center gap-2.5 flex-1">
+        <!-- Filtros Rápidos (Totalmente Responsivos) -->
+        <div class="space-y-2.5 border-b border-slate-100 pb-3.5">
+          <!-- Campo de Busca -->
+          <div class="w-full">
             <input type="text" id="filtroBusca" oninput="renderizarTabelaLancamentos()" placeholder="Buscar por descrição ou pagamento..."
-              class="ed-input text-xs max-w-xs" />
+              class="ed-input text-xs w-full" />
+          </div>
 
-            <select id="filtroCategoria" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs max-w-[160px]">
-              <option value="TODOS">Todas Categorias</option>
-              <option value="MO">Mão de Obra (MO)</option>
-              <option value="MAT">Material (MAT)</option>
-              <option value="EQUIP">Equipamento (EQUIP)</option>
+          <!-- Filtros de Categoria e Titular em Grid de 2 Colunas -->
+          <div class="grid grid-cols-2 gap-2 w-full">
+            <select id="filtroCategoria" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs w-full truncate font-semibold text-[#23396B]">
+              <option value="TODOS">Categorias: Todas</option>
+              <option value="MO">Mão de Obra</option>
+              <option value="MAT">Material</option>
+              <option value="EQUIP">Equipamento</option>
               <option value="SUB_ALIM">Alimentação</option>
-              <option value="SUB_TRANSP">Transporte / Comb.</option>
+              <option value="SUB_TRANSP">Transporte</option>
               <option value="OUTROS">Outros / Taxas</option>
               <option value="ENTRADA_CAIXA">Entrada de Caixa</option>
             </select>
 
-            <select id="filtroTitular" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs max-w-[130px]">
-              <option value="TODOS">Todos Titulares</option>
+            <select id="filtroTitular" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs w-full truncate font-semibold text-[#23396B]">
+              <option value="TODOS">Titulares: Todos</option>
               <option value="EMTEC">EMTEC</option>
               <option value="MELO">Melo</option>
+              <option value="PILAR">Pilar</option>
               <option value="ELON">Elon</option>
               <option value="IAGO">Iago</option>
             </select>
           </div>
 
-          <div class="text-xs text-[#64748B] text-right">
-            Total exibido: <strong id="totalFiltradoValor" class="font-display text-base font-extrabold text-[#23396B]">R$ 0,00</strong>
+          <!-- Banner Informativo com Total Filtrado -->
+          <div class="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[#64748B] font-bold">Total exibido:</span>
+            <strong id="totalFiltradoValor" class="font-display text-sm sm:text-base font-extrabold text-[#23396B]">R$ 0,00</strong>
           </div>
         </div>
 
-        <!-- Tabela Responsiva (Cabeçalho Oculto no Mobile para Eliminar Rolagem Horizontal) -->
-        <div class="overflow-x-auto">
+        <!-- Lista Mobile Exclusiva em Cards Nativos (Sem Tabela, Zero Rolagem Lateral) -->
+        <div id="cardsLancamentosMobile" class="md:hidden space-y-3"></div>
+
+        <!-- Tabela Desktop -->
+        <div class="hidden md:block overflow-x-auto">
           <table class="w-full text-left border-collapse">
-            <thead class="hidden md:table-header-group">
+            <thead>
               <tr class="border-b border-[#CBD5E1] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8FAFC]">
                 <th class="py-3 px-3">Data</th>
                 <th class="py-3 px-3">Descrição / Pagamento</th>
@@ -791,9 +801,13 @@
           </div>
         </form>
 
-        <div class="overflow-x-auto pt-4">
+        <!-- Cards Mobile para Medições (Zero Rolagem Lateral) -->
+        <div id="cardsMedicoesMobile" class="md:hidden space-y-3 pt-3"></div>
+
+        <!-- Tabela Desktop -->
+        <div class="hidden md:block overflow-x-auto pt-4">
           <table class="w-full text-left border-collapse">
-            <thead class="hidden md:table-header-group">
+            <thead>
               <tr class="border-b border-[#CBD5E1] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8FAFC]">
                 <th class="py-3 px-4">Medição</th>
                 <th class="py-3 px-4">Status</th>
