@@ -1,9 +1,75 @@
+// ==========================================================================
+// EMTEC Engenharia — Controle Financeiro e Viabilidade de Obras
+// Sincronização em Nuvem (Vercel Blob), Segurança por PIN, Mobile-First & EVM
+// ==========================================================================
+
 const STORAGE_KEY = "EMTEC_SISTEMA_CUSTOS_V1";
-let estado = carregarEstado();
+const PIN_STORAGE_KEY = "emtec_auth_pin";
+const DEFAULT_PIN = "1234";
+
+let estado = carregarEstadoLocal();
 let obraAtualId = estado.obras[0]?.id || "";
 let chartInstance = null;
+let categoriaRapidaAtiva = "MO";
+let isSincronizando = false;
 
-function carregarEstado() {
+// --------------------------------------------------------------------------
+// 1. SEGURANÇA E AUTENTICAÇÃO POR PIN
+// --------------------------------------------------------------------------
+function verificarAuth() {
+  const pinSalvo = localStorage.getItem(PIN_STORAGE_KEY);
+  const modal = document.getElementById("pinGateModal");
+  if (!modal) return true;
+
+  if (pinSalvo && pinSalvo === DEFAULT_PIN) {
+    modal.classList.add("hidden");
+    return true;
+  } else {
+    modal.classList.remove("hidden");
+    const input = document.getElementById("inputPinAcesso");
+    if (input) setTimeout(() => input.focus(), 200);
+    return false;
+  }
+}
+
+function autenticarPIN(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById("inputPinAcesso");
+  const checkLembrar = document.getElementById("checkLembrarPin");
+  const erroMsg = document.getElementById("pinErroMsg");
+  const pin = (input?.value || "").trim();
+
+  if (pin === DEFAULT_PIN) {
+    if (checkLembrar && checkLembrar.checked) {
+      localStorage.setItem(PIN_STORAGE_KEY, pin);
+    } else {
+      sessionStorage.setItem(PIN_STORAGE_KEY, pin);
+    }
+    if (erroMsg) erroMsg.classList.add("hidden");
+    document.getElementById("pinGateModal").classList.add("hidden");
+    // Inicializar sincronização com a nuvem após login
+    sincronizarComNuvem(true);
+  } else {
+    if (erroMsg) erroMsg.classList.remove("hidden");
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+  }
+}
+
+function logout() {
+  if (confirm("Deseja sair do sistema neste aparelho?")) {
+    localStorage.removeItem(PIN_STORAGE_KEY);
+    sessionStorage.removeItem(PIN_STORAGE_KEY);
+    location.reload();
+  }
+}
+
+// --------------------------------------------------------------------------
+// 2. CARREGAMENTO E SINCRONIZAÇÃO EM NUVEM (VERCEL BLOB + LOCALSTORAGE)
+// --------------------------------------------------------------------------
+function carregarEstadoLocal() {
   try {
     const salvo = localStorage.getItem(STORAGE_KEY);
     if (salvo) {
@@ -15,20 +81,108 @@ function carregarEstado() {
   } catch (e) {
     console.error("Erro ao carregar localStorage:", e);
   }
-  return JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA));
+  return JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA || { obras: [] }));
+}
+
+function getPinAtual() {
+  return localStorage.getItem(PIN_STORAGE_KEY) || sessionStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
+}
+
+function atualizarBadgeNuvem(status, dataHora) {
+  const badge = document.getElementById("cloudBadge");
+  const badgeMob = document.getElementById("cloudBadgeMobile");
+  if (!badge && !badgeMob) return;
+
+  let html = "";
+  if (status === "syncing") {
+    html = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span> <span class="font-bold text-[#FF8C00]">Sincronizando...</span>`;
+  } else if (status === "success") {
+    const hora = dataHora ? new Date(dataHora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    html = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> <span class="font-bold text-[#16A34A]">Nuvem Conectada • ${hora}</span>`;
+  } else if (status === "offline") {
+    html = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span class="font-bold text-rose-600">Salvo no Aparelho (Offline)</span>`;
+  }
+
+  if (badge) badge.innerHTML = html;
+  if (badgeMob) badgeMob.innerHTML = html;
+}
+
+async function sincronizarComNuvem(forcarDownload = false) {
+  if (isSincronizando) return;
+  isSincronizando = true;
+  atualizarBadgeNuvem("syncing");
+
+  const pin = getPinAtual();
+
+  try {
+    if (forcarDownload) {
+      const res = await fetch("/api/sync", {
+        headers: { "x-emtec-pin": pin },
+        cache: "no-store"
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.exists && json.data && Array.isArray(json.data.obras) && json.data.obras.length > 0) {
+          estado = json.data;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+          if (!estado.obras.some(o => o.id === obraAtualId)) {
+            obraAtualId = estado.obras[0]?.id || "";
+          }
+          renderizarSeletorObras();
+          atualizarTudo();
+          atualizarBadgeNuvem("success", json.updatedAt);
+          isSincronizando = false;
+          return;
+        } else if (!json.exists) {
+          // Primeira execução: nuvem vazia, inicializar enviando o estado local
+          await enviarParaNuvem(pin);
+          isSincronizando = false;
+          return;
+        }
+      }
+    }
+
+    await enviarParaNuvem(pin);
+  } catch (err) {
+    console.warn("Nuvem Vercel Blob offline ou indisponível:", err);
+    atualizarBadgeNuvem("offline");
+  } finally {
+    isSincronizando = false;
+  }
+}
+
+async function enviarParaNuvem(pin) {
+  try {
+    const res = await fetch("/api/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-emtec-pin": pin
+      },
+      body: JSON.stringify(estado)
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      atualizarBadgeNuvem("success", json.timestamp);
+    } else {
+      atualizarBadgeNuvem("offline");
+    }
+  } catch (e) {
+    atualizarBadgeNuvem("offline");
+  }
 }
 
 function salvarEstado() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
-  const badge = document.getElementById("cloudBadge");
-  if (badge) {
-    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34B442]"></span> Salvo agora`;
-    setTimeout(() => {
-      badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34B442]"></span> Sincronizado`;
-    }, 2000);
-  }
+  // Disparar sincronização assíncrona automática em segundo plano
+  sincronizarComNuvem(false);
 }
 
+// --------------------------------------------------------------------------
+// 3. ENGENHARIA FINANCEIRA DE CUSTOS (EVM / EAC / VIABILIDADE PROJETADA)
+// --------------------------------------------------------------------------
 function getObraAtual() {
   return estado.obras.find(o => o.id === obraAtualId) || estado.obras[0];
 }
@@ -63,8 +217,9 @@ function normalizarTipoOficial(tipoEscolhido) {
 }
 
 function calcularMetricasObra(obra) {
-  const saidas = obra.lancamentos.filter(l => l.movimento !== "ENTRADA_CAIXA");
-  const entradasCaixa = obra.lancamentos.filter(l => l.movimento === "ENTRADA_CAIXA");
+  if (!obra) return {};
+  const saidas = (obra.lancamentos || []).filter(l => l.movimento !== "ENTRADA_CAIXA");
+  const entradasCaixa = (obra.lancamentos || []).filter(l => l.movimento === "ENTRADA_CAIXA");
 
   const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0 };
   const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0 };
@@ -108,8 +263,35 @@ function calcularMetricasObra(obra) {
   const orc = obra.orcamentoPrevisto || {};
   const tetoTotal = Object.values(orc).reduce((a, b) => a + Number(b || 0), 0);
 
+  // 1. Saldo de Caixa Atual (Hoje): Receita Líquida Recebida - Custos Realizados
   const saldoAtual = medLiquidaRecebida - custoTotal;
-  const saldoProjetadoContrato = medLiquidaTotalContrato - custoTotal;
+
+  // 2. Compromissos Pendentes (Empreitas Contratadas em Aberto)
+  let saldoEmpreitasPendente = 0;
+  for (const emp of (obra.empreitas || [])) {
+    const falta = Math.max(0, Number(emp.valorContratado || 0) - Number(emp.valorPago || 0));
+    saldoEmpreitasPendente += falta;
+  }
+
+  // 3. Custos Restantes Estimados para Concluir a Obra (ETC)
+  // Custo orçado restante para materiais e suprimentos além do que já foi contratado
+  const tetoRestante = Math.max(0, tetoTotal - custoTotal);
+  const custoRestanteEstimado = Math.max(0, tetoRestante - saldoEmpreitasPendente);
+
+  // 4. Custo Total Projetado Final na Conclusão (EAC - Estimate at Completion)
+  const isEmAndamento = obra.status !== "Concluída";
+  const custoTotalProjetado = isEmAndamento
+    ? custoTotal + saldoEmpreitasPendente + custoRestanteEstimado
+    : custoTotal;
+
+  // 5. Receita Total Contratada
+  const receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida;
+
+  // 6. Resultado Final Projetado
+  const saldoProjetadoFinal = receitaContratoTotal - custoTotalProjetado;
+  const margemProjetadaFinalPerc = receitaContratoTotal > 0
+    ? (saldoProjetadoFinal / receitaContratoTotal) * 100
+    : 0;
 
   return {
     qtdSaidas: saidas.length,
@@ -123,53 +305,83 @@ function calcularMetricasObra(obra) {
     medLiquidaTotalContrato,
     tetoTotal,
     saldoAtual,
-    saldoProjetadoContrato
+    saldoEmpreitasPendente,
+    custoRestanteEstimado,
+    custoTotalProjetado,
+    receitaContratoTotal,
+    saldoProjetadoFinal,
+    margemProjetadaFinalPerc
   };
 }
 
-function inicializarApp() {
-  const hoje = new Date().toISOString().split("T")[0];
-  const inputData = document.getElementById("lancData");
-  if (inputData) inputData.value = hoje;
-
-  renderizarSeletorObras();
-  atualizarTudo();
-}
-
-function renderizarSeletorObras() {
-  const sel = document.getElementById("obraSelect");
-  sel.innerHTML = estado.obras.map(o =>
-    `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>${o.nome}</option>`
-  ).join("");
-}
-
-function trocarObra(id) {
-  obraAtualId = id;
-  limparFormLancamento();
-  atualizarTudo();
-}
-
+// --------------------------------------------------------------------------
+// 4. ATUALIZAÇÃO GERAL DA INTERFACE (DESKTOP E MOBILE)
+// --------------------------------------------------------------------------
 function atualizarTudo() {
   const obra = getObraAtual();
   if (!obra) return;
   const m = calcularMetricasObra(obra);
 
-  document.getElementById("obraTitulo").textContent = obra.nome;
-  document.getElementById("obraClienteTag").textContent = `${obra.cliente || "CONTRATO"} • INÍCIO ${formatDataBR(obra.dataInicio)}`;
-  document.getElementById("kpiDescNotaTag").textContent = `-${obra.aliquotaImposto || 7.5}% NF`;
+  const isEmAndamento = obra.status !== "Concluída";
 
-  document.getElementById("kpiMedicaoLiquida").textContent = formatBRL(m.medLiquidaRecebida);
-  document.getElementById("kpiMedicaoSub").textContent =
-    m.medLiquidaTotalContrato > m.medLiquidaRecebida
+  // Identificação e Header
+  const elObraTitulo = document.getElementById("obraTitulo");
+  if (elObraTitulo) elObraTitulo.textContent = obra.nome;
+
+  const elObraClienteTag = document.getElementById("obraClienteTag");
+  if (elObraClienteTag) elObraClienteTag.textContent = `${obra.cliente || "CONTRATO"} • INÍCIO ${formatDataBR(obra.dataInicio)}`;
+
+  // Mobile Hero Card
+  const mobObraNome = document.getElementById("mobObraNome");
+  if (mobObraNome) mobObraNome.textContent = obra.nome;
+
+  const mobSaldoAtual = document.getElementById("mobSaldoAtual");
+  if (mobSaldoAtual) {
+    mobSaldoAtual.textContent = formatBRL(m.saldoAtual);
+    mobSaldoAtual.className = m.saldoAtual >= 0
+      ? "font-display text-2xl sm:text-3xl font-extrabold text-[#16A34A] tracking-tight"
+      : "font-display text-2xl sm:text-3xl font-extrabold text-rose-600 tracking-tight";
+  }
+
+  const mobCustoReal = document.getElementById("mobCustoReal");
+  if (mobCustoReal) mobCustoReal.textContent = formatBRL(m.custoTotal);
+
+  const mobReceitaLiq = document.getElementById("mobReceitaLiq");
+  if (mobReceitaLiq) mobReceitaLiq.textContent = formatBRL(m.medLiquidaRecebida);
+
+  const mobMargemProj = document.getElementById("mobMargemProj");
+  if (mobMargemProj) {
+    if (isEmAndamento) {
+      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% (${formatBRL(m.saldoProjetadoFinal)} previsto)`;
+      mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
+    } else {
+      const margemFinal = m.receitaContratoTotal > 0 ? (m.saldoAtual / m.receitaContratoTotal) * 100 : 0;
+      mobMargemProj.textContent = `${margemFinal.toFixed(1)}% realizada (Concluída)`;
+      mobMargemProj.className = m.saldoAtual >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
+    }
+  }
+
+  // KPIs Desktop
+  const kpiMedLiq = document.getElementById("kpiMedicaoLiquida");
+  if (kpiMedLiq) kpiMedLiq.textContent = formatBRL(m.medLiquidaRecebida);
+
+  const kpiMedSub = document.getElementById("kpiMedicaoSub");
+  if (kpiMedSub) {
+    kpiMedSub.textContent = m.medLiquidaTotalContrato > m.medLiquidaRecebida
       ? `Bruto: ${formatBRL(m.medBrutaRecebida)} | Contrato Líq: ${formatBRL(m.medLiquidaTotalContrato)}`
       : `Faturamento Bruto Atestado: ${formatBRL(m.medBrutaRecebida)}`;
+  }
 
-  document.getElementById("kpiCustoTotal").textContent = formatBRL(m.custoTotal);
-  document.getElementById("kpiQtdLancamentos").textContent = `${m.qtdSaidas} registros`;
-  document.getElementById("kpiCustoSub").textContent =
-    `MAT: ${formatBRL(m.porTipoOficial.MAT)} | MO: ${formatBRL(m.porTipoOficial.MO)}`;
+  const kpiCustoTotal = document.getElementById("kpiCustoTotal");
+  if (kpiCustoTotal) kpiCustoTotal.textContent = formatBRL(m.custoTotal);
 
-  const isEmAndamento = obra.status !== "Concluída";
+  const kpiQtdLanc = document.getElementById("kpiQtdLancamentos");
+  if (kpiQtdLanc) kpiQtdLanc.textContent = `${m.qtdSaidas} registros`;
+
+  const kpiCustoSub = document.getElementById("kpiCustoSub");
+  if (kpiCustoSub) kpiCustoSub.textContent = `MAT: ${formatBRL(m.porTipoOficial.MAT)} | MO: ${formatBRL(m.porTipoOficial.MO)}`;
+
+  // Card Saldo e Viabilidade
   const badgeViab = document.getElementById("viabilidadeBadge");
   const cardSaldoBox = document.getElementById("cardSaldoBox");
   const cardSaldoLabel = document.getElementById("cardSaldoLabel");
@@ -177,93 +389,103 @@ function atualizarTudo() {
   const kpiMargemPerc = document.getElementById("kpiMargemPerc");
   const kpiSaldoSub = document.getElementById("kpiSaldoSub");
 
-  // Viabilidade Projetada sobre Teto Orçado vs Margem de Caixa Momentâneo (Resolve DIV-01 da Auditoria)
-  const baseReceitaContrato = m.medLiquidaTotalContrato > 0 ? m.medLiquidaTotalContrato : m.medLiquidaRecebida;
-  const margemProjetada = baseReceitaContrato > 0 && m.tetoTotal > 0
-    ? ((baseReceitaContrato - m.tetoTotal) / baseReceitaContrato) * 100
-    : 0;
-  const margemRealizada = baseReceitaContrato > 0
-    ? (m.saldoAtual / baseReceitaContrato) * 100
-    : 0;
-
-  kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
+  if (kpiSaldoFinal) kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
 
   if (isEmAndamento) {
     if (cardSaldoLabel) cardSaldoLabel.textContent = "Saldo de Caixa Atual";
-    if (kpiMargemPerc) kpiMargemPerc.textContent = `${margemProjetada >= 0 ? "+" : ""}${margemProjetada.toFixed(1)}% projetada`;
-    if (kpiSaldoSub) kpiSaldoSub.textContent = `Em caixa (Recebido - Gasto). Margem projetada no término.`;
+    if (kpiMargemPerc) {
+      kpiMargemPerc.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada`;
+    }
+    if (kpiSaldoSub) {
+      kpiSaldoSub.textContent = `Empreitas pendentes: ${formatBRL(m.saldoEmpreitasPendente)} | Custo final projetado: ${formatBRL(m.custoTotalProjetado)}`;
+    }
 
-    if (m.tetoTotal > 0 && m.custoTotal > m.tetoTotal) {
+    if (m.saldoProjetadoFinal < 0) {
       badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Em Andamento • Teto Excedido`;
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Em Andamento • Risco de Prejuízo (${formatBRL(Math.abs(m.saldoProjetadoFinal))})`;
       cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
     } else if (m.saldoAtual < 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#FF8C00]/20 text-[#FF8C00] border border-[#FF8C00]/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span> Em Andamento • Caixa Descoberto`;
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#FF8C00]/25 text-[#FF8C00] border border-[#FF8C00]/50 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span> Em Andamento • Caixa Descoberto Momentâneo`;
       cardSaldoBox.className = "rounded-2xl p-4 bg-[#FF8C00]/15 border border-[#FF8C00]/40 backdrop-blur-xs";
     } else {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#A6CE38]/20 text-[#A6CE38] border border-[#A6CE38]/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#A6CE38]"></span> Em Andamento • Viável (${margemProjetada.toFixed(0)}% proj.)`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#A6CE38]/15 border border-[#A6CE38]/45 backdrop-blur-xs";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#16A34A]/25 text-[#16A34A] border border-[#16A34A]/40 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Em Andamento • Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(0)}% proj.)`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/15 border border-[#16A34A]/40 backdrop-blur-xs";
     }
   } else {
     if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido Final";
+    const margemRealizada = m.receitaContratoTotal > 0 ? (m.saldoAtual / m.receitaContratoTotal) * 100 : 0;
     if (kpiMargemPerc) kpiMargemPerc.textContent = `${margemRealizada.toFixed(1)}% final`;
-    if (kpiSaldoSub) kpiSaldoSub.textContent = `Obra Concluída: Faturamento Líquido menos Custo Total.`;
+    if (kpiSaldoSub) kpiSaldoSub.textContent = `Obra Concluída: Faturamento Líquido menos Custo Total Desembolsado.`;
 
     if (m.saldoAtual >= 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#34B442]/25 text-[#34B442] border border-[#34B442]/50 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#34B442]"></span> Obra Concluída • Lucro Realizado`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#34B442]/15 border border-[#34B442]/45 backdrop-blur-xs";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#16A34A]/25 text-[#16A34A] border border-[#16A34A]/50 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Obra Concluída • Lucro Realizado`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/15 border border-[#16A34A]/45 backdrop-blur-xs";
     } else {
       badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Obra Concluída • Prejuízo`;
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Obra Concluída • Prejuízo Realizado`;
       cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
     }
   }
 
+  // Teto Orçamentário
   const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
-  document.getElementById("kpiTetoValor").textContent = formatBRL(m.tetoTotal);
+  const kpiTetoValor = document.getElementById("kpiTetoValor");
+  if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.tetoTotal);
+
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   const barTeto = document.getElementById("kpiTetoBar");
-  badgeTeto.textContent = `${percTeto.toFixed(1)}% utilizado`;
-  barTeto.style.width = `${Math.min(percTeto, 100)}%`;
-
-  if (percTeto < 80) {
-    barTeto.className = "bg-[#A6CE38] h-1.5 rounded-full transition-all duration-300";
-  } else if (percTeto <= 100) {
-    barTeto.className = "bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300";
-  } else {
-    barTeto.className = "bg-rose-400 h-1.5 rounded-full transition-all duration-300";
+  if (badgeTeto) badgeTeto.textContent = `${percTeto.toFixed(1)}% utilizado`;
+  if (barTeto) {
+    barTeto.style.width = `${Math.min(percTeto, 100)}%`;
+    if (percTeto < 80) {
+      barTeto.className = "bg-[#16A34A] h-1.5 rounded-full transition-all duration-300";
+    } else if (percTeto <= 100) {
+      barTeto.className = "bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300";
+    } else {
+      barTeto.className = "bg-rose-500 h-1.5 rounded-full transition-all duration-300";
+    }
   }
 
   const restanteTeto = m.tetoTotal - m.custoTotal;
-  document.getElementById("kpiTetoSub").textContent =
-    restanteTeto >= 0
+  const kpiTetoSub = document.getElementById("kpiTetoSub");
+  if (kpiTetoSub) {
+    kpiTetoSub.textContent = restanteTeto >= 0
       ? `Saldo disponível no teto: ${formatBRL(restanteTeto)}`
       : `Excedente sobre o limite: ${formatBRL(Math.abs(restanteTeto))}`;
-
-  const bannerAud = document.getElementById("alertaAuditoriaBanner");
-  if (obra.id === "obra-piscina") {
-    bannerAud.classList.remove("hidden");
-    document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Reforma Piscina:";
-    document.getElementById("alertaAuditoriaTexto").textContent =
-      "Os 5 lançamentos de Equipamento (R$ 1.123,00) ignorados na fórmula do Excel original foram somados. Custo real: R$ 68.704,19 | Saldo líquido: R$ 20.835,81.";
-  } else if (obra.id === "obra-caixa-forro") {
-    bannerAud.classList.remove("hidden");
-    document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Caixa Obra:";
-    document.getElementById("alertaAuditoriaTexto").textContent =
-      "O resumo da planilha original exibia R$ 790,00 de custo, porém o somatório real de saídas lançadas totaliza R$ 3.270,26.";
-  } else {
-    bannerAud.classList.add("hidden");
   }
 
+  // Banner Auditoria Forense
+  const bannerAud = document.getElementById("alertaAuditoriaBanner");
+  if (bannerAud) {
+    if (obra.id === "obra-piscina") {
+      bannerAud.classList.remove("hidden");
+      document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Reforma Piscina:";
+      document.getElementById("alertaAuditoriaTexto").textContent =
+        "Os 5 lançamentos de Equipamento (R$ 1.123,00) ignorados na fórmula do Excel original foram somados. Custo real: R$ 68.704,19 | Saldo líquido: R$ 20.835,81.";
+    } else if (obra.id === "obra-caixa-forro") {
+      bannerAud.classList.remove("hidden");
+      document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Aba IAGO (Caixa Obra):";
+      document.getElementById("alertaAuditoriaTexto").textContent =
+        "O resumo da planilha original apontou para a coluna C (Entradas) totalizando R$ 790,00, omitindo as saídas reais da coluna D que somam R$ 3.270,26.";
+    } else {
+      bannerAud.classList.add("hidden");
+    }
+  }
+
+  // Preencher Select de Empreitas
   const selEmp = document.getElementById("lancEmpreitaId");
-  selEmp.innerHTML = `<option value="">Não vinculado a contrato de empreita</option>` +
+  const selEmpRapido = document.getElementById("lancRapidoEmpreitaId");
+  const optEmpreitas = `<option value="">Não vinculado a contrato de empreita</option>` +
     (obra.empreitas || []).map(e => {
       const falta = Math.max(0, Number(e.valorContratado) - Number(e.valorPago));
       return `<option value="${e.id}">${e.fornecedor} (Saldo a pagar: ${formatBRL(falta)})</option>`;
     }).join("");
+
+  if (selEmp) selEmp.innerHTML = optEmpreitas;
+  if (selEmpRapido) selEmpRapido.innerHTML = optEmpreitas;
 
   renderizarMiniCards(m);
   renderizarTabelaLancamentos();
@@ -273,16 +495,19 @@ function atualizarTudo() {
 }
 
 function renderizarMiniCards(m) {
+  const container = document.getElementById("miniCardsCategorias");
+  if (!container) return;
+
   const cards = [
     { label: "Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos e materiais", dot: "bg-[#23396B]" },
     { label: "Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)}`, dot: "bg-[#4395D8]" },
     { label: "Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Locação e ferramentas", dot: "bg-[#FF8C00]" },
     { label: "Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, ART e comissões", dot: "bg-[#6C757D]" },
-    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#34B442]" },
+    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#16A34A]" },
     { label: "Combustível / Transp.", val: m.porSubtipoReal.TRANSP, sub: "Abastecimento e deslocamento", dot: "bg-[#002E6E]" }
   ];
 
-  document.getElementById("miniCardsCategorias").innerHTML = cards.map(c => `
+  container.innerHTML = cards.map(c => `
     <div class="ed-card p-4 hover:border-[#4395D8] transition">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${c.dot}"></span>
@@ -294,6 +519,9 @@ function renderizarMiniCards(m) {
   `).join("");
 }
 
+// --------------------------------------------------------------------------
+// 5. TABELA DE LANÇAMENTOS E FILTROS
+// --------------------------------------------------------------------------
 function renderizarTabelaLancamentos() {
   const obra = getObraAtual();
   const busca = (document.getElementById("filtroBusca")?.value || "").toLowerCase().trim();
@@ -301,7 +529,7 @@ function renderizarTabelaLancamentos() {
   const tit = document.getElementById("filtroTitular")?.value || "TODOS";
   const mes = document.getElementById("filtroMes")?.value || "TODOS";
 
-  const filtrados = obra.lancamentos.filter(item => {
+  const filtrados = (obra.lancamentos || []).filter(item => {
     if (busca && !item.descricao.toLowerCase().includes(busca) && !(item.pagamento || "").toLowerCase().includes(busca)) {
       return false;
     }
@@ -321,100 +549,250 @@ function renderizarTabelaLancamentos() {
     return true;
   });
 
-  const totalFiltrado = filtrados.reduce((acc, i) => {
-    return acc + (i.movimento === "ENTRADA_CAIXA" ? 0 : Number(i.valor || 0));
-  }, 0);
-  document.getElementById("totalFiltradoValor").textContent = `${formatBRL(totalFiltrado)} (${filtrados.length} itens)`;
+  const totalFiltrado = filtrados
+    .filter(i => i.movimento !== "ENTRADA_CAIXA")
+    .reduce((acc, i) => acc + Number(i.valor || 0), 0);
 
-  const badgeTipo = {
-    MAT: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#4395D8]/15 text-[#23396B] border border-[#4395D8]/30">MAT</span>`,
-    MO: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#23396B] text-white">MO</span>`,
-    EQUIP: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#FF8C00]/15 text-[#FF6B12] border border-[#FF8C00]/30">EQUIP</span>`,
-    OUTROS: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#F8F9FA] text-[#495057] border border-[#DEE2E6]">OUTROS</span>`
-  };
-
-  const badgeSub = {
-    MAT: `<span class="text-xs text-[#23396B] font-medium">Material</span>`,
-    MO: `<span class="text-xs text-[#4395D8] font-semibold">Mão de Obra</span>`,
-    EQUIP: `<span class="text-xs text-[#FF8C00] font-semibold">Equipamento</span>`,
-    ALIM: `<span class="text-xs text-[#34B442] font-semibold">Alimentação</span>`,
-    TRANSP: `<span class="text-xs text-[#002E6E] font-semibold">Transporte / Comb.</span>`,
-    OUTROS: `<span class="text-xs text-[#6C757D]">Outros / Taxas</span>`,
-    CAIXA: `<span class="text-xs text-[#34B442] font-bold">Entrada de Caixa (+)</span>`
-  };
+  const elTotalFiltrado = document.getElementById("totalFiltradoValor");
+  if (elTotalFiltrado) elTotalFiltrado.textContent = formatBRL(totalFiltrado);
 
   const tbody = document.getElementById("tbodyLancamentos");
+  if (!tbody) return;
+
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-[#6C757D]">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-8 text-center text-sm text-[#6C757D]">
+          Nenhuma despesa encontrada para os filtros selecionados.
+        </td>
+      </tr>
+    `;
     return;
   }
 
   tbody.innerHTML = filtrados.map(item => {
     const isEntrada = item.movimento === "ENTRADA_CAIXA";
-    const dataCorrigidaTag = item.dataOriginal && item.dataOriginal !== item.data
-      ? `<span class="block text-[10px] text-[#FF8C00] font-semibold">Corrigido (${item.dataOriginal})</span>`
-      : "";
+    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+
+    let tagCor = "bg-[#23396B]/10 text-[#23396B]";
+    if (item.tipo === "MO") tagCor = "bg-[#4395D8]/15 text-[#23396B]";
+    if (item.tipo === "MAT") tagCor = "bg-[#23396B]/15 text-[#23396B]";
+    if (item.tipo === "EQUIP") tagCor = "bg-[#FF8C00]/20 text-[#0F172A] font-bold";
+    if (sub === "ALIM") tagCor = "bg-[#16A34A]/15 text-[#16A34A]";
+    if (sub === "TRANSP") tagCor = "bg-[#002E6E]/15 text-[#002E6E]";
 
     return `
-      <tr class="hover:bg-[#F8F9FA] transition ${isEntrada ? "bg-[#34B442]/5" : ""}">
-        <td class="py-3 px-3.5 whitespace-nowrap font-medium text-[#343A40]">
-          ${formatDataBR(item.data)}
-          ${dataCorrigidaTag}
+      <tr class="hover:bg-[#F8F9FA] transition border-b border-[#DEE2E6]">
+        <td class="py-3 px-3 text-xs font-semibold text-[#6C757D] whitespace-nowrap">${formatDataBR(item.data)}</td>
+        <td class="py-3 px-3">
+          <div class="font-bold text-xs sm:text-sm text-[#23396B]">${item.descricao}</div>
+          <div class="text-[11px] text-[#6C757D] flex items-center gap-2 mt-0.5">
+            <span>${item.pagamento || "PIX"}</span>
+            <span>•</span>
+            <span class="font-semibold text-[#23396B]">${item.titular || "EMTEC"}</span>
+            ${item.empreitaId ? `<span class="text-[#FF8C00] font-bold">• Empreita</span>` : ""}
+          </div>
         </td>
-        <td class="py-3 px-3.5 font-semibold text-[#23396B]">${item.descricao}</td>
-        <td class="py-3 px-3.5">${isEntrada ? `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-[#34B442]/15 text-[#34B442]">ENTRADA</span>` : (badgeTipo[item.tipo] || item.tipo)}</td>
-        <td class="py-3 px-3.5">${badgeSub[item.subtipo] || item.subtipo}</td>
-        <td class="py-3 px-3.5 text-[#6C757D] text-xs">${item.pagamento || "-"}</td>
-        <td class="py-3 px-3.5">
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F8F9FA] border border-[#DEE2E6] text-[#23396B]">${item.titular || "-"}</span>
+        <td class="py-3 px-3 whitespace-nowrap">
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${tagCor}">
+            ${item.tipo} ${sub !== item.tipo ? `(${sub})` : ""}
+          </span>
         </td>
-        <td class="py-3 px-3.5 text-right font-display font-bold whitespace-nowrap ${isEntrada ? "text-[#34B442]" : "text-[#23396B]"}">
-          ${isEntrada ? "+ " : ""}${formatBRL(item.valor)}
+        <td class="py-3 px-3 text-right font-display text-xs sm:text-sm font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"} whitespace-nowrap">
+          ${isEntrada ? "+" : ""}${formatBRL(item.valor)}
         </td>
-        <td class="py-3 px-3.5 text-center whitespace-nowrap no-print">
-          <button onclick="editarLancamento('${item.id}')" class="text-xs text-[#4395D8] hover:text-[#23396B] hover:underline font-semibold mr-3">Editar</button>
-          <button onclick="excluirLancamento('${item.id}')" class="text-xs text-rose-600 hover:underline font-semibold">Excluir</button>
+        <td class="py-3 px-3 text-center no-print whitespace-nowrap">
+          <button onclick="editarLancamento('${item.id}')" class="text-xs font-semibold text-[#4395D8] hover:text-[#23396B] mr-2">Editar</button>
+          <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Excluir</button>
         </td>
       </tr>
     `;
   }).join("");
 }
 
-function salvarLancamento(e) {
-  e.preventDefault();
+// --------------------------------------------------------------------------
+// 6. LANÇAMENTO RÁPIDO DE 5 SEGUNDOS (MOBILE BOTTOM SHEET & DESKTOP)
+// --------------------------------------------------------------------------
+function abrirModalLancamentoRapido() {
+  const modal = document.getElementById("modalLancamentoRapido");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+
+  const hoje = new Date().toISOString().split("T")[0];
+  const inputData = document.getElementById("lancRapidoData");
+  if (inputData && !inputData.value) inputData.value = hoje;
+
+  selecionarCategoriaRapida("MO");
+
+  const inputValor = document.getElementById("lancRapidoValor");
+  if (inputValor) {
+    setTimeout(() => inputValor.focus(), 150);
+  }
+}
+
+function fecharModalLancamentoRapido() {
+  const modal = document.getElementById("modalLancamentoRapido");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+}
+
+function selecionarCategoriaRapida(tipo) {
+  categoriaRapidaAtiva = tipo;
+  ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
+    const btn = document.getElementById(`btnCatRapida_${cat}`);
+    if (!btn) return;
+    if (cat === tipo) {
+      btn.className = "py-2.5 px-3 rounded-2xl text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-sm flex items-center justify-center gap-1.5";
+    } else {
+      btn.className = "py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5";
+    }
+  });
+}
+
+function toggleOpcoesAvancadasRapidas() {
+  const el = document.getElementById("opcoesAvancadasRapidas");
+  const icon = document.getElementById("iconeOpcoesAvancadasRapidas");
+  if (!el) return;
+  if (el.classList.contains("hidden")) {
+    el.classList.remove("hidden");
+    if (icon) icon.textContent = "−";
+  } else {
+    el.classList.add("hidden");
+    if (icon) icon.textContent = "+";
+  }
+}
+
+function salvarLancamentoRapido(e) {
+  if (e) e.preventDefault();
   const obra = getObraAtual();
-  const id = document.getElementById("lancId").value;
-  const descricao = document.getElementById("lancDescricao").value.trim().toUpperCase();
-  const tipoEscolhido = document.getElementById("lancTipo").value;
-  const valor = parseFloat(document.getElementById("lancValor").value);
-  const data = document.getElementById("lancData").value;
+  if (!obra) return;
+
+  const valorInput = document.getElementById("lancRapidoValor");
+  const descInput = document.getElementById("lancRapidoDescricao");
+  const dataInput = document.getElementById("lancRapidoData");
+  const titSelect = document.getElementById("lancRapidoTitular");
+  const pagSelect = document.getElementById("lancRapidoPagamento");
+  const empSelect = document.getElementById("lancRapidoEmpreitaId");
+
+  const valor = parseFloat(valorInput?.value || 0);
+  const descricao = (descInput?.value || "").trim();
+  const data = dataInput?.value || new Date().toISOString().split("T")[0];
+  const titular = titSelect?.value || "EMTEC";
+  const pagamento = pagSelect?.value || "PIX";
+  const empreitaId = empSelect?.value || "";
+
+  if (isNaN(valor) || valor <= 0) {
+    alert("Por favor, digite um valor válido maior que zero.");
+    valorInput?.focus();
+    return;
+  }
+
+  if (!descricao) {
+    alert("Por favor, informe a descrição da despesa (ex: Almoço equipe, Cimento, etc.).");
+    descInput?.focus();
+    return;
+  }
+
+  const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva);
+
+  const novo = {
+    id: "lanc-" + Date.now(),
+    descricao,
+    tipo: categoriaRapidaAtiva,
+    subtipo,
+    valor,
+    data,
+    dataOriginal: data,
+    pagamento,
+    titular,
+    movimento: "SAIDA",
+    empreitaId: empreitaId || undefined
+  };
+
+  if (!obra.lancamentos) obra.lancamentos = [];
+  obra.lancamentos.unshift(novo);
+
+  // Se vinculado a empreita, abater automaticamente no valor pago
+  if (empreitaId && obra.empreitas) {
+    const emp = obra.empreitas.find(e => e.id === empreitaId);
+    if (emp) {
+      emp.valorPago = Number(emp.valorPago || 0) + valor;
+    }
+  }
+
+  salvarEstado();
+  atualizarTudo();
+  fecharModalLancamentoRapido();
+
+  // Limpar formulário rápido
+  if (valorInput) valorInput.value = "";
+  if (descInput) descInput.value = "";
+
+  // Feedback tátil e sonoro sutil
+  if (navigator.vibrate) navigator.vibrate(40);
+  mostrarNotificacaoToast(`✅ Despesa de ${formatBRL(valor)} registrada e sincronizada!`);
+}
+
+function mostrarNotificacaoToast(msg) {
+  const toast = document.getElementById("toastFeedback");
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.remove("hidden");
+  toast.classList.add("flex");
+  setTimeout(() => {
+    toast.classList.add("hidden");
+    toast.classList.remove("flex");
+  }, 3000);
+}
+
+// --------------------------------------------------------------------------
+// 7. FORMULÁRIO DE LANÇAMENTO COMPLETO (DESKTOP)
+// --------------------------------------------------------------------------
+function salvarLancamentoDesktop(e) {
+  if (e) e.preventDefault();
+  const obra = getObraAtual();
+  if (!obra) return;
+
+  const idEdicao = document.getElementById("lancIdEdicao")?.value;
+  const desc = document.getElementById("lancDescricao")?.value.trim();
+  const valor = parseFloat(document.getElementById("lancValor")?.value || 0);
+  const data = document.getElementById("lancData")?.value || new Date().toISOString().split("T")[0];
+  const tipoEscolhido = document.getElementById("lancTipo")?.value || "MO";
   const titular = document.getElementById("lancTitular")?.value || "EMTEC";
   const pagamento = document.getElementById("lancPagamento")?.value || "PIX";
   const empreitaId = document.getElementById("lancEmpreitaId")?.value || "";
 
-  const movimento = tipoEscolhido === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : "SAIDA";
-  const tipoOficial = tipoEscolhido === "ENTRADA_CAIXA" ? "MO" : normalizarTipoOficial(tipoEscolhido);
-  const subtipo = detectarSubtipo(descricao, tipoEscolhido);
+  if (isNaN(valor) || valor <= 0) {
+    alert("Informe um valor válido.");
+    return;
+  }
 
-  if (id) {
-    const idx = obra.lancamentos.findIndex(l => l.id === id);
-    if (idx >= 0) {
+  const isEntrada = tipoEscolhido === "ENTRADA_CAIXA";
+  const tipoOficial = isEntrada ? "MAT" : normalizarTipoOficial(tipoEscolhido);
+  const subtipo = detectarSubtipo(desc, tipoEscolhido);
+
+  if (idEdicao) {
+    const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
+    if (idx !== -1) {
       obra.lancamentos[idx] = {
         ...obra.lancamentos[idx],
-        descricao,
+        descricao: desc,
         tipo: tipoOficial,
         subtipo,
         valor,
         data,
         pagamento,
         titular,
-        movimento
+        movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
+        empreitaId: empreitaId || undefined
       };
     }
   } else {
-    obra.lancamentos.unshift({
+    const novo = {
       id: "lanc-" + Date.now(),
-      descricao,
+      descricao: desc,
       tipo: tipoOficial,
       subtipo,
       valor,
@@ -422,11 +800,15 @@ function salvarLancamento(e) {
       dataOriginal: data,
       pagamento,
       titular,
-      movimento
-    });
+      movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
+      empreitaId: empreitaId || undefined
+    };
 
-    if (empreitaId) {
-      const emp = (obra.empreitas || []).find(em => em.id === empreitaId);
+    if (!obra.lancamentos) obra.lancamentos = [];
+    obra.lancamentos.unshift(novo);
+
+    if (empreitaId && obra.empreitas) {
+      const emp = obra.empreitas.find(e => e.id === empreitaId);
       if (emp) {
         emp.valorPago = Number(emp.valorPago || 0) + valor;
       }
@@ -436,67 +818,169 @@ function salvarLancamento(e) {
   salvarEstado();
   limparFormLancamento();
   atualizarTudo();
+  mostrarNotificacaoToast(`✅ Despesa salva com sucesso.`);
 }
 
 function editarLancamento(id) {
   const obra = getObraAtual();
-  const item = obra.lancamentos.find(l => l.id === id);
+  const item = (obra.lancamentos || []).find(l => l.id === id);
   if (!item) return;
 
-  document.getElementById("lancId").value = item.id;
+  mudarAba("lancamentos");
+  document.getElementById("lancIdEdicao").value = item.id;
   document.getElementById("lancDescricao").value = item.descricao;
-  document.getElementById("lancTipo").value = item.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : (item.subtipo || item.tipo);
   document.getElementById("lancValor").value = item.valor;
   document.getElementById("lancData").value = item.data;
-  document.getElementById("lancTitular").value = item.titular;
-  document.getElementById("lancPagamento").value = item.pagamento;
+  document.getElementById("lancTipo").value = item.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : item.tipo;
+  document.getElementById("lancTitular").value = item.titular || "EMTEC";
+  document.getElementById("lancPagamento").value = item.pagamento || "PIX";
+  document.getElementById("lancEmpreitaId").value = item.empreitaId || "";
 
-  document.getElementById("formLancTitulo").textContent = "Editando Registro: " + item.descricao;
-  document.getElementById("btnSalvarLancTexto").textContent = "Atualizar Registro";
+  document.getElementById("formLancTitulo").textContent = "Editar Despesa";
   document.getElementById("btnCancelarEdicao").classList.remove("hidden");
-  document.getElementById("boxFormLancamento").scrollIntoView({ behavior: "smooth" });
+  document.getElementById("camposAvancados").classList.remove("hidden");
+  document.getElementById("lancDescricao").focus();
+}
+
+function cancelarEdicao() {
+  limparFormLancamento();
 }
 
 function limparFormLancamento() {
-  document.getElementById("lancId").value = "";
-  document.getElementById("lancDescricao").value = "";
-  document.getElementById("lancValor").value = "";
-  document.getElementById("lancEmpreitaId").value = "";
-  document.getElementById("formLancTitulo").textContent = "Lançar Custo na Obra";
-  document.getElementById("btnSalvarLancTexto").textContent = "Registrar Lançamento";
-  document.getElementById("btnCancelarEdicao").classList.add("hidden");
+  const form = document.getElementById("formLancamento");
+  if (form) form.reset();
+  const idEd = document.getElementById("lancIdEdicao");
+  if (idEd) idEd.value = "";
+  const tit = document.getElementById("formLancTitulo");
+  if (tit) tit.textContent = "Registrar Nova Despesa";
+  const btnCanc = document.getElementById("btnCancelarEdicao");
+  if (btnCanc) btnCanc.classList.add("hidden");
+  const hoje = new Date().toISOString().split("T")[0];
+  const d = document.getElementById("lancData");
+  if (d) d.value = hoje;
 }
 
 function excluirLancamento(id) {
-  if (!confirm("Confirma a exclusão deste lançamento?")) return;
+  if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
   const obra = getObraAtual();
-  obra.lancamentos = obra.lancamentos.filter(l => l.id !== id);
+  obra.lancamentos = (obra.lancamentos || []).filter(l => l.id !== id);
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast("Lançamento excluído.");
+}
+
+// --------------------------------------------------------------------------
+// 8. MEDIÇÕES E CONTRATOS
+// --------------------------------------------------------------------------
+function renderizarAbaMedicoes(obra, m) {
+  const tbody = document.getElementById("tbodyMedicoes");
+  if (!tbody) return;
+  const lista = obra.medicoes || [];
+
+  tbody.innerHTML = lista.map(med => {
+    const bruto = Number(med.valorBruto || 0);
+    const desc = Number(med.descontoNotaPerc ?? 7.5);
+    const liq = med.valorLiquido ? Number(med.valorLiquido) : bruto * (1 - desc / 100);
+    const isRec = med.status === "Recebida";
+
+    return `
+      <tr class="hover:bg-[#F8F9FA] border-b border-[#DEE2E6]">
+        <td class="py-3.5 px-4 font-bold text-[#23396B]">
+          ${med.titulo}
+          <span class="block text-xs text-[#6C757D] font-normal">${med.observacao || ""}</span>
+        </td>
+        <td class="py-3.5 px-4">
+          <button onclick="alternarStatusMedicao('${med.id}')" class="px-3 py-1 rounded-full text-xs font-bold ${isRec ? "bg-[#16A34A]/15 text-[#16A34A]" : "bg-[#FF8C00]/20 text-[#0F172A] border border-[#FF8C00]/40"}">
+            ${isRec ? "Atestada / Recebida" : "Prevista (Mudar p/ Recebida)"}
+          </button>
+        </td>
+        <td class="py-3.5 px-4 text-right font-semibold text-[#23396B]">${formatBRL(bruto)}</td>
+        <td class="py-3.5 px-4 text-right text-[#6C757D]">-${desc}%</td>
+        <td class="py-3.5 px-4 text-right font-display font-extrabold text-[#16A34A]">${formatBRL(liq)}</td>
+        <td class="py-3.5 px-4 text-center no-print">
+          <button onclick="excluirMedicao('${med.id}')" class="text-xs text-rose-600 font-semibold hover:underline">Excluir</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function salvarMedicao(e) {
+  if (e) e.preventDefault();
+  const obra = getObraAtual();
+  const titulo = document.getElementById("medTitulo")?.value.trim();
+  const valorBruto = parseFloat(document.getElementById("medValorBruto")?.value || 0);
+  const descontoNotaPerc = parseFloat(document.getElementById("medDescPerc")?.value || 7.5);
+  const status = document.getElementById("medStatus")?.value || "Recebida";
+  const valorLiquido = Math.round(valorBruto * (1 - descontoNotaPerc / 100) * 100) / 100;
+
+  if (!obra.medicoes) obra.medicoes = [];
+  obra.medicoes.push({
+    id: "med-" + Date.now(),
+    titulo,
+    data: new Date().toISOString().split("T")[0],
+    valorBruto,
+    descontoNotaPerc,
+    valorLiquido,
+    status,
+    observacao: "Medição registrada no sistema"
+  });
+
+  document.getElementById("medTitulo").value = "";
+  document.getElementById("medValorBruto").value = "";
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast("Medição cadastrada com sucesso.");
+}
+
+function alternarStatusMedicao(id) {
+  const obra = getObraAtual();
+  const med = (obra.medicoes || []).find(m => m.id === id);
+  if (med) {
+    med.status = med.status === "Recebida" ? "Pendente" : "Recebida";
+    salvarEstado();
+    atualizarTudo();
+  }
+}
+
+function excluirMedicao(id) {
+  if (!confirm("Excluir esta medição?")) return;
+  const obra = getObraAtual();
+  obra.medicoes = (obra.medicoes || []).filter(m => m.id !== id);
   salvarEstado();
   atualizarTudo();
 }
 
+// --------------------------------------------------------------------------
+// 9. RESUMO, ORÇAMENTO E GRÁFICOS
+// --------------------------------------------------------------------------
 function renderizarAbaResumo(obra, m) {
-  const cats = [
-    { key: "MAT", nome: "Material de Construção (MAT)", gasto: m.porSubtipoReal.MAT },
-    { key: "MO", nome: "Mão de Obra Direta / Empreitas (MO)", gasto: m.porSubtipoReal.MO },
-    { key: "EQUIP", nome: "Equipamentos & Locação (EQUIP)", gasto: m.porSubtipoReal.EQUIP },
-    { key: "ALIM", nome: "Alimentação (Almoços / Jantas / Café)", gasto: m.porSubtipoReal.ALIM },
-    { key: "TRANSP", nome: "Combustível / Uber / Passagens", gasto: m.porSubtipoReal.TRANSP },
-    { key: "OUTROS", nome: "Outros (Comissões / ART / Taxas)", gasto: m.porSubtipoReal.OUTROS }
+  const container = document.getElementById("orcamentoComparativoLista");
+  if (!container) return;
+
+  const categorias = [
+    { key: "MAT", nome: "Material", gasto: m.porTipoOficial.MAT },
+    { key: "MO", nome: "Mão de Obra Geral", gasto: m.porTipoOficial.MO },
+    { key: "EQUIP", nome: "Equipamentos & Ferramentas", gasto: m.porTipoOficial.EQUIP },
+    { key: "ALIM", nome: "Alimentação de Equipe", gasto: m.porSubtipoReal.ALIM },
+    { key: "TRANSP", nome: "Combustível & Transporte", gasto: m.porSubtipoReal.TRANSP },
+    { key: "OUTROS", nome: "Outros & Taxas", gasto: m.porTipoOficial.OUTROS }
   ];
 
   const orc = obra.orcamentoPrevisto || {};
-  const container = document.getElementById("listaBarrasOrcamento");
 
-  container.innerHTML = cats.map(c => {
+  container.innerHTML = categorias.map(c => {
     const teto = Number(orc[c.key] || 0);
     const perc = teto > 0 ? (c.gasto / teto) * 100 : 0;
-    const corBarra = perc < 80 ? "bg-[#23396B]" : perc <= 100 ? "bg-[#FF8C00]" : "bg-rose-600";
     const saldoCat = teto - c.gasto;
 
+    let corBarra = "bg-[#16A34A]";
+    if (perc > 80 && perc <= 100) corBarra = "bg-[#FF8C00]";
+    if (perc > 100) corBarra = "bg-rose-500";
+
     return `
-      <div class="p-4 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
-        <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="p-3.5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
+        <div class="flex items-center justify-between">
           <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
           <div class="flex items-center gap-2">
             <span class="text-[11px] font-semibold uppercase text-[#6C757D]">Teto R$:</span>
@@ -506,7 +990,7 @@ function renderizarAbaResumo(obra, m) {
         </div>
         <div class="flex items-center justify-between text-xs mt-2">
           <span class="text-[#6C757D]">Realizado: <strong class="text-[#23396B]">${formatBRL(c.gasto)}</strong> (${perc.toFixed(1)}%)</span>
-          <span class="${saldoCat >= 0 ? "text-[#34B442] font-semibold" : "text-rose-600 font-bold"}">
+          <span class="${saldoCat >= 0 ? "text-[#16A34A] font-semibold" : "text-rose-600 font-bold"}">
             ${saldoCat >= 0 ? `Disponível: ${formatBRL(saldoCat)}` : `Excedido: ${formatBRL(Math.abs(saldoCat))}`}
           </span>
         </div>
@@ -517,18 +1001,21 @@ function renderizarAbaResumo(obra, m) {
     `;
   }).join("");
 
-  document.getElementById("resumoComparativoBox").innerHTML = `
-    <div class="flex justify-between text-[#343A40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
-    <div class="flex justify-between text-[#343A40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
-    <div class="flex justify-between text-[#343A40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#FF8C00]">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
-    <div class="flex justify-between text-[#343A40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
-    <div class="flex justify-between pt-2.5 border-t border-[#DEE2E6] font-display text-sm font-extrabold text-[#23396B]">
-      <span>CUSTO TOTAL AUDITADO:</span><span>${formatBRL(m.custoTotal)}</span>
-    </div>
-  `;
+  const resumoComp = document.getElementById("resumoComparativoBox");
+  if (resumoComp) {
+    resumoComp.innerHTML = `
+      <div class="flex justify-between text-[#343A40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
+      <div class="flex justify-between text-[#343A40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
+      <div class="flex justify-between text-[#343A40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#FF8C00] font-bold">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
+      <div class="flex justify-between text-[#343A40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
+      <div class="flex justify-between pt-2.5 border-t border-[#DEE2E6] font-display text-sm font-extrabold text-[#23396B]">
+        <span>CUSTO TOTAL AUDITADO:</span><span>${formatBRL(m.custoTotal)}</span>
+      </div>
+    `;
+  }
 
   const ctx = document.getElementById("chartCategorias");
-  if (ctx) {
+  if (ctx && typeof Chart !== "undefined") {
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
       type: "doughnut",
@@ -543,7 +1030,7 @@ function renderizarAbaResumo(obra, m) {
             m.porSubtipoReal.TRANSP,
             m.porSubtipoReal.OUTROS
           ],
-          backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#34B442", "#002E6E", "#A6CE38"],
+          backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#16A34A", "#002E6E", "#64748B"],
           borderWidth: 2,
           borderColor: "#ffffff"
         }]
@@ -568,189 +1055,181 @@ function salvarTetosOrcamento() {
   });
   salvarEstado();
   atualizarTudo();
-  alert("Limites orçamentários atualizados.");
+  mostrarNotificacaoToast("Limites orçamentários atualizados.");
 }
 
-function renderizarAbaMedicoes(obra, m) {
-  const tbody = document.getElementById("tbodyMedicoes");
-  const lista = obra.medicoes || [];
-
-  tbody.innerHTML = lista.map(med => {
-    const bruto = Number(med.valorBruto || 0);
-    const desc = Number(med.descontoNotaPerc ?? 7.5);
-    const liq = med.valorLiquido ? Number(med.valorLiquido) : bruto * (1 - desc / 100);
-    const isRec = med.status === "Recebida";
-
-    return `
-      <tr class="hover:bg-[#F8F9FA]">
-        <td class="py-3.5 px-4 font-bold text-[#23396B]">
-          ${med.titulo}
-          <span class="block text-xs text-[#6C757D] font-normal">${med.observacao || ""}</span>
-        </td>
-        <td class="py-3.5 px-4">
-          <button onclick="alternarStatusMedicao('${med.id}')" class="px-3 py-1 rounded-full text-xs font-bold ${isRec ? "bg-[#34B442]/15 text-[#34B442]" : "bg-[#FF8C00]/15 text-[#FF6B12] border border-[#FF8C00]/30"}">
-            ${isRec ? "Atestada / Recebida" : "Prevista (Alterar para Atestada)"}
-          </button>
-        </td>
-        <td class="py-3.5 px-4 text-right font-semibold text-[#23396B]">${formatBRL(bruto)}</td>
-        <td class="py-3.5 px-4 text-right text-[#6C757D]">-${desc}%</td>
-        <td class="py-3.5 px-4 text-right font-display font-extrabold text-[#34B442]">${formatBRL(liq)}</td>
-        <td class="py-3.5 px-4 text-center no-print">
-          <button onclick="excluirMedicao('${med.id}')" class="text-xs text-rose-600 font-semibold hover:underline">Excluir</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function salvarMedicao(e) {
-  e.preventDefault();
-  const obra = getObraAtual();
-  const titulo = document.getElementById("medTitulo").value.trim();
-  const valorBruto = parseFloat(document.getElementById("medValorBruto").value);
-  const descontoNotaPerc = parseFloat(document.getElementById("medDescPerc").value || 7.5);
-  const status = document.getElementById("medStatus").value;
-  const valorLiquido = Math.round(valorBruto * (1 - descontoNotaPerc / 100) * 100) / 100;
-
-  if (!obra.medicoes) obra.medicoes = [];
-  obra.medicoes.push({
-    id: "med-" + Date.now(),
-    titulo,
-    data: new Date().toISOString().split("T")[0],
-    valorBruto,
-    descontoNotaPerc,
-    valorLiquido,
-    status,
-    observacao: "Medição registrada no sistema"
-  });
-
-  document.getElementById("medTitulo").value = "";
-  document.getElementById("medValorBruto").value = "";
-  salvarEstado();
-  atualizarTudo();
-}
-
-function alternarStatusMedicao(id) {
-  const obra = getObraAtual();
-  const med = (obra.medicoes || []).find(m => m.id === id);
-  if (med) {
-    med.status = med.status === "Recebida" ? "Pendente" : "Recebida";
-    salvarEstado();
-    atualizarTudo();
-  }
-}
-
-function excluirMedicao(id) {
-  if (!confirm("Excluir esta medição?")) return;
-  const obra = getObraAtual();
-  obra.medicoes = (obra.medicoes || []).filter(m => m.id !== id);
-  salvarEstado();
-  atualizarTudo();
-}
-
+// --------------------------------------------------------------------------
+// 10. EMPREITAS E TITULARES
+// --------------------------------------------------------------------------
 function renderizarAbaEmpreitasETitulares(obra, m) {
-  const divEmp = document.getElementById("listaEmpreitas");
-  const emps = obra.empreitas || [];
+  const listaEmp = document.getElementById("listaEmpreitas");
+  if (listaEmp) {
+    const emps = obra.empreitas || [];
+    if (emps.length === 0) {
+      listaEmp.innerHTML = `<p class="text-xs text-[#6C757D]">Nenhum contrato de empreiteiro cadastrado.</p>`;
+    } else {
+      listaEmp.innerHTML = emps.map(e => {
+        const contratado = Number(e.valorContratado || 0);
+        const pago = Number(e.valorPago || 0);
+        const falta = Math.max(0, contratado - pago);
+        const perc = contratado > 0 ? (pago / contratado) * 100 : 0;
 
-  divEmp.innerHTML = emps.map(e => {
-    const contratado = Number(e.valorContratado || 0);
-    const pago = Number(e.valorPago || 0);
-    const falta = Math.max(0, contratado - pago);
-    const perc = contratado > 0 ? Math.min(100, (pago / contratado) * 100) : 0;
-
-    return `
-      <div class="p-4 rounded-2xl border border-[#DEE2E6] bg-[#F8F9FA]">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <h4 class="font-display font-bold text-[#23396B] text-sm">${e.fornecedor}</h4>
-            <p class="text-xs text-[#6C757D]">${e.servico || ""} ${e.observacao ? "• " + e.observacao : ""}</p>
+        return `
+          <div class="p-4 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6] space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="font-display font-bold text-sm text-[#23396B]">${e.fornecedor}</h4>
+                <p class="text-xs text-[#6C757D]">${e.servico || ""}</p>
+              </div>
+              <button onclick="excluirEmpreita('${e.id}')" class="text-xs text-rose-600 hover:underline">Excluir</button>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-xs pt-1">
+              <div><span class="text-[#6C757D] block">Contratado</span><strong class="text-[#23396B]">${formatBRL(contratado)}</strong></div>
+              <div><span class="text-[#6C757D] block">Pago</span><strong class="text-[#16A34A]">${formatBRL(pago)}</strong></div>
+              <div><span class="text-[#6C757D] block">Saldo a Pagar</span><strong class="${falta > 0 ? "text-[#FF8C00]" : "text-[#16A34A]"} font-bold">${formatBRL(falta)}</strong></div>
+            </div>
+            <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div class="bg-[#23396B] h-2 rounded-full" style="width: ${Math.min(perc, 100)}%"></div>
+            </div>
           </div>
-          <span class="px-3 py-1 rounded-full text-xs font-extrabold ${falta === 0 ? "bg-[#34B442]/15 text-[#34B442]" : "bg-[#FF8C00] text-white"}">
-            ${falta === 0 ? "QUITADO" : `SALDO A PAGAR: ${formatBRL(falta)}`}
-          </span>
-        </div>
-        <div class="grid grid-cols-3 gap-2 text-xs mt-3 pt-2.5 border-t border-[#DEE2E6]">
-          <div class="text-[#6C757D]">Contratado: <strong class="text-[#23396B]">${formatBRL(contratado)}</strong></div>
-          <div class="text-[#6C757D]">Pago: <strong class="text-[#34B442]">${formatBRL(pago)}</strong></div>
-          <div class="text-right text-[#6C757D]">Execução Financeira: <strong class="text-[#4395D8]">${perc.toFixed(0)}%</strong></div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const divTit = document.getElementById("listaTitulares");
-  const titularesEntries = Object.entries(m.porTitular).sort((a, b) => b[1] - a[1]);
-
-  let htmlTit = titularesEntries.map(([tit, val]) => {
-    const perc = m.custoTotal > 0 ? (val / m.custoTotal) * 100 : 0;
-    return `
-      <div class="p-4 rounded-2xl border border-[#DEE2E6] bg-[#F8F9FA] flex items-center justify-between">
-        <div>
-          <span class="text-xs font-extrabold px-3 py-0.5 rounded-full bg-[#23396B] text-white">${tit}</span>
-          <p class="text-xs text-[#6C757D] mt-1.5">${perc.toFixed(1)}% de participação nos desembolsos</p>
-        </div>
-        <div class="text-right">
-          <p class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(val)}</p>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  if (obra.enviosCaixa && obra.enviosCaixa.length > 0) {
-    const totalEnvios = obra.enviosCaixa.reduce((a, b) => a + Number(b.valor || 0), 0);
-    htmlTit += `
-      <div class="p-4 rounded-2xl bg-[#23396B] text-white mt-3 text-xs space-y-1.5">
-        <div class="font-bold text-[#A6CE38] uppercase tracking-wider">Controle de Adiantamentos (Caixa Obra)</div>
-        <div class="flex justify-between text-white/80"><span>Total Enviado / Entradas:</span><strong class="text-white">${formatBRL(totalEnvios)}</strong></div>
-        <div class="flex justify-between text-white/80"><span>Total Saídas Registradas:</span><strong class="text-white">${formatBRL(m.custoTotal)}</strong></div>
-        <div class="flex justify-between pt-1.5 border-t border-white/15 font-bold text-[#FF8C00]">
-          <span>Saldo de Caixa (Entradas - Saídas):</span><span>${formatBRL(totalEnvios - m.custoTotal)}</span>
-        </div>
-      </div>
-    `;
+        `;
+      }).join("");
+    }
   }
 
-  divTit.innerHTML = htmlTit;
+  const listaTit = document.getElementById("listaTitulares");
+  if (listaTit) {
+    const tits = Object.entries(m.porTitular || {});
+    if (tits.length === 0) {
+      listaTit.innerHTML = `<p class="text-xs text-[#6C757D]">Nenhum desembolso registrado.</p>`;
+    } else {
+      listaTit.innerHTML = tits.map(([titular, val]) => {
+        const perc = m.custoTotal > 0 ? (val / m.custoTotal) * 100 : 0;
+        return `
+          <div class="p-3.5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6] flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-[#23396B]">${titular}</span>
+              <span class="block text-[11px] text-[#6C757D]">${perc.toFixed(1)}% do custo total da obra</span>
+            </div>
+            <div class="font-display font-extrabold text-sm sm:text-base text-[#23396B]">${formatBRL(val)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
 }
 
 function salvarEmpreita(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const obra = getObraAtual();
-  const fornecedor = document.getElementById("empFornecedor").value.trim();
-  const valorContratado = parseFloat(document.getElementById("empContratado").value || 0);
-  const valorPago = parseFloat(document.getElementById("empPago").value || 0);
+  const fornecedor = document.getElementById("empFornecedor")?.value.trim();
+  const servico = document.getElementById("empServico")?.value.trim();
+  const valorContratado = parseFloat(document.getElementById("empContratado")?.value || 0);
+  const valorPago = parseFloat(document.getElementById("empPago")?.value || 0);
 
   if (!obra.empreitas) obra.empreitas = [];
   obra.empreitas.push({
     id: "emp-" + Date.now(),
     fornecedor,
-    servico: "Contrato de Empreita",
+    servico,
     valorContratado,
     valorPago,
-    observacao: ""
+    observacao: "Contrato registrado no sistema"
   });
 
   document.getElementById("empFornecedor").value = "";
+  document.getElementById("empServico").value = "";
   document.getElementById("empContratado").value = "";
   document.getElementById("empPago").value = "";
+
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast("Empreiteiro cadastrado.");
+}
+
+function excluirEmpreita(id) {
+  if (!confirm("Excluir este contrato de empreita?")) return;
+  const obra = getObraAtual();
+  obra.empreitas = (obra.empreitas || []).filter(e => e.id !== id);
   salvarEstado();
   atualizarTudo();
 }
 
-function mudarAba(aba) {
-  ["lancamentos", "resumo", "medicoes", "empreitas", "auditoria"].forEach(a => {
-    document.getElementById(`aba-${a}`).classList.toggle("hidden", a !== aba);
-    const btn = document.getElementById(`tab-btn-${a}`);
-    if (btn) btn.classList.toggle("active", a === aba);
-  });
-  if (aba === "resumo") {
-    atualizarTudo();
+// --------------------------------------------------------------------------
+// 11. GESTÃO DE OBRAS E NAVEGAÇÃO
+// --------------------------------------------------------------------------
+function renderizarSeletorObras() {
+  const sel = document.getElementById("obraSelect");
+  if (!sel) return;
+  sel.innerHTML = estado.obras.map(o =>
+    `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>${o.nome}</option>`
+  ).join("");
+}
+
+function trocarObra(id) {
+  obraAtualId = id;
+  limparFormLancamento();
+  atualizarTudo();
+}
+
+function alternarStatusObra() {
+  const obra = getObraAtual();
+  if (!obra) return;
+  obra.status = obra.status === "Concluída" ? "Em Andamento" : "Concluída";
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast(`Status alterado para: ${obra.status}`);
+}
+
+function mudarAba(abaId) {
+  // Abas disponíveis
+  const abas = ["resumo", "lancamentos", "medicoes", "empreitas", "auditoria"];
+
+  if (abaId === "relatorios_menu") {
+    abaId = "resumo";
   }
+
+  abas.forEach(id => {
+    const sec = document.getElementById(`aba-${id}`);
+    const btn = document.getElementById(`tabBtn_${id}`);
+    if (sec) {
+      if (id === abaId) {
+        sec.classList.remove("hidden");
+      } else {
+        sec.classList.add("hidden");
+      }
+    }
+    if (btn) {
+      if (id === abaId) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    }
+  });
+
+  // Atualizar Bottom Nav no celular
+  const navMobResumo = document.getElementById("navMobResumo");
+  const navMobLanc = document.getElementById("navMobLanc");
+  const navMobMed = document.getElementById("navMobMed");
+  const navMobRel = document.getElementById("navMobRel");
+
+  if (navMobResumo) navMobResumo.className = abaId === "resumo" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
+  if (navMobLanc) navMobLanc.className = abaId === "lancamentos" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
+  if (navMobMed) navMobMed.className = abaId === "medicoes" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
+  if (navMobRel) navMobRel.className = (abaId === "empreitas" || abaId === "auditoria") ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function irParaLancamento() {
-  mudarAba("lancamentos");
-  document.getElementById("lancDescricao").focus();
+  // No mobile, abre direto o modal rápido de 5 segundos
+  if (window.innerWidth < 768) {
+    abrirModalLancamentoRapido();
+  } else {
+    mudarAba("lancamentos");
+    document.getElementById("lancDescricao")?.focus();
+  }
 }
 
 function toggleCamposAvancados() {
@@ -770,31 +1249,30 @@ function toggleCamposAvancados() {
   }
 }
 
-function alternarStatusObra() {
-  const obra = getObraAtual();
-  if (!obra) return;
-  obra.status = obra.status === "Concluída" ? "Em Andamento" : "Concluída";
-  salvarEstado();
-  atualizarTudo();
-}
-
+// Modais de Obra e Nuvem
 function abrirModalNovaObra() {
-  document.getElementById("modalNovaObra").classList.remove("hidden");
-  document.getElementById("modalNovaObra").classList.add("flex");
+  const m = document.getElementById("modalNovaObra");
+  if (m) {
+    m.classList.remove("hidden");
+    m.classList.add("flex");
+  }
 }
 
 function fecharModalNovaObra() {
-  document.getElementById("modalNovaObra").classList.add("hidden");
-  document.getElementById("modalNovaObra").classList.remove("flex");
+  const m = document.getElementById("modalNovaObra");
+  if (m) {
+    m.classList.add("hidden");
+    m.classList.remove("flex");
+  }
 }
 
 function criarNovaObra(e) {
-  e.preventDefault();
-  const nome = document.getElementById("novaObraNome").value.trim();
-  const cliente = document.getElementById("novaObraCliente").value.trim() || "Contrato";
-  const aliquotaImposto = parseFloat(document.getElementById("novaObraImposto").value || 7.5);
-  const valorContrato = parseFloat(document.getElementById("novaObraValorContrato").value || 0);
-  const tetoCusto = parseFloat(document.getElementById("novaObraTetoCusto").value || 0);
+  if (e) e.preventDefault();
+  const nome = document.getElementById("novaObraNome")?.value.trim();
+  const cliente = document.getElementById("novaObraCliente")?.value.trim() || "Contrato";
+  const aliquotaImposto = parseFloat(document.getElementById("novaObraImposto")?.value || 7.5);
+  const valorContrato = parseFloat(document.getElementById("novaObraValorContrato")?.value || 0);
+  const tetoCusto = parseFloat(document.getElementById("novaObraTetoCusto")?.value || 0);
 
   const nova = {
     id: "obra-" + Date.now(),
@@ -834,16 +1312,23 @@ function criarNovaObra(e) {
   renderizarSeletorObras();
   fecharModalNovaObra();
   atualizarTudo();
+  mostrarNotificacaoToast(`Nova obra "${nome}" cadastrada.`);
 }
 
 function abrirModalNuvem() {
-  document.getElementById("modalNuvem").classList.remove("hidden");
-  document.getElementById("modalNuvem").classList.add("flex");
+  const m = document.getElementById("modalNuvem");
+  if (m) {
+    m.classList.remove("hidden");
+    m.classList.add("flex");
+  }
 }
 
 function fecharModalNuvem() {
-  document.getElementById("modalNuvem").classList.add("hidden");
-  document.getElementById("modalNuvem").classList.remove("flex");
+  const m = document.getElementById("modalNuvem");
+  if (m) {
+    m.classList.add("hidden");
+    m.classList.remove("flex");
+  }
 }
 
 function exportarBackupJSON() {
@@ -868,7 +1353,7 @@ function importarBackupJSON(e) {
         renderizarSeletorObras();
         atualizarTudo();
         fecharModalNuvem();
-        alert("Base importada com sucesso.");
+        mostrarNotificacaoToast("Base importada e sincronizada com a nuvem!");
       }
     } catch (err) {
       alert("Arquivo de backup inválido.");
@@ -886,13 +1371,14 @@ function resetarDadosOriginais() {
   renderizarSeletorObras();
   atualizarTudo();
   fecharModalNuvem();
+  mostrarNotificacaoToast("Dados restaurados.");
 }
 
 function exportarExcelObra() {
   const obra = getObraAtual();
   const m = calcularMetricasObra(obra);
 
-  const rowsLanc = obra.lancamentos.map(l => ({
+  const rowsLanc = (obra.lancamentos || []).map(l => ({
     "DATA": formatDataBR(l.data),
     "DESCRIÇÃO": l.descricao,
     "TIPO OFICIAL": l.tipo,
@@ -911,16 +1397,45 @@ function exportarExcelObra() {
     { "INDICADOR": "Total Outros", "VALOR": m.porTipoOficial.OUTROS },
     { "INDICADOR": "CUSTO TOTAL DA OBRA", "VALOR": m.custoTotal },
     { "INDICADOR": "Total Medições Líquidas Recebidas", "VALOR": m.medLiquidaRecebida },
-    { "INDICADOR": "SALDO FINAL DE OBRA (LUCRO)", "VALOR": m.saldoAtual }
+    { "INDICADOR": "SALDO DE CAIXA ATUAL (HOJE)", "VALOR": m.saldoAtual },
+    { "INDICADOR": "Saldo Devedor Empreitas", "VALOR": m.saldoEmpreitasPendente },
+    { "INDICADOR": "Custo Final Projetado (EAC)", "VALOR": m.custoTotalProjetado },
+    { "INDICADOR": "RESULTADO FINAL PROJETADO", "VALOR": m.saldoProjetadoFinal }
   ];
 
-  const wb = XLSX.utils.book_new();
-  const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
-  const wsRes = XLSX.utils.json_to_sheet(rowsResumo);
-  XLSX.utils.book_append_sheet(wb, wsLanc, "Lançamentos Auditados");
-  XLSX.utils.book_append_sheet(wb, wsRes, "Resumo & Viabilidade");
+  if (typeof XLSX !== "undefined") {
+    const wb = XLSX.utils.book_new();
+    const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
+    const wsRes = XLSX.utils.json_to_sheet(rowsResumo);
+    XLSX.utils.book_append_sheet(wb, wsLanc, "Lançamentos Auditados");
+    XLSX.utils.book_append_sheet(wb, wsRes, "Resumo & Viabilidade");
+    XLSX.writeFile(wb, `Centro_Custo_${obra.nome.replace(/\s+/g, "_")}_Corrigido.xlsx`);
+  } else {
+    alert("Biblioteca Excel não disponível no momento.");
+  }
+}
 
-  XLSX.writeFile(wb, `Centro_Custo_${obra.nome.replace(/\s+/g, "_")}_Corrigido.xlsx`);
+// --------------------------------------------------------------------------
+// 12. INICIALIZAÇÃO DA APLICAÇÃO
+// --------------------------------------------------------------------------
+function inicializarApp() {
+  const hoje = new Date().toISOString().split("T")[0];
+  const inputData = document.getElementById("lancData");
+  if (inputData) inputData.value = hoje;
+
+  renderizarSeletorObras();
+  atualizarTudo();
+
+  // Verificar autenticação por PIN
+  verificarAuth();
+
+  // Tentar sincronizar da nuvem Vercel Blob
+  sincronizarComNuvem(true);
+
+  // Escutar eventos de reconexão de internet
+  window.addEventListener("online", () => {
+    sincronizarComNuvem(false);
+  });
 }
 
 window.addEventListener("DOMContentLoaded", inicializarApp);
