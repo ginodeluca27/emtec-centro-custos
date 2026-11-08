@@ -401,17 +401,17 @@ function atualizarTudo() {
     }
 
     if (m.saldoProjetadoFinal < 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Em Andamento • Risco de Prejuízo (${formatBRL(Math.abs(m.saldoProjetadoFinal))})`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] cursor-pointer shadow-sm";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Em Andamento • Risco de Prejuízo (${formatBRL(Math.abs(m.saldoProjetadoFinal))})`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs";
     } else if (m.saldoAtual < 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#FF8C00]/25 text-[#FF8C00] border border-[#FF8C00]/50 cursor-pointer";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] cursor-pointer shadow-sm";
       badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span> Em Andamento • Caixa Descoberto Momentâneo`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#FF8C00]/15 border border-[#FF8C00]/40 backdrop-blur-xs";
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs";
     } else {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#16A34A]/25 text-[#16A34A] border border-[#16A34A]/40 cursor-pointer";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] cursor-pointer shadow-sm";
       badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Em Andamento • Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(0)}% proj.)`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/15 border border-[#16A34A]/40 backdrop-blur-xs";
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs";
     }
   } else {
     if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido Final";
@@ -420,13 +420,13 @@ function atualizarTudo() {
     if (kpiSaldoSub) kpiSaldoSub.textContent = `Obra Concluída: Faturamento Líquido menos Custo Total Desembolsado.`;
 
     if (m.saldoAtual >= 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#16A34A]/25 text-[#16A34A] border border-[#16A34A]/50 cursor-pointer";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] cursor-pointer shadow-sm";
       badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Obra Concluída • Lucro Realizado`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/15 border border-[#16A34A]/45 backdrop-blur-xs";
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs";
     } else {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Obra Concluída • Prejuízo Realizado`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] cursor-pointer shadow-sm";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Obra Concluída • Prejuízo Realizado`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs";
     }
   }
 

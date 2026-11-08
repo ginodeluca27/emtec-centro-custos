@@ -436,7 +436,7 @@
           <span class="ed-eyebrow-light" id="obraClienteTag">CONTRATO ATIVO</span>
           <div class="flex flex-wrap items-center gap-3 mt-1">
             <h2 id="obraTitulo" class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Reforma Piscina</h2>
-            <button onclick="alternarStatusObra()" id="viabilidadeBadge" class="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#16A34A]/25 text-[#16A34A] border border-[#16A34A]/40 transition hover:opacity-90" title="Alternar Status: Em Andamento / Concluída">
+            <button onclick="alternarStatusObra()" id="viabilidadeBadge" class="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] transition hover:opacity-95 shadow-sm" title="Alternar Status: Em Andamento / Concluída">
               <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>
               Obra Saudável
             </button>
@@ -472,18 +472,18 @@
             <span class="text-[11px] font-bold uppercase tracking-wider">Custo Realizado</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white/90" id="kpiQtdLancamentos">0 registros</span>
           </div>
-          <div class="font-display text-2xl font-extrabold text-[#FCD34D] mt-1.5" id="kpiCustoTotal">R$ 0,00</div>
+          <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiCustoTotal">R$ 0,00</div>
           <div class="text-[11px] text-white/70 mt-1 truncate" id="kpiCustoSub">Auditado e Conferido</div>
         </div>
 
         <!-- KPI 3: Saldo / Margem -->
-        <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/50 backdrop-blur-xs" id="cardSaldoBox">
+        <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs" id="cardSaldoBox">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold uppercase tracking-wider text-[#86EFAC]" id="cardSaldoLabel">Saldo de Caixa Atual</span>
-            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#16A34A]/30 text-white" id="kpiMargemPerc">0% margem</span>
+            <span class="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]" id="kpiMargemPerc">0% margem</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiSaldoFinal">R$ 0,00</div>
-          <div class="text-[11px] text-white/80 mt-1 truncate" id="kpiSaldoSub">Em caixa no momento</div>
+          <div class="text-[11px] text-emerald-200/90 mt-1 truncate" id="kpiSaldoSub">Em caixa no momento</div>
         </div>
 
         <!-- KPI 4 -->
