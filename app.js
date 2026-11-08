@@ -22,9 +22,9 @@ function salvarEstado() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
   const badge = document.getElementById("cloudBadge");
   if (badge) {
-    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34b442]"></span> Salvo agora`;
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34B442]"></span> Salvo agora`;
     setTimeout(() => {
-      badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34b442]"></span> Sincronizado`;
+      badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#34B442]"></span> Sincronizado`;
     }, 2000);
   }
 }
@@ -169,25 +169,57 @@ function atualizarTudo() {
   document.getElementById("kpiCustoSub").textContent =
     `MAT: ${formatBRL(m.porTipoOficial.MAT)} | MO: ${formatBRL(m.porTipoOficial.MO)}`;
 
+  const isEmAndamento = obra.status !== "Concluída";
   const badgeViab = document.getElementById("viabilidadeBadge");
   const cardSaldoBox = document.getElementById("cardSaldoBox");
+  const cardSaldoLabel = document.getElementById("cardSaldoLabel");
   const kpiSaldoFinal = document.getElementById("kpiSaldoFinal");
   const kpiMargemPerc = document.getElementById("kpiMargemPerc");
+  const kpiSaldoSub = document.getElementById("kpiSaldoSub");
 
-  const baseReceita = m.medLiquidaRecebida > 0 ? m.medLiquidaRecebida : m.medLiquidaTotalContrato;
-  const margem = baseReceita > 0 ? (m.saldoAtual / baseReceita) * 100 : 0;
+  // Viabilidade Projetada sobre Teto Orçado vs Margem de Caixa Momentâneo (Resolve DIV-01 da Auditoria)
+  const baseReceitaContrato = m.medLiquidaTotalContrato > 0 ? m.medLiquidaTotalContrato : m.medLiquidaRecebida;
+  const margemProjetada = baseReceitaContrato > 0 && m.tetoTotal > 0
+    ? ((baseReceitaContrato - m.tetoTotal) / baseReceitaContrato) * 100
+    : 0;
+  const margemRealizada = baseReceitaContrato > 0
+    ? (m.saldoAtual / baseReceitaContrato) * 100
+    : 0;
 
   kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
-  kpiMargemPerc.textContent = `${margem.toFixed(1)}% margem`;
 
-  if (m.saldoAtual >= 0) {
-    badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#a3e635]/20 text-[#a3e635] border border-[#a3e635]/40";
-    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#a3e635]"></span> Obra Viável • Saldo Positivo`;
-    cardSaldoBox.className = "rounded-2xl p-4 bg-[#a3e635]/10 border border-[#a3e635]/40 backdrop-blur-xs";
+  if (isEmAndamento) {
+    if (cardSaldoLabel) cardSaldoLabel.textContent = "Saldo de Caixa Atual";
+    if (kpiMargemPerc) kpiMargemPerc.textContent = `${margemProjetada >= 0 ? "+" : ""}${margemProjetada.toFixed(1)}% projetada`;
+    if (kpiSaldoSub) kpiSaldoSub.textContent = `Em caixa (Recebido - Gasto). Margem projetada no término.`;
+
+    if (m.tetoTotal > 0 && m.custoTotal > m.tetoTotal) {
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Em Andamento • Teto Excedido`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
+    } else if (m.saldoAtual < 0) {
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#FF8C00]/20 text-[#FF8C00] border border-[#FF8C00]/40 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span> Em Andamento • Caixa Descoberto`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#FF8C00]/15 border border-[#FF8C00]/40 backdrop-blur-xs";
+    } else {
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#A6CE38]/20 text-[#A6CE38] border border-[#A6CE38]/40 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#A6CE38]"></span> Em Andamento • Viável (${margemProjetada.toFixed(0)}% proj.)`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#A6CE38]/15 border border-[#A6CE38]/45 backdrop-blur-xs";
+    }
   } else {
-    badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40";
-    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Atenção • Custo Acima do Recebido`;
-    cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
+    if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido Final";
+    if (kpiMargemPerc) kpiMargemPerc.textContent = `${margemRealizada.toFixed(1)}% final`;
+    if (kpiSaldoSub) kpiSaldoSub.textContent = `Obra Concluída: Faturamento Líquido menos Custo Total.`;
+
+    if (m.saldoAtual >= 0) {
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#34B442]/25 text-[#34B442] border border-[#34B442]/50 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#34B442]"></span> Obra Concluída • Lucro Realizado`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-[#34B442]/15 border border-[#34B442]/45 backdrop-blur-xs";
+    } else {
+      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/40 cursor-pointer";
+      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Obra Concluída • Prejuízo`;
+      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/15 border border-rose-400/40 backdrop-blur-xs";
+    }
   }
 
   const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
@@ -198,9 +230,9 @@ function atualizarTudo() {
   barTeto.style.width = `${Math.min(percTeto, 100)}%`;
 
   if (percTeto < 80) {
-    barTeto.className = "bg-[#a3e635] h-1.5 rounded-full transition-all duration-300";
+    barTeto.className = "bg-[#A6CE38] h-1.5 rounded-full transition-all duration-300";
   } else if (percTeto <= 100) {
-    barTeto.className = "bg-amber-400 h-1.5 rounded-full transition-all duration-300";
+    barTeto.className = "bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300";
   } else {
     barTeto.className = "bg-rose-400 h-1.5 rounded-full transition-all duration-300";
   }
@@ -242,22 +274,22 @@ function atualizarTudo() {
 
 function renderizarMiniCards(m) {
   const cards = [
-    { label: "Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos e materiais", dot: "bg-[#5F0DA0]" },
-    { label: "Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)}`, dot: "bg-[#380C5B]" },
-    { label: "Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Locação e ferramentas", dot: "bg-[#8d1dd3]" },
-    { label: "Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, ART e comissões", dot: "bg-[#686869]" },
-    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#34b442]" },
-    { label: "Combustível / Transp.", val: m.porSubtipoReal.TRANSP, sub: "Abastecimento e deslocamento", dot: "bg-[#230236]" }
+    { label: "Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos e materiais", dot: "bg-[#23396B]" },
+    { label: "Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)}`, dot: "bg-[#4395D8]" },
+    { label: "Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Locação e ferramentas", dot: "bg-[#FF8C00]" },
+    { label: "Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, ART e comissões", dot: "bg-[#6C757D]" },
+    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#34B442]" },
+    { label: "Combustível / Transp.", val: m.porSubtipoReal.TRANSP, sub: "Abastecimento e deslocamento", dot: "bg-[#002E6E]" }
   ];
 
   document.getElementById("miniCardsCategorias").innerHTML = cards.map(c => `
-    <div class="ed-card p-4 hover:border-[#5F0DA0] transition">
+    <div class="ed-card p-4 hover:border-[#4395D8] transition">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${c.dot}"></span>
-        <span class="text-[11px] font-bold uppercase tracking-wider text-[#686869]">${c.label}</span>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-[#6C757D]">${c.label}</span>
       </div>
-      <div class="font-display text-base sm:text-lg font-extrabold text-[#230236] mt-1.5">${formatBRL(c.val)}</div>
-      <div class="text-[11px] text-[#686869] mt-0.5">${c.sub}</div>
+      <div class="font-display text-base sm:text-lg font-extrabold text-[#23396B] mt-1.5">${formatBRL(c.val)}</div>
+      <div class="text-[11px] text-[#6C757D] mt-0.5">${c.sub}</div>
     </div>
   `).join("");
 }
@@ -295,52 +327,52 @@ function renderizarTabelaLancamentos() {
   document.getElementById("totalFiltradoValor").textContent = `${formatBRL(totalFiltrado)} (${filtrados.length} itens)`;
 
   const badgeTipo = {
-    MAT: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#faf6fd] text-[#5F0DA0] border border-[#deb2ff]">MAT</span>`,
-    MO: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#230236] text-white">MO</span>`,
-    EQUIP: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#8d1dd3]/15 text-[#5F0DA0] border border-[#8d1dd3]/30">EQUIP</span>`,
-    OUTROS: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#F4F4F4] text-[#3e3e40]">OUTROS</span>`
+    MAT: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#4395D8]/15 text-[#23396B] border border-[#4395D8]/30">MAT</span>`,
+    MO: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#23396B] text-white">MO</span>`,
+    EQUIP: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#FF8C00]/15 text-[#FF6B12] border border-[#FF8C00]/30">EQUIP</span>`,
+    OUTROS: `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider bg-[#F8F9FA] text-[#495057] border border-[#DEE2E6]">OUTROS</span>`
   };
 
   const badgeSub = {
-    MAT: `<span class="text-xs text-[#230236] font-medium">Material</span>`,
-    MO: `<span class="text-xs text-[#5F0DA0] font-semibold">Mão de Obra</span>`,
-    EQUIP: `<span class="text-xs text-[#8d1dd3] font-semibold">Equipamento</span>`,
-    ALIM: `<span class="text-xs text-[#34b442] font-semibold">Alimentação</span>`,
-    TRANSP: `<span class="text-xs text-[#380C5B] font-semibold">Transporte / Comb.</span>`,
-    OUTROS: `<span class="text-xs text-[#686869]">Outros / Taxas</span>`,
-    CAIXA: `<span class="text-xs text-[#34b442] font-bold">Entrada de Caixa (+)</span>`
+    MAT: `<span class="text-xs text-[#23396B] font-medium">Material</span>`,
+    MO: `<span class="text-xs text-[#4395D8] font-semibold">Mão de Obra</span>`,
+    EQUIP: `<span class="text-xs text-[#FF8C00] font-semibold">Equipamento</span>`,
+    ALIM: `<span class="text-xs text-[#34B442] font-semibold">Alimentação</span>`,
+    TRANSP: `<span class="text-xs text-[#002E6E] font-semibold">Transporte / Comb.</span>`,
+    OUTROS: `<span class="text-xs text-[#6C757D]">Outros / Taxas</span>`,
+    CAIXA: `<span class="text-xs text-[#34B442] font-bold">Entrada de Caixa (+)</span>`
   };
 
   const tbody = document.getElementById("tbodyLancamentos");
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-[#686869]">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-[#6C757D]">Nenhum registro encontrado para os filtros selecionados.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtrados.map(item => {
     const isEntrada = item.movimento === "ENTRADA_CAIXA";
     const dataCorrigidaTag = item.dataOriginal && item.dataOriginal !== item.data
-      ? `<span class="block text-[10px] text-[#5F0DA0] font-semibold">Corrigido (${item.dataOriginal})</span>`
+      ? `<span class="block text-[10px] text-[#FF8C00] font-semibold">Corrigido (${item.dataOriginal})</span>`
       : "";
 
     return `
-      <tr class="hover:bg-[#faf6fd]/80 transition ${isEntrada ? "bg-[#34b442]/5" : ""}">
-        <td class="py-3 px-3.5 whitespace-nowrap font-medium text-[#3e3e40]">
+      <tr class="hover:bg-[#F8F9FA] transition ${isEntrada ? "bg-[#34B442]/5" : ""}">
+        <td class="py-3 px-3.5 whitespace-nowrap font-medium text-[#343A40]">
           ${formatDataBR(item.data)}
           ${dataCorrigidaTag}
         </td>
-        <td class="py-3 px-3.5 font-semibold text-[#230236]">${item.descricao}</td>
-        <td class="py-3 px-3.5">${isEntrada ? `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-[#34b442]/15 text-[#34b442]">ENTRADA</span>` : (badgeTipo[item.tipo] || item.tipo)}</td>
+        <td class="py-3 px-3.5 font-semibold text-[#23396B]">${item.descricao}</td>
+        <td class="py-3 px-3.5">${isEntrada ? `<span class="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-[#34B442]/15 text-[#34B442]">ENTRADA</span>` : (badgeTipo[item.tipo] || item.tipo)}</td>
         <td class="py-3 px-3.5">${badgeSub[item.subtipo] || item.subtipo}</td>
-        <td class="py-3 px-3.5 text-[#686869] text-xs">${item.pagamento || "-"}</td>
+        <td class="py-3 px-3.5 text-[#6C757D] text-xs">${item.pagamento || "-"}</td>
         <td class="py-3 px-3.5">
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F4F4F4] text-[#230236]">${item.titular || "-"}</span>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F8F9FA] border border-[#DEE2E6] text-[#23396B]">${item.titular || "-"}</span>
         </td>
-        <td class="py-3 px-3.5 text-right font-display font-bold whitespace-nowrap ${isEntrada ? "text-[#34b442]" : "text-[#230236]"}">
+        <td class="py-3 px-3.5 text-right font-display font-bold whitespace-nowrap ${isEntrada ? "text-[#34B442]" : "text-[#23396B]"}">
           ${isEntrada ? "+ " : ""}${formatBRL(item.valor)}
         </td>
         <td class="py-3 px-3.5 text-center whitespace-nowrap no-print">
-          <button onclick="editarLancamento('${item.id}')" class="text-xs text-[#5F0DA0] hover:underline font-semibold mr-3">Editar</button>
+          <button onclick="editarLancamento('${item.id}')" class="text-xs text-[#4395D8] hover:text-[#23396B] hover:underline font-semibold mr-3">Editar</button>
           <button onclick="excluirLancamento('${item.id}')" class="text-xs text-rose-600 hover:underline font-semibold">Excluir</button>
         </td>
       </tr>
@@ -356,9 +388,9 @@ function salvarLancamento(e) {
   const tipoEscolhido = document.getElementById("lancTipo").value;
   const valor = parseFloat(document.getElementById("lancValor").value);
   const data = document.getElementById("lancData").value;
-  const titular = document.getElementById("lancTitular").value;
-  const pagamento = document.getElementById("lancPagamento").value;
-  const empreitaId = document.getElementById("lancEmpreitaId").value;
+  const titular = document.getElementById("lancTitular")?.value || "EMTEC";
+  const pagamento = document.getElementById("lancPagamento")?.value || "PIX";
+  const empreitaId = document.getElementById("lancEmpreitaId")?.value || "";
 
   const movimento = tipoEscolhido === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : "SAIDA";
   const tipoOficial = tipoEscolhido === "ENTRADA_CAIXA" ? "MO" : normalizarTipoOficial(tipoEscolhido);
@@ -459,26 +491,26 @@ function renderizarAbaResumo(obra, m) {
   container.innerHTML = cats.map(c => {
     const teto = Number(orc[c.key] || 0);
     const perc = teto > 0 ? (c.gasto / teto) * 100 : 0;
-    const corBarra = perc < 80 ? "bg-[#5F0DA0]" : perc <= 100 ? "bg-amber-500" : "bg-rose-600";
+    const corBarra = perc < 80 ? "bg-[#23396B]" : perc <= 100 ? "bg-[#FF8C00]" : "bg-rose-600";
     const saldoCat = teto - c.gasto;
 
     return `
-      <div class="p-4 rounded-2xl bg-[#faf6fd] border border-[#deb2ff]">
+      <div class="p-4 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs sm:text-sm font-bold text-[#230236]">${c.nome}</span>
+          <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
           <div class="flex items-center gap-2">
-            <span class="text-[11px] font-semibold uppercase text-[#686869]">Teto R$:</span>
+            <span class="text-[11px] font-semibold uppercase text-[#6C757D]">Teto R$:</span>
             <input type="number" step="100" data-orc-key="${c.key}" value="${teto}"
-              class="w-28 rounded-xl border border-[#deb2ff] px-2.5 py-1 text-xs font-bold text-right bg-white text-[#230236]" />
+              class="w-28 rounded-xl border border-[#CBD5E1] px-2.5 py-1 text-xs font-bold text-right bg-white text-[#23396B]" />
           </div>
         </div>
         <div class="flex items-center justify-between text-xs mt-2">
-          <span class="text-[#686869]">Realizado: <strong class="text-[#230236]">${formatBRL(c.gasto)}</strong> (${perc.toFixed(1)}%)</span>
-          <span class="${saldoCat >= 0 ? "text-[#34b442] font-semibold" : "text-rose-600 font-bold"}">
+          <span class="text-[#6C757D]">Realizado: <strong class="text-[#23396B]">${formatBRL(c.gasto)}</strong> (${perc.toFixed(1)}%)</span>
+          <span class="${saldoCat >= 0 ? "text-[#34B442] font-semibold" : "text-rose-600 font-bold"}">
             ${saldoCat >= 0 ? `Disponível: ${formatBRL(saldoCat)}` : `Excedido: ${formatBRL(Math.abs(saldoCat))}`}
           </span>
         </div>
-        <div class="w-full bg-[#e9d5ff] h-2 rounded-full mt-2 overflow-hidden">
+        <div class="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
           <div class="${corBarra} h-2 rounded-full" style="width: ${Math.min(perc, 100)}%"></div>
         </div>
       </div>
@@ -486,11 +518,11 @@ function renderizarAbaResumo(obra, m) {
   }).join("");
 
   document.getElementById("resumoComparativoBox").innerHTML = `
-    <div class="flex justify-between text-[#3e3e40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
-    <div class="flex justify-between text-[#3e3e40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
-    <div class="flex justify-between text-[#3e3e40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#5F0DA0]">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
-    <div class="flex justify-between text-[#3e3e40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
-    <div class="flex justify-between pt-2.5 border-t border-[#deb2ff] font-display text-sm font-extrabold text-[#230236]">
+    <div class="flex justify-between text-[#343A40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
+    <div class="flex justify-between text-[#343A40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
+    <div class="flex justify-between text-[#343A40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#FF8C00]">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
+    <div class="flex justify-between text-[#343A40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
+    <div class="flex justify-between pt-2.5 border-t border-[#DEE2E6] font-display text-sm font-extrabold text-[#23396B]">
       <span>CUSTO TOTAL AUDITADO:</span><span>${formatBRL(m.custoTotal)}</span>
     </div>
   `;
@@ -511,7 +543,7 @@ function renderizarAbaResumo(obra, m) {
             m.porSubtipoReal.TRANSP,
             m.porSubtipoReal.OUTROS
           ],
-          backgroundColor: ["#5F0DA0", "#230236", "#8d1dd3", "#34b442", "#380C5B", "#deb2ff"],
+          backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#34B442", "#002E6E", "#A6CE38"],
           borderWidth: 2,
           borderColor: "#ffffff"
         }]
@@ -550,19 +582,19 @@ function renderizarAbaMedicoes(obra, m) {
     const isRec = med.status === "Recebida";
 
     return `
-      <tr class="hover:bg-[#faf6fd]/60">
-        <td class="py-3.5 px-4 font-bold text-[#230236]">
+      <tr class="hover:bg-[#F8F9FA]">
+        <td class="py-3.5 px-4 font-bold text-[#23396B]">
           ${med.titulo}
-          <span class="block text-xs text-[#686869] font-normal">${med.observacao || ""}</span>
+          <span class="block text-xs text-[#6C757D] font-normal">${med.observacao || ""}</span>
         </td>
         <td class="py-3.5 px-4">
-          <button onclick="alternarStatusMedicao('${med.id}')" class="px-3 py-1 rounded-full text-xs font-bold ${isRec ? "bg-[#34b442]/15 text-[#34b442]" : "bg-[#faf6fd] text-[#5F0DA0] border border-[#deb2ff]"}">
+          <button onclick="alternarStatusMedicao('${med.id}')" class="px-3 py-1 rounded-full text-xs font-bold ${isRec ? "bg-[#34B442]/15 text-[#34B442]" : "bg-[#FF8C00]/15 text-[#FF6B12] border border-[#FF8C00]/30"}">
             ${isRec ? "Atestada / Recebida" : "Prevista (Alterar para Atestada)"}
           </button>
         </td>
-        <td class="py-3.5 px-4 text-right font-semibold text-[#230236]">${formatBRL(bruto)}</td>
-        <td class="py-3.5 px-4 text-right text-[#686869]">-${desc}%</td>
-        <td class="py-3.5 px-4 text-right font-display font-extrabold text-[#34b442]">${formatBRL(liq)}</td>
+        <td class="py-3.5 px-4 text-right font-semibold text-[#23396B]">${formatBRL(bruto)}</td>
+        <td class="py-3.5 px-4 text-right text-[#6C757D]">-${desc}%</td>
+        <td class="py-3.5 px-4 text-right font-display font-extrabold text-[#34B442]">${formatBRL(liq)}</td>
         <td class="py-3.5 px-4 text-center no-print">
           <button onclick="excluirMedicao('${med.id}')" class="text-xs text-rose-600 font-semibold hover:underline">Excluir</button>
         </td>
@@ -627,20 +659,20 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
     const perc = contratado > 0 ? Math.min(100, (pago / contratado) * 100) : 0;
 
     return `
-      <div class="p-4 rounded-2xl border border-[#deb2ff] bg-[#faf6fd]">
+      <div class="p-4 rounded-2xl border border-[#DEE2E6] bg-[#F8F9FA]">
         <div class="flex items-center justify-between gap-2">
           <div>
-            <h4 class="font-display font-bold text-[#230236] text-sm">${e.fornecedor}</h4>
-            <p class="text-xs text-[#686869]">${e.servico || ""} ${e.observacao ? "• " + e.observacao : ""}</p>
+            <h4 class="font-display font-bold text-[#23396B] text-sm">${e.fornecedor}</h4>
+            <p class="text-xs text-[#6C757D]">${e.servico || ""} ${e.observacao ? "• " + e.observacao : ""}</p>
           </div>
-          <span class="px-3 py-1 rounded-full text-xs font-extrabold ${falta === 0 ? "bg-[#34b442]/15 text-[#34b442]" : "bg-[#230236] text-white"}">
+          <span class="px-3 py-1 rounded-full text-xs font-extrabold ${falta === 0 ? "bg-[#34B442]/15 text-[#34B442]" : "bg-[#FF8C00] text-white"}">
             ${falta === 0 ? "QUITADO" : `SALDO A PAGAR: ${formatBRL(falta)}`}
           </span>
         </div>
-        <div class="grid grid-cols-3 gap-2 text-xs mt-3 pt-2.5 border-t border-[#e9d5ff]">
-          <div class="text-[#686869]">Contratado: <strong class="text-[#230236]">${formatBRL(contratado)}</strong></div>
-          <div class="text-[#686869]">Pago: <strong class="text-[#34b442]">${formatBRL(pago)}</strong></div>
-          <div class="text-right text-[#686869]">Execução Financeira: <strong class="text-[#5F0DA0]">${perc.toFixed(0)}%</strong></div>
+        <div class="grid grid-cols-3 gap-2 text-xs mt-3 pt-2.5 border-t border-[#DEE2E6]">
+          <div class="text-[#6C757D]">Contratado: <strong class="text-[#23396B]">${formatBRL(contratado)}</strong></div>
+          <div class="text-[#6C757D]">Pago: <strong class="text-[#34B442]">${formatBRL(pago)}</strong></div>
+          <div class="text-right text-[#6C757D]">Execução Financeira: <strong class="text-[#4395D8]">${perc.toFixed(0)}%</strong></div>
         </div>
       </div>
     `;
@@ -652,13 +684,13 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
   let htmlTit = titularesEntries.map(([tit, val]) => {
     const perc = m.custoTotal > 0 ? (val / m.custoTotal) * 100 : 0;
     return `
-      <div class="p-4 rounded-2xl border border-[#deb2ff] bg-[#faf6fd] flex items-center justify-between">
+      <div class="p-4 rounded-2xl border border-[#DEE2E6] bg-[#F8F9FA] flex items-center justify-between">
         <div>
-          <span class="text-xs font-extrabold px-3 py-0.5 rounded-full bg-[#230236] text-white">${tit}</span>
-          <p class="text-xs text-[#686869] mt-1.5">${perc.toFixed(1)}% de participação nos desembolsos</p>
+          <span class="text-xs font-extrabold px-3 py-0.5 rounded-full bg-[#23396B] text-white">${tit}</span>
+          <p class="text-xs text-[#6C757D] mt-1.5">${perc.toFixed(1)}% de participação nos desembolsos</p>
         </div>
         <div class="text-right">
-          <p class="font-display text-base font-extrabold text-[#230236]">${formatBRL(val)}</p>
+          <p class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(val)}</p>
         </div>
       </div>
     `;
@@ -667,11 +699,11 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
   if (obra.enviosCaixa && obra.enviosCaixa.length > 0) {
     const totalEnvios = obra.enviosCaixa.reduce((a, b) => a + Number(b.valor || 0), 0);
     htmlTit += `
-      <div class="p-4 rounded-2xl bg-[#230236] text-white mt-3 text-xs space-y-1.5">
-        <div class="font-bold text-[#a3e635] uppercase tracking-wider">Controle de Adiantamentos (Caixa Obra)</div>
+      <div class="p-4 rounded-2xl bg-[#23396B] text-white mt-3 text-xs space-y-1.5">
+        <div class="font-bold text-[#A6CE38] uppercase tracking-wider">Controle de Adiantamentos (Caixa Obra)</div>
         <div class="flex justify-between text-white/80"><span>Total Enviado / Entradas:</span><strong class="text-white">${formatBRL(totalEnvios)}</strong></div>
         <div class="flex justify-between text-white/80"><span>Total Saídas Registradas:</span><strong class="text-white">${formatBRL(m.custoTotal)}</strong></div>
-        <div class="flex justify-between pt-1.5 border-t border-white/15 font-bold text-[#deb2ff]">
+        <div class="flex justify-between pt-1.5 border-t border-white/15 font-bold text-[#FF8C00]">
           <span>Saldo de Caixa (Entradas - Saídas):</span><span>${formatBRL(totalEnvios - m.custoTotal)}</span>
         </div>
       </div>
@@ -719,6 +751,31 @@ function mudarAba(aba) {
 function irParaLancamento() {
   mudarAba("lancamentos");
   document.getElementById("lancDescricao").focus();
+}
+
+function toggleCamposAvancados() {
+  const el = document.getElementById("camposAvancados");
+  const icone = document.getElementById("iconeToggleAvancado");
+  const texto = document.getElementById("textoToggleAvancado");
+  if (!el) return;
+  const isHidden = el.classList.contains("hidden");
+  if (isHidden) {
+    el.classList.remove("hidden");
+    if (icone) icone.textContent = "−";
+    if (texto) texto.textContent = "Ocultar detalhes adicionais";
+  } else {
+    el.classList.add("hidden");
+    if (icone) icone.textContent = "+";
+    if (texto) texto.textContent = "Mais detalhes (Titular, Meio de Pagamento, Empreita)";
+  }
+}
+
+function alternarStatusObra() {
+  const obra = getObraAtual();
+  if (!obra) return;
+  obra.status = obra.status === "Concluída" ? "Em Andamento" : "Concluída";
+  salvarEstado();
+  atualizarTudo();
 }
 
 function abrirModalNovaObra() {

@@ -12,25 +12,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --ed-primary: #5F0DA0;
-      --ed-primary-hover: #4e0b84;
-      --ed-primary-light: #8d1dd3;
-      --ed-secondary: #380C5B;
-      --ed-dark: #230236;
-      --ed-border: #deb2ff;
-      --ed-bg-soft: #faf6fd;
-      --ed-bg-surface: #FDFDFD;
-      --ed-bg-muted: #F4F4F4;
-      --ed-text: #2a2a2b;
-      --ed-text-muted: #686869;
-      --ed-lime: #a3e635;
-      --ed-green: #34b442;
+      --cr-navy: #23396B;
+      --cr-navy-dark: #002E6E;
+      --cr-blue: #4395D8;
+      --cr-orange: #FF8C00;
+      --cr-orange-hover: #FF6B12;
+      --cr-lime: #A6CE38;
+      --cr-green: #34B442;
+      --cr-bg: #F8F9FA;
+      --cr-surface: #FFFFFF;
+      --cr-border: #DEE2E6;
+      --cr-text: #212529;
+      --cr-muted: #6C757D;
     }
 
     body {
       font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: var(--ed-bg-soft);
-      color: var(--ed-text);
+      background-color: var(--cr-bg);
+      color: var(--cr-text);
       -webkit-font-smoothing: antialiased;
     }
 
@@ -38,20 +37,20 @@
       font-family: "Sora", "Plus Jakarta Sans", sans-serif;
     }
 
-    /* E-deas Header & Scroll Shadow */
+    /* Header & Scroll Shadow */
     .ed-header {
       position: sticky;
       top: 0;
       z-index: 50;
-      background: #FDFDFD;
-      border-bottom: 1px solid #deb2ff;
-      box-shadow: 1px 13px 15px -3px rgba(35, 2, 54, 0.05);
+      background: #FFFFFF;
+      border-bottom: 1px solid #DEE2E6;
+      box-shadow: 1px 13px 15px -3px rgba(0, 46, 110, 0.05);
     }
 
-    /* E-deas Section Eyebrow TitleEffect2 */
+    /* Section Eyebrow TitleEffect2 (Carmen Rios / E-deas style) */
     .ed-eyebrow {
       position: relative;
-      color: #2a2a2b;
+      color: #23396B;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -61,8 +60,8 @@
     }
     .ed-eyebrow::after {
       content: "";
-      background: #5F0DA0;
-      width: 28px;
+      background: #FF8C00;
+      width: 30px;
       height: 2.5px;
       position: absolute;
       left: 0;
@@ -71,7 +70,7 @@
 
     .ed-eyebrow-light {
       position: relative;
-      color: #deb2ff;
+      color: #A6CE38;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -81,24 +80,47 @@
     }
     .ed-eyebrow-light::after {
       content: "";
-      background: #a3e635;
-      width: 28px;
+      background: #FF8C00;
+      width: 30px;
       height: 2.5px;
       position: absolute;
       left: 0;
       top: 0;
     }
 
-    /* E-deas Pill Buttons (.ed-btn) */
+    /* Pill Buttons (.ed-btn) */
     .ed-btn {
-      background: #5F0DA0;
+      background: #FF8C00;
       color: #fff;
       padding: 10px 22px;
       border-radius: 35px;
-      border: 1px solid #5F0DA0;
+      border: 1px solid #FF8C00;
       font-size: 13.5px;
-      font-weight: 600;
-      transition: all 0.35s ease-in-out;
+      font-weight: 700;
+      transition: all 0.3s ease-in-out;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      line-height: 1.2;
+      box-shadow: 0 4px 14px rgba(255, 140, 0, 0.25);
+    }
+    .ed-btn:hover {
+      background: #FF6B12;
+      border-color: #FF6B12;
+      transform: translateY(-1px);
+    }
+
+    .ed-btn--navy {
+      background: #23396B;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 35px;
+      border: 1px solid #23396B;
+      font-size: 13.5px;
+      font-weight: 700;
+      transition: all 0.3s ease-in-out;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -106,65 +128,28 @@
       gap: 8px;
       line-height: 1.2;
     }
-    .ed-btn:hover {
-      background: #4e0b84;
-      border-color: #4e0b84;
-      transform: translateY(-1px);
+    .ed-btn--navy:hover {
+      background: #002E6E;
+      border-color: #002E6E;
     }
 
     .ed-btn--transparent {
       background: transparent;
-      color: #5F0DA0;
-      border: 1px solid #5F0DA0;
+      color: #23396B;
+      border: 1px solid #23396B;
       padding: 9px 20px;
       border-radius: 35px;
       font-size: 13px;
       font-weight: 600;
-      transition: all 0.35s ease-in-out;
+      transition: all 0.3s ease-in-out;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 7px;
     }
     .ed-btn--transparent:hover {
-      background: #5F0DA0;
+      background: #23396B;
       color: #fff;
-    }
-
-    .ed-btn--secondary {
-      background: #380C5B;
-      border: 1px solid #5F0DA0;
-      color: #fff;
-      padding: 10px 22px;
-      border-radius: 35px;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.35s ease-in-out;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .ed-btn--secondary:hover {
-      background: #230236;
-    }
-
-    .ed-btn--green {
-      background: #34b442;
-      border: 1px solid #34b442;
-      color: #fff;
-      padding: 10px 22px;
-      border-radius: 35px;
-      font-size: 13.5px;
-      font-weight: 600;
-      transition: all 0.35s ease-in-out;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .ed-btn--green:hover {
-      background: #2b9937;
     }
 
     /* Navigation Tabs */
@@ -173,38 +158,38 @@
       border-radius: 35px;
       font-size: 13px;
       font-weight: 600;
-      color: #3e3e40;
-      background: #ffffff;
-      border: 1px solid #e5d4f5;
+      color: #343A40;
+      background: #FFFFFF;
+      border: 1px solid #DEE2E6;
       transition: all 0.3s ease;
       display: inline-flex;
       align-items: center;
       gap: 8px;
     }
     .tab-btn:hover {
-      border-color: #5F0DA0;
-      color: #5F0DA0;
+      border-color: #4395D8;
+      color: #23396B;
     }
     .tab-btn.active {
-      background: #230236;
-      color: #ffffff;
-      border-color: #230236;
-      box-shadow: 0 8px 20px -4px rgba(95, 13, 160, 0.28);
+      background: #23396B;
+      color: #FFFFFF;
+      border-color: #23396B;
+      box-shadow: 0 8px 20px -4px rgba(35, 57, 107, 0.28);
     }
     .tab-btn.active .tab-dot {
-      background: #a3e635;
+      background: #FF8C00;
     }
 
     /* Cards & Surfaces */
     .ed-card {
-      background: #ffffff;
-      border: 1px solid #ead6fa;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
       border-radius: 18px;
-      box-shadow: 0 10px 30px -10px rgba(35, 2, 54, 0.04);
+      box-shadow: 0 10px 30px -10px rgba(35, 57, 107, 0.05);
     }
 
     .ed-hero-panel {
-      background: linear-gradient(135deg, #230236 0%, #380C5B 65%, #4e0b84 100%);
+      background: linear-gradient(135deg, #002E6E 0%, #23396B 65%, #1E4E8C 100%);
       border-radius: 22px;
       position: relative;
       overflow: hidden;
@@ -214,17 +199,17 @@
     .ed-input {
       width: 100%;
       border-radius: 12px;
-      border: 1px solid #d8c2ec;
-      background: #fdfdfd;
+      border: 1px solid #CBD5E1;
+      background: #FFFFFF;
       padding: 9px 13px;
       font-size: 13.5px;
-      color: #2a2a2b;
+      color: #212529;
       transition: all 0.2s ease;
     }
     .ed-input:focus {
       outline: none;
-      border-color: #5F0DA0;
-      box-shadow: 0 0 0 3px rgba(95, 13, 160, 0.12);
+      border-color: #4395D8;
+      box-shadow: 0 0 0 3px rgba(67, 149, 216, 0.16);
     }
 
     @media print {
@@ -236,42 +221,42 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- TOP HEADER (E-DEAS CLEAN LIGHT BAR) -->
+  <!-- TOP HEADER -->
   <header class="ed-header no-print">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
       <!-- Brand Identity -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2.5">
-          <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="10" fill="#230236"/>
-            <path d="M10 13H28M10 20H23M10 27H28" stroke="#DEB2FF" stroke-width="2.5" stroke-linecap="round"/>
-            <rect x="26" y="17.5" width="5" height="5" fill="#A3E635"/>
+          <svg width="38" height="38" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="10" fill="#23396B"/>
+            <path d="M10 13H28M10 20H22M10 27H28" stroke="#4395D8" stroke-width="2.5" stroke-linecap="round"/>
+            <rect x="25.5" y="17.5" width="5.5" height="5.5" rx="1" fill="#FF8C00"/>
           </svg>
           <div>
             <div class="flex items-center gap-2.5">
-              <span class="font-display font-extrabold text-base tracking-tight text-[#230236]">EMTEC</span>
-              <span class="text-[11px] font-semibold uppercase tracking-widest text-[#5F0DA0] border-l border-[#deb2ff] pl-2.5">Engenharia & Obras</span>
+              <span class="font-display font-extrabold text-base tracking-tight text-[#23396B]">EMTEC</span>
+              <span class="text-[11px] font-bold uppercase tracking-widest text-[#FF8C00] border-l border-[#DEE2E6] pl-2.5">Engenharia & Obras</span>
             </div>
-            <p class="text-[11px] text-[#686869] font-medium">Sistema de Controle de Centro de Custos e Viabilidade</p>
+            <p class="text-[11px] text-[#6C757D] font-medium">Sistema de Controle de Centro de Custos e Viabilidade</p>
           </div>
         </div>
 
-        <span id="cloudBadge" class="hidden md:inline-flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-full bg-[#faf6fd] text-[#5F0DA0] border border-[#deb2ff] font-semibold">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#34b442]"></span>
+        <span id="cloudBadge" class="hidden md:inline-flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-full bg-[#F8F9FA] text-[#23396B] border border-[#DEE2E6] font-semibold">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#34B442]"></span>
           Sincronizado
         </span>
       </div>
 
       <!-- Obra Selector & Pill Actions -->
       <div class="flex flex-wrap items-center gap-2.5">
-        <div class="flex items-center bg-[#faf6fd] border border-[#deb2ff] rounded-full px-4 py-1.5">
-          <span class="text-[11px] uppercase tracking-wider text-[#686869] mr-2 font-bold">Obra:</span>
-          <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#230236] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer pr-2">
+        <div class="flex items-center bg-[#F8F9FA] border border-[#CBD5E1] rounded-full px-4 py-1.5">
+          <span class="text-[11px] uppercase tracking-wider text-[#6C757D] mr-2 font-bold">Obra:</span>
+          <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer pr-2">
           </select>
         </div>
 
         <button onclick="abrirModalNovaObra()" class="ed-btn">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           <span>Nova Obra</span>
         </button>
 
@@ -285,7 +270,7 @@
           <span>Relatório</span>
         </button>
 
-        <button onclick="abrirModalNuvem()" class="w-9 h-9 rounded-full border border-[#deb2ff] bg-[#faf6fd] hover:bg-[#5F0DA0] hover:text-white text-[#5F0DA0] flex items-center justify-center transition" title="Backup e Restauração de Dados">
+        <button onclick="abrirModalNuvem()" class="w-9 h-9 rounded-full border border-[#CBD5E1] bg-[#F8F9FA] hover:bg-[#23396B] hover:text-white text-[#23396B] flex items-center justify-center transition" title="Backup e Restauração de Dados">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
         </button>
       </div>
@@ -295,35 +280,35 @@
   <!-- MAIN WORKSPACE -->
   <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 space-y-6">
 
-    <!-- HERO EXECUTIVE PANEL (E-DEAS DEEP PLUM + ARCHITECTURAL SVG LINES) -->
+    <!-- HERO EXECUTIVE PANEL (NAVY #23396B + BLUE #4395D8 + ORANGE #FF8C00 + LIME #A6CE38) -->
     <section class="ed-hero-panel p-6 sm:p-8 shadow-xl">
-      <!-- Architectural Vector Line Decoration (Inspired by e-deas LineEffect) -->
-      <svg class="absolute right-0 top-0 h-full w-1/2 opacity-20 pointer-events-none" viewBox="0 0 500 260" fill="none">
-        <path d="M80 0V140H280V260" stroke="#DEB2FF" stroke-width="1"/>
-        <path d="M220 0V85H440V220" stroke="#DEB2FF" stroke-width="1"/>
-        <rect x="276" y="136" width="8" height="8" fill="#A3E635"/>
-        <rect x="216" y="81" width="8" height="8" fill="#DEB2FF"/>
-        <rect x="436" y="216" width="8" height="8" fill="#A3E635"/>
+      <!-- Architectural Vector Line Decoration -->
+      <svg class="absolute right-0 top-0 h-full w-1/2 opacity-25 pointer-events-none" viewBox="0 0 500 260" fill="none">
+        <path d="M80 0V140H280V260" stroke="#4395D8" stroke-width="1.2"/>
+        <path d="M220 0V85H440V220" stroke="#4395D8" stroke-width="1.2"/>
+        <rect x="276" y="136" width="8" height="8" fill="#FF8C00"/>
+        <rect x="216" y="81" width="8" height="8" fill="#4395D8"/>
+        <rect x="436" y="216" width="8" height="8" fill="#A6CE38"/>
       </svg>
 
-      <div class="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 border-b border-[#deb2ff]/20 pb-6">
+      <div class="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 border-b border-[#4395D8]/25 pb-6">
         <div>
           <span class="ed-eyebrow-light" id="obraClienteTag">CONTRATO ATIVO</span>
           <div class="flex flex-wrap items-center gap-3 mt-1">
             <h2 id="obraTitulo" class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Reforma Piscina</h2>
-            <span id="viabilidadeBadge" class="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#a3e635]/20 text-[#a3e635] border border-[#a3e635]/40">
-              <span class="w-2 h-2 rounded-full bg-[#a3e635]"></span>
+            <button onclick="alternarStatusObra()" id="viabilidadeBadge" class="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#A6CE38]/20 text-[#A6CE38] border border-[#A6CE38]/40 transition hover:opacity-90" title="Clique para alternar entre Em Andamento e Concluída">
+              <span class="w-2 h-2 rounded-full bg-[#A6CE38]"></span>
               Obra Viável
-            </span>
+            </button>
           </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 no-print">
-          <button onclick="irParaLancamento()" class="ed-btn--green">
+          <button onclick="irParaLancamento()" class="ed-btn">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             <span>Lançar Despesa</span>
           </button>
-          <button onclick="mudarAba('medicoes')" class="px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-[#deb2ff]/30 transition">
+          <button onclick="mudarAba('medicoes')" class="px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-[#4395D8]/40 transition">
             Gerenciar Medições
           </button>
         </div>
@@ -332,59 +317,59 @@
       <!-- 4 EXECUTIVE METRICS -->
       <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
         <!-- KPI 1 -->
-        <div class="rounded-2xl p-4 bg-white/[0.06] border border-[#deb2ff]/20 backdrop-blur-xs">
+        <div class="rounded-2xl p-4 bg-white/[0.07] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#deb2ff]">Medições Líquidas</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#8ED1FC]">Medições Líquidas</span>
             <span class="text-[11px] font-bold text-white/90 bg-white/10 px-2.5 py-0.5 rounded-full" id="kpiDescNotaTag">-7,5% NF</span>
           </div>
           <p class="font-display text-2xl font-bold text-white mt-2" id="kpiMedicaoLiquida">R$ 0,00</p>
-          <p class="text-xs text-white/60 mt-1" id="kpiMedicaoSub">Bruto: R$ 0,00</p>
+          <p class="text-xs text-white/65 mt-1" id="kpiMedicaoSub">Bruto: R$ 0,00</p>
         </div>
 
         <!-- KPI 2 -->
-        <div class="rounded-2xl p-4 bg-white/[0.06] border border-[#deb2ff]/20 backdrop-blur-xs">
+        <div class="rounded-2xl p-4 bg-white/[0.07] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#deb2ff]">Custo Realizado</span>
-            <span class="text-[11px] font-semibold text-white/80 bg-white/10 px-2.5 py-0.5 rounded-full" id="kpiQtdLancamentos">0 itens</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#8ED1FC]">Custo Realizado</span>
+            <span class="text-[11px] font-semibold text-white/90 bg-white/10 px-2.5 py-0.5 rounded-full" id="kpiQtdLancamentos">0 itens</span>
           </div>
-          <p class="font-display text-2xl font-bold text-[#fca5a5] mt-2" id="kpiCustoTotal">R$ 0,00</p>
-          <p class="text-xs text-white/60 mt-1" id="kpiCustoSub">Mão de Obra + Material + Equip</p>
+          <p class="font-display text-2xl font-bold text-[#FFB366] mt-2" id="kpiCustoTotal">R$ 0,00</p>
+          <p class="text-xs text-white/65 mt-1" id="kpiCustoSub">Mão de Obra + Material + Equip</p>
         </div>
 
         <!-- KPI 3 -->
-        <div class="rounded-2xl p-4 bg-[#a3e635]/10 border border-[#a3e635]/40 backdrop-blur-xs" id="cardSaldoBox">
+        <div class="rounded-2xl p-4 bg-[#A6CE38]/15 border border-[#A6CE38]/45 backdrop-blur-xs" id="cardSaldoBox">
           <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#a3e635]" id="cardSaldoLabel">Resultado Líquido</span>
-            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#a3e635]/20 text-[#a3e635]" id="kpiMargemPerc">0% margem</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#A6CE38]" id="cardSaldoLabel">Resultado Líquido</span>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#A6CE38]/20 text-[#A6CE38]" id="kpiMargemPerc">0% margem</span>
           </div>
           <p class="font-display text-2xl font-bold text-white mt-2" id="kpiSaldoFinal">R$ 0,00</p>
           <p class="text-xs text-white/75 mt-1" id="kpiSaldoSub">Medição Atestada menos Custos</p>
         </div>
 
         <!-- KPI 4 -->
-        <div class="rounded-2xl p-4 bg-white/[0.06] border border-[#deb2ff]/20 backdrop-blur-xs">
+        <div class="rounded-2xl p-4 bg-white/[0.07] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#deb2ff]">Limite Orçamentário</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#8ED1FC]">Limite Orçamentário</span>
             <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white" id="kpiTetoPercBadge">0% usado</span>
           </div>
           <p class="font-display text-2xl font-bold text-white mt-2" id="kpiTetoValor">R$ 0,00</p>
           <div class="w-full bg-white/15 h-1.5 rounded-full mt-2.5 overflow-hidden">
-            <div id="kpiTetoBar" class="bg-[#a3e635] h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            <div id="kpiTetoBar" class="bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
           </div>
-          <p class="text-[11px] text-white/65 mt-1.5" id="kpiTetoSub">Margem de teto disponível</p>
+          <p class="text-[11px] text-white/70 mt-1.5" id="kpiTetoSub">Margem de teto disponível</p>
         </div>
       </div>
 
       <!-- TECHNICAL AUDIT NOTICE -->
-      <div id="alertaAuditoriaBanner" class="relative z-10 mt-5 rounded-xl bg-white/[0.08] border border-[#deb2ff]/30 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div id="alertaAuditoriaBanner" class="relative z-10 mt-5 rounded-xl bg-white/[0.08] border border-[#4395D8]/35 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="flex items-center gap-3">
-          <span class="w-2 h-2 rounded-full bg-[#a3e635] shrink-0"></span>
-          <div class="text-xs text-white/90">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#FF8C00] shrink-0"></span>
+          <div class="text-xs text-white/95">
             <strong class="font-bold text-white" id="alertaAuditoriaTitulo">Revisão Automática de Consistência:</strong>
             <span id="alertaAuditoriaTexto" class="text-white/80 ml-1">Os 5 lançamentos de Equipamentos (R$ 1.123,00) que não estavam somados no resumo da planilha original foram contabilizados automaticamente.</span>
           </div>
         </div>
-        <button onclick="mudarAba('auditoria')" class="shrink-0 text-xs font-bold text-[#a3e635] hover:underline no-print">
+        <button onclick="mudarAba('auditoria')" class="shrink-0 text-xs font-bold text-[#FF8C00] hover:underline no-print">
           Ver comparativo técnico →
         </button>
       </div>
@@ -393,38 +378,34 @@
     <!-- PILL NAVIGATION TABS -->
     <nav class="flex flex-wrap gap-2.5 no-print" id="tabsNav">
       <button onclick="mudarAba('lancamentos')" id="tab-btn-lancamentos" class="tab-btn active">
-        <span class="tab-dot w-2 h-2 rounded-full bg-[#5F0DA0]"></span>
+        <span class="tab-dot w-2 h-2 rounded-full bg-[#FF8C00]"></span>
         <span>Lançamentos de Custos</span>
       </button>
       <button onclick="mudarAba('resumo')" id="tab-btn-resumo" class="tab-btn">
-        <span class="tab-dot w-2 h-2 rounded-full bg-[#deb2ff]"></span>
+        <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
         <span>Orçado vs. Realizado</span>
       </button>
       <button onclick="mudarAba('medicoes')" id="tab-btn-medicoes" class="tab-btn">
-        <span class="tab-dot w-2 h-2 rounded-full bg-[#deb2ff]"></span>
+        <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
         <span>Medições Atestadas</span>
       </button>
       <button onclick="mudarAba('empreitas')" id="tab-btn-empreitas" class="tab-btn">
-        <span class="tab-dot w-2 h-2 rounded-full bg-[#deb2ff]"></span>
+        <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
         <span>Contratos de Empreita & Titulares</span>
       </button>
       <button onclick="mudarAba('auditoria')" id="tab-btn-auditoria" class="tab-btn">
-        <span class="tab-dot w-2 h-2 rounded-full bg-[#deb2ff]"></span>
+        <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
         <span>Auditoria da Planilha</span>
       </button>
     </nav>
 
-    <!-- ==========================================
-         ABA 1: LANÇAMENTOS DE CUSTOS
-         ========================================== -->
+    <!-- ABA 1: LANÇAMENTOS DE CUSTOS -->
     <section id="aba-lancamentos" class="space-y-6">
-
-      <!-- FORMULÁRIO DE LANÇAMENTO -->
       <div class="ed-card p-5 sm:p-6 no-print" id="boxFormLancamento">
-        <div class="flex items-center justify-between mb-4 border-b border-[#f0e4fa] pb-3">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
           <div>
             <span class="ed-eyebrow">REGISTRO DE DESPESAS E CAIXA</span>
-            <h3 class="font-display text-base sm:text-lg font-bold text-[#230236] mt-0.5" id="formLancTitulo">
+            <h3 class="font-display text-base sm:text-lg font-bold text-[#23396B] mt-0.5" id="formLancTitulo">
               Lançar Custo na Obra
             </h3>
           </div>
@@ -433,87 +414,97 @@
           </button>
         </div>
 
-        <form id="formLancamento" onsubmit="salvarLancamento(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5">
+        <form id="formLancamento" onsubmit="salvarLancamento(event)" class="space-y-3.5">
           <input type="hidden" id="lancId" value="" />
 
-          <div class="lg:col-span-4">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Descrição do Item *</label>
-            <input type="text" id="lancDescricao" required placeholder="Ex: Cimento 10 sacos, Diária equipe, Almoço..."
-              class="ed-input" />
+          <!-- MODO RÁPIDO PARA A ESPOSA (4 CAMPOS ESSENCIAIS) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5">
+            <div class="lg:col-span-5">
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Descrição do Item *</label>
+              <input type="text" id="lancDescricao" required placeholder="Ex: Cimento 10 sacos, Diária equipe, Almoço..."
+                class="ed-input font-medium" />
+            </div>
+
+            <div class="lg:col-span-3">
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Classificação *</label>
+              <select id="lancTipo" required class="ed-input font-semibold text-[#23396B]">
+                <option value="MAT">Material (MAT)</option>
+                <option value="MO">Mão de Obra (MO)</option>
+                <option value="EQUIP">Equipamento (EQUIP)</option>
+                <option value="ALIM">Alimentação</option>
+                <option value="TRANSP">Combustível / Transporte</option>
+                <option value="OUTROS">Outros / Taxas</option>
+                <option value="ENTRADA_CAIXA">Entrada de Caixa (+)</option>
+              </select>
+            </div>
+
+            <div class="lg:col-span-2">
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Valor (R$) *</label>
+              <input type="number" step="0.01" min="0.01" id="lancValor" required placeholder="0,00"
+                class="ed-input font-bold text-[#23396B]" />
+            </div>
+
+            <div class="lg:col-span-2">
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Data *</label>
+              <input type="date" id="lancData" required class="ed-input" />
+            </div>
           </div>
 
-          <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Classificação *</label>
-            <select id="lancTipo" required class="ed-input font-semibold">
-              <option value="MAT">Material (MAT)</option>
-              <option value="MO">Mão de Obra (MO)</option>
-              <option value="EQUIP">Equipamento (EQUIP)</option>
-              <option value="ALIM">Alimentação</option>
-              <option value="TRANSP">Combustível / Transporte</option>
-              <option value="OUTROS">Outros / Taxas</option>
-              <option value="ENTRADA_CAIXA">Entrada de Caixa (+)</option>
-            </select>
-          </div>
+          <!-- LINHA DE AÇÕES E BOTÃO DE DETALHES COMPLEMENTARES -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <button type="button" onclick="toggleCamposAvancados()" class="text-xs font-bold text-[#4395D8] hover:text-[#23396B] flex items-center gap-1.5 transition">
+              <span id="iconeToggleAvancado" class="text-sm">+</span>
+              <span id="textoToggleAvancado">Mais detalhes (Titular, Meio de Pagamento, Empreita)</span>
+            </button>
 
-          <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Valor (R$) *</label>
-            <input type="number" step="0.01" min="0.01" id="lancValor" required placeholder="0,00"
-              class="ed-input font-bold text-[#230236]" />
-          </div>
-
-          <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Data *</label>
-            <input type="date" id="lancData" required class="ed-input" />
-          </div>
-
-          <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Titular Pagador *</label>
-            <select id="lancTitular" required class="ed-input font-semibold">
-              <option value="EMTEC">EMTEC</option>
-              <option value="MELO">MELO</option>
-              <option value="ELON">ELON</option>
-              <option value="IAGO">IAGO</option>
-              <option value="OUTRO">OUTRO</option>
-            </select>
-          </div>
-
-          <div class="lg:col-span-3">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Meio de Pagamento</label>
-            <select id="lancPagamento" class="ed-input">
-              <option value="PIX">PIX</option>
-              <option value="DINHEIRO">DINHEIRO</option>
-              <option value="CARTÃO BRADESCO">CARTÃO BRADESCO (À vista)</option>
-              <option value="CARTÃO BRADESCO 2X">CARTÃO BRADESCO 2X</option>
-              <option value="CARTÃO BRADESCO 3X">CARTÃO BRADESCO 3X</option>
-              <option value="CARTÃO BRADESCO 5X">CARTÃO BRADESCO 5X</option>
-              <option value="CARTÃO INTER 2X">CARTÃO INTER 2X</option>
-              <option value="CARTÃO">CARTÃO (Geral)</option>
-              <option value="CARTÃO 2X">CARTÃO 2X</option>
-              <option value="CARTÃO 3X">CARTÃO 3X</option>
-              <option value="BOLETO">BOLETO / TRANSFERÊNCIA</option>
-            </select>
-          </div>
-
-          <div class="lg:col-span-5">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Abater de Contrato de Empreita (Opcional)</label>
-            <select id="lancEmpreitaId" class="ed-input">
-              <option value="">Não vinculado a contrato de empreita</option>
-            </select>
-          </div>
-
-          <div class="lg:col-span-4 flex items-end">
-            <button type="submit" class="ed-btn w-full py-2.5">
+            <button type="submit" class="ed-btn py-2.5 px-6">
               <span id="btnSalvarLancTexto">Registrar Lançamento</span>
             </button>
+          </div>
+
+          <!-- CAMPOS COMPLEMENTARES (RECOLHIDOS POR PADRÃO) -->
+          <div id="camposAvancados" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-100 bg-[#F8F9FA] p-3.5 rounded-2xl border border-[#DEE2E6]">
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Titular Pagador</label>
+              <select id="lancTitular" class="ed-input font-medium bg-white">
+                <option value="EMTEC" selected>EMTEC</option>
+                <option value="MELO">MELO</option>
+                <option value="ELON">ELON</option>
+                <option value="IAGO">IAGO</option>
+                <option value="OUTRO">OUTRO</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Meio de Pagamento</label>
+              <select id="lancPagamento" class="ed-input font-medium bg-white">
+                <option value="PIX" selected>PIX</option>
+                <option value="DINHEIRO">DINHEIRO</option>
+                <option value="CARTÃO BRADESCO">CARTÃO BRADESCO (À vista)</option>
+                <option value="CARTÃO BRADESCO 2X">CARTÃO BRADESCO 2X</option>
+                <option value="CARTÃO BRADESCO 3X">CARTÃO BRADESCO 3X</option>
+                <option value="CARTÃO BRADESCO 5X">CARTÃO BRADESCO 5X</option>
+                <option value="CARTÃO INTER 2X">CARTÃO INTER 2X</option>
+                <option value="CARTÃO">CARTÃO (Geral)</option>
+                <option value="CARTÃO 2X">CARTÃO 2X</option>
+                <option value="CARTÃO 3X">CARTÃO 3X</option>
+                <option value="BOLETO">BOLETO / TRANSFERÊNCIA</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Abater de Contrato de Empreita</label>
+              <select id="lancEmpreitaId" class="ed-input font-medium bg-white">
+                <option value="">Não vinculado a contrato</option>
+              </select>
+            </div>
           </div>
         </form>
       </div>
 
-      <!-- SÍNTESE POR CATEGORIA -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5" id="miniCardsCategorias">
       </div>
 
-      <!-- LISTAGEM E FILTROS -->
       <div class="ed-card p-5 sm:p-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5 no-print">
           <div class="flex flex-wrap items-center gap-2.5 flex-1">
@@ -549,16 +540,16 @@
             </select>
           </div>
 
-          <div class="text-right border-l border-[#deb2ff] pl-4">
-            <span class="block text-[10px] font-bold uppercase tracking-wider text-[#686869]">Subtotal Filtrado</span>
-            <span id="totalFiltradoValor" class="font-display text-base font-extrabold text-[#230236]">R$ 0,00</span>
+          <div class="text-right border-l border-[#DEE2E6] pl-4">
+            <span class="block text-[10px] font-bold uppercase tracking-wider text-[#6C757D]">Subtotal Filtrado</span>
+            <span id="totalFiltradoValor" class="font-display text-base font-extrabold text-[#23396B]">R$ 0,00</span>
           </div>
         </div>
 
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="border-b border-[#deb2ff] text-[11px] font-bold uppercase tracking-wider text-[#686869] bg-[#faf6fd]">
+              <tr class="border-b border-[#DEE2E6] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8F9FA]">
                 <th class="py-3 px-3.5">Data</th>
                 <th class="py-3 px-3.5">Descrição do Lançamento</th>
                 <th class="py-3 px-3.5">Centro Oficial</th>
@@ -569,24 +560,21 @@
                 <th class="py-3 px-3.5 text-center no-print">Ações</th>
               </tr>
             </thead>
-            <tbody id="tbodyLancamentos" class="divide-y divide-[#f2e8fa] text-xs sm:text-sm">
+            <tbody id="tbodyLancamentos" class="divide-y divide-slate-100 text-xs sm:text-sm">
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- ==========================================
-         ABA 2: RELATÓRIO & TETO DE CUSTOS
-         ========================================== -->
+    <!-- ABA 2: RELATÓRIO & TETO DE CUSTOS -->
     <section id="aba-resumo" class="hidden space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
         <div class="lg:col-span-7 ed-card p-6">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-[#f0e4fa] pb-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-slate-100 pb-4">
             <div>
               <span class="ed-eyebrow">LIMITE ORÇAMENTÁRIO POR CATEGORIA</span>
-              <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Previsão de Custo vs. Desembolso Real</h3>
+              <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Previsão de Custo vs. Desembolso Real</h3>
             </div>
             <button onclick="salvarTetosOrcamento()" class="ed-btn no-print">
               Salvar Limites
@@ -598,41 +586,38 @@
         <div class="lg:col-span-5 ed-card p-6 flex flex-col justify-between">
           <div>
             <span class="ed-eyebrow">DISTRIBUIÇÃO FINANCEIRA</span>
-            <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Composição Real dos Custos</h3>
-            <p class="text-xs text-[#686869] mb-4">Separação analítica de alimentação e logística em relação aos insumos e mão de obra direta.</p>
+            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Composição Real dos Custos</h3>
+            <p class="text-xs text-[#6C757D] mb-4">Separação analítica de alimentação e logística em relação aos insumos e mão de obra direta.</p>
             <div class="h-64 flex items-center justify-center">
               <canvas id="chartCategorias"></canvas>
             </div>
           </div>
-          <div id="resumoComparativoBox" class="mt-5 pt-4 border-t border-[#f0e4fa] text-xs space-y-2"></div>
+          <div id="resumoComparativoBox" class="mt-5 pt-4 border-t border-slate-100 text-xs space-y-2"></div>
         </div>
-
       </div>
     </section>
 
-    <!-- ==========================================
-         ABA 3: MEDIÇÕES ATESTADAS
-         ========================================== -->
+    <!-- ABA 3: MEDIÇÕES ATESTADAS -->
     <section id="aba-medicoes" class="hidden space-y-6">
       <div class="ed-card p-6 no-print">
         <span class="ed-eyebrow">RECEITAS E FATURAMENTO</span>
-        <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5 mb-4">Registrar Medição ou Parcela do Contrato</h3>
+        <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5 mb-4">Registrar Medição ou Parcela do Contrato</h3>
 
         <form onsubmit="salvarMedicao(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5">
           <div class="lg:col-span-4">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Identificação da Medição *</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Identificação da Medição *</label>
             <input type="text" id="medTitulo" required placeholder="Ex: 1ª Medição Atestada, Entrada 40%..." class="ed-input" />
           </div>
           <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Valor Bruto (R$) *</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Valor Bruto (R$) *</label>
             <input type="number" step="0.01" id="medValorBruto" required placeholder="0,00" class="ed-input font-bold" />
           </div>
           <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Retenção / NF (%)</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Retenção / NF (%)</label>
             <input type="number" step="0.1" id="medDescPerc" value="7.5" class="ed-input" />
           </div>
           <div class="lg:col-span-2">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1.5">Situação *</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1.5">Situação *</label>
             <select id="medStatus" class="ed-input font-semibold">
               <option value="Recebida">Atestada / Recebida</option>
               <option value="Pendente">Prevista / A Faturar</option>
@@ -646,11 +631,11 @@
 
       <div class="ed-card p-6">
         <span class="ed-eyebrow">QUADRO DE MEDIÇÕES</span>
-        <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5 mb-4">Faturamento Bruto, Desconto de Nota e Receita Líquida</h3>
+        <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5 mb-4">Faturamento Bruto, Desconto de Nota e Receita Líquida</h3>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="border-b border-[#deb2ff] text-[11px] font-bold uppercase tracking-wider text-[#686869] bg-[#faf6fd]">
+              <tr class="border-b border-[#DEE2E6] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8F9FA]">
                 <th class="py-3 px-4">Etapa / Medição</th>
                 <th class="py-3 px-4">Status</th>
                 <th class="py-3 px-4 text-right">Valor Bruto</th>
@@ -659,26 +644,23 @@
                 <th class="py-3 px-4 text-center no-print">Ações</th>
               </tr>
             </thead>
-            <tbody id="tbodyMedicoes" class="divide-y divide-[#f2e8fa] text-sm"></tbody>
+            <tbody id="tbodyMedicoes" class="divide-y divide-slate-100 text-sm"></tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- ==========================================
-         ABA 4: EMPREITAS & TITULARES
-         ========================================== -->
+    <!-- ABA 4: EMPREITAS & TITULARES -->
     <section id="aba-empreitas" class="hidden space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
         <div class="lg:col-span-7 ed-card p-6 space-y-4">
-          <div class="border-b border-[#f0e4fa] pb-3">
+          <div class="border-b border-slate-100 pb-3">
             <span class="ed-eyebrow">SUBEMPREITEIROS E CONTRATOS FECHADOS</span>
-            <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Controle de Saldo de Empreitas</h3>
-            <p class="text-xs text-[#686869]">Acompanhamento de valor acordado, adiantamentos realizados e saldo pendente a pagar.</p>
+            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Controle de Saldo de Empreitas</h3>
+            <p class="text-xs text-[#6C757D]">Acompanhamento de valor acordado, adiantamentos realizados e saldo pendente a pagar.</p>
           </div>
 
-          <form onsubmit="salvarEmpreita(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 bg-[#faf6fd] p-3.5 rounded-2xl border border-[#deb2ff] no-print">
+          <form onsubmit="salvarEmpreita(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 bg-[#F8F9FA] p-3.5 rounded-2xl border border-[#DEE2E6] no-print">
             <div class="sm:col-span-4">
               <input type="text" id="empFornecedor" required placeholder="Fornecedor / Empreiteiro" class="ed-input text-xs" />
             </div>
@@ -697,55 +679,62 @@
         </div>
 
         <div class="lg:col-span-5 ed-card p-6 space-y-4">
-          <div class="border-b border-[#f0e4fa] pb-3">
+          <div class="border-b border-slate-100 pb-3">
             <span class="ed-eyebrow">PRESTAÇÃO DE CONTAS</span>
-            <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Desembolso por Titular & Caixa</h3>
-            <p class="text-xs text-[#686869]">Consolidação de pagamentos efetuados por EMTEC, Melo, Elon e Iago.</p>
+            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Desembolso por Titular & Caixa</h3>
+            <p class="text-xs text-[#6C757D]">Consolidação de pagamentos efetuados por EMTEC, Melo, Elon e Iago.</p>
           </div>
           <div id="listaTitulares" class="space-y-3"></div>
         </div>
-
       </div>
     </section>
 
-    <!-- ==========================================
-         ABA 5: AUDITORIA DA PLANILHA ANTIGA
-         ========================================== -->
+    <!-- ABA 5: AUDITORIA DA PLANILHA ANTIGA -->
     <section id="aba-auditoria" class="hidden space-y-6">
       <div class="ed-card p-6 space-y-5">
-        <div class="border-b border-[#f0e4fa] pb-4">
+        <div class="border-b border-slate-100 pb-4">
           <span class="ed-eyebrow">RELATÓRIO DE CONFERÊNCIA TÉCNICA</span>
-          <h3 class="font-display text-xl font-bold text-[#230236] mt-0.5">Divergências Corrigidas em Relação ao Arquivo Excel Original</h3>
-          <p class="text-xs text-[#686869] mt-1">Análise automática realizada sobre o arquivo <code>C. CUSTO REFORMA PISCINA.xlsx</code>.</p>
+          <h3 class="font-display text-xl font-bold text-[#23396B] mt-0.5">Divergências Corrigidas em Relação ao Arquivo Excel Original</h3>
+          <p class="text-xs text-[#6C757D] mt-1">Análise automática realizada sobre o arquivo <code>C. CUSTO REFORMA PISCINA.xlsx</code>.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div class="p-5 rounded-2xl bg-[#faf6fd] border border-[#deb2ff]">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#5F0DA0]">01 • Reforma Piscina</span>
-            <h4 class="font-display text-base font-bold text-[#230236] mt-1">R$ 1.123,00 em Equipamentos Não Somados</h4>
-            <p class="text-xs text-[#3e3e40] mt-2 leading-relaxed">
+          <div class="p-5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#FF8C00]">01 • Reforma Piscina</span>
+            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">R$ 1.123,00 em Equipamentos Não Somados</h4>
+            <p class="text-xs text-[#343A40] mt-2 leading-relaxed">
               Na planilha original, a célula de resumo <strong>EQUIPAMENTO</strong> exibia <strong>R$ 0,00</strong>, deixando de somar 5 registros classificados como <code>EQUIP</code>:
               <br>• 09/09/2026: Contêiner (R$ 400,00)
               <br>• 22/09/2026: Contêiner (R$ 400,00)
-              <br>• 14/10/2026: Espaçadores (R$ 49,00)
+              <br>• 14/10/2026: Espaçadores (R$ 49,00)*
               <br>• 19/10/2026: Misturador (R$ 40,00)
               <br>• 19/10/2026: Drive e Refletor (R$ 234,00)
-              <br><strong class="text-[#230236] block mt-2">Custo Real Auditado: R$ 68.704,19 (Saldo Líquido: R$ 20.835,81).</strong>
+              <br><span class="text-[11px] text-[#6C757D] italic">*Nota contábil: Espaçadores constavam como EQUIP no Excel, mas atuam como insumo/material de assentamento.</span>
+              <br><strong class="text-[#23396B] block mt-2">Custo Real Auditado: R$ 68.704,19 (Saldo Líquido Real: R$ 20.835,81).</strong>
             </p>
           </div>
 
-          <div class="p-5 rounded-2xl bg-[#faf6fd] border border-[#deb2ff]">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#5F0DA0]">02 • Aba Caixa Obra</span>
-            <h4 class="font-display text-base font-bold text-[#230236] mt-1">Resumo Travado em R$ 790,00</h4>
-            <p class="text-xs text-[#3e3e40] mt-2 leading-relaxed">
-              Na 3ª aba (Caixa Obra), a coluna de saídas totaliza <strong>R$ 3.270,26</strong>, porém o quadro de resumo lateral exibia <strong>TOTAL CUSTO OBRA: R$ 790,00</strong> (referenciando a coluna de entradas de caixa por engano) e exibia <strong>TOTAL OUTROS: R$ 0,00</strong> apesar de R$ 323,04 lançados nessa categoria.
+          <div class="p-5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#FF8C00]">02 • Aba Caixa Obra (Prova Forense)</span>
+            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Causa-Raiz do Erro de R$ 790,00</h4>
+            <p class="text-xs text-[#343A40] mt-2 leading-relaxed">
+              Na 3ª aba (<code>CAIXA OBRA</code>), a célula <strong>TOTAL CUSTO OBRA</strong> continha a fórmula <code>=SOMA(D4:D38)</code>.
+              <br><br>
+              A coluna <strong>D</strong> é a coluna de <strong>ENTRADAS</strong> de caixinha repassadas ao encarregado:
+              <br>• 06/07/2026: R$ 240,00
+              <br>• 06/07/2026: R$ 150,00
+              <br>• 08/07/2026: R$ 200,00
+              <br>• 10/07/2026: R$ 200,00
+              <br><strong>Soma exata das Entradas: R$ 790,00.</strong>
+              <br><br>
+              A fórmula original somava o dinheiro entregue ao caixa, ignorando completamente as 35 despesas reais lançadas na <strong>Coluna E (SAÍDA = R$ 3.270,26)</strong> e o valor de <strong>R$ 323,04</strong> na coluna <code>OUTROS</code>.
             </p>
           </div>
 
-          <div class="p-5 rounded-2xl bg-[#faf6fd] border border-[#deb2ff]">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#5F0DA0]">03 • Padronização Analítica</span>
-            <h4 class="font-display text-base font-bold text-[#230236] mt-1">Saneamento de Datas e Subcategorias</h4>
-            <p class="text-xs text-[#3e3e40] mt-2 leading-relaxed">
+          <div class="p-5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#FF8C00]">03 • Padronização Analítica</span>
+            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Saneamento de Datas e Subcategorias</h4>
+            <p class="text-xs text-[#343A40] mt-2 leading-relaxed">
               • Duas datas digitadas sem separador (<code>1708/2026</code> e <code>2010/2026</code>) foram normalizadas para o calendário ISO (<code>17/08/2026</code> e <code>20/10/2026</code>).
               <br>• Despesas de <strong>Alimentação (R$ 2.387,27)</strong> e <strong>Combustível/Transporte (R$ 1.884,84)</strong> que estavam diluídas entre Mão de Obra e Outros agora contam com rastreamento próprio.
             </p>
@@ -757,48 +746,48 @@
   </main>
 
   <!-- FOOTER -->
-  <footer class="bg-[#faf6fd] border-t border-[#deb2ff] mt-12 py-5 no-print">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#686869]">
+  <footer class="bg-white border-t border-[#DEE2E6] mt-12 py-5 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6C757D]">
       <div class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-[#5F0DA0]"></span>
-        <strong class="text-[#230236]">EMTEC Engenharia & Obras</strong> — Sistema de Controle de Custos e Viabilidade
+        <span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span>
+        <strong class="text-[#23396B]">EMTEC Engenharia & Obras</strong> — Sistema de Controle de Custos e Viabilidade
       </div>
       <div>Dados sincronizados localmente com exportação direta para Excel (.xlsx)</div>
     </div>
   </footer>
 
   <!-- MODAL NOVA OBRA -->
-  <div id="modalNovaObra" class="fixed inset-0 bg-[#230236]/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#deb2ff] shadow-2xl">
-      <div class="flex items-center justify-between border-b border-[#f0e4fa] pb-3 mb-4">
+  <div id="modalNovaObra" class="fixed inset-0 bg-[#002E6E]/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#DEE2E6] shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
         <div>
           <span class="ed-eyebrow">NOVO CENTRO DE CUSTO</span>
-          <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Cadastrar Nova Obra</h3>
+          <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Cadastrar Nova Obra</h3>
         </div>
-        <button onclick="fecharModalNovaObra()" class="text-[#686869] hover:text-[#230236] font-bold text-lg">✕</button>
+        <button onclick="fecharModalNovaObra()" class="text-[#6C757D] hover:text-[#23396B] font-bold text-lg">✕</button>
       </div>
       <form onsubmit="criarNovaObra(event)" class="space-y-3.5">
         <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1">Nome da Obra *</label>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Nome da Obra *</label>
           <input type="text" id="novaObraNome" required placeholder="Ex: Reforma Comercial / Residencial..." class="ed-input" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1">Cliente / Contrato</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Cliente / Contrato</label>
             <input type="text" id="novaObraCliente" placeholder="Identificação do cliente" class="ed-input" />
           </div>
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1">Imposto NF (%)</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Imposto NF (%)</label>
             <input type="number" step="0.1" id="novaObraImposto" value="7.5" class="ed-input" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3 pt-1">
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1">Valor do Contrato (R$)</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Valor do Contrato (R$)</label>
             <input type="number" step="0.01" id="novaObraValorContrato" placeholder="Ex: 80000" class="ed-input font-bold" />
           </div>
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#686869] mb-1">Teto de Custo Previsto (R$)</label>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-[#6C757D] mb-1">Teto de Custo Previsto (R$)</label>
             <input type="number" step="0.01" id="novaObraTetoCusto" placeholder="Ex: 55000" class="ed-input font-bold" />
           </div>
         </div>
@@ -811,16 +800,16 @@
   </div>
 
   <!-- MODAL BACKUP -->
-  <div id="modalNuvem" class="fixed inset-0 bg-[#230236]/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#deb2ff] shadow-2xl space-y-4">
-      <div class="flex items-center justify-between border-b border-[#f0e4fa] pb-3">
+  <div id="modalNuvem" class="fixed inset-0 bg-[#002E6E]/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#DEE2E6] shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
         <div>
           <span class="ed-eyebrow">GESTÃO DE ARQUIVOS</span>
-          <h3 class="font-display text-lg font-bold text-[#230236] mt-0.5">Backup e Restauração da Base</h3>
+          <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Backup e Restauração da Base</h3>
         </div>
-        <button onclick="fecharModalNuvem()" class="text-[#686869] hover:text-[#230236] font-bold text-lg">✕</button>
+        <button onclick="fecharModalNuvem()" class="text-[#6C757D] hover:text-[#23396B] font-bold text-lg">✕</button>
       </div>
-      <p class="text-xs text-[#686869] leading-relaxed">
+      <p class="text-xs text-[#6C757D] leading-relaxed">
         Exporte a base completa em formato JSON para transferir entre dispositivos ou restaure os lançamentos originais importados da planilha.
       </p>
       <div class="flex flex-wrap gap-2.5 pt-1">
