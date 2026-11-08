@@ -11,7 +11,7 @@ const DEFAULT_PIN = "1234";
 let estado = carregarEstadoLocal();
 let obraAtualId = estado.obras[0]?.id || "";
 let chartInstance = null;
-let categoriaRapidaAtiva = "MO";
+let categoriaRapidaAtiva = "";
 let isSincronizando = false;
 let perfilAtivo = localStorage.getItem(USUARIO_STORAGE_KEY) || "Pilar";
 let perfilSelecionadoNoModal = perfilAtivo;
@@ -560,12 +560,30 @@ function renderizarMiniCards(m) {
   if (!container) return;
 
   const cards = [
-    { label: "Material (MAT)", val: m.porTipoOficial.MAT, sub: "Insumos e materiais", dot: "bg-[#23396B]" },
-    { label: "Mão de Obra (MO)", val: m.porTipoOficial.MO, sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)}`, dot: "bg-[#4395D8]" },
-    { label: "Equipamento (EQUIP)", val: m.porTipoOficial.EQUIP, sub: "Locação e ferramentas", dot: "bg-[#FF8C00]" },
-    { label: "Outros (Oficial)", val: m.porTipoOficial.OUTROS, sub: "Taxas, ART e comissões", dot: "bg-[#6C757D]" },
-    { label: "Alimentação", val: m.porSubtipoReal.ALIM, sub: "Refeições de equipe", dot: "bg-[#16A34A]" },
-    { label: "Combustível / Transp.", val: m.porSubtipoReal.TRANSP, sub: "Abastecimento e deslocamento", dot: "bg-[#002E6E]" }
+    {
+      label: "Material (MAT)",
+      val: m.porTipoOficial.MAT,
+      sub: "Insumos e materiais",
+      dot: "bg-[#23396B]"
+    },
+    {
+      label: "Mão de Obra (MO)",
+      val: m.porTipoOficial.MO,
+      sub: `Direta: ${formatBRL(m.porSubtipoReal.MO)} | Alim: ${formatBRL(m.porSubtipoReal.ALIM)}`,
+      dot: "bg-[#4395D8]"
+    },
+    {
+      label: "Equipamento (EQUIP)",
+      val: m.porTipoOficial.EQUIP,
+      sub: "Locação e ferramentas",
+      dot: "bg-[#FF8C00]"
+    },
+    {
+      label: "Outros (Oficial)",
+      val: m.porTipoOficial.OUTROS,
+      sub: `Taxas/ART | Comb: ${formatBRL(m.porSubtipoReal.TRANSP)}`,
+      dot: "bg-[#6C757D]"
+    }
   ];
 
   container.innerHTML = cards.map(c => `
@@ -575,7 +593,7 @@ function renderizarMiniCards(m) {
         <span class="text-[11px] font-bold uppercase tracking-wider text-[#6C757D]">${c.label}</span>
       </div>
       <div class="font-display text-base sm:text-lg font-extrabold text-[#23396B] mt-1.5">${formatBRL(c.val)}</div>
-      <div class="text-[11px] text-[#6C757D] mt-0.5">${c.sub}</div>
+      <div class="text-[11px] text-[#6C757D] mt-0.5 truncate" title="${c.sub}">${c.sub}</div>
     </div>
   `).join("");
 }
@@ -935,7 +953,14 @@ function abrirModalLancamentoRapido() {
   const selTit = document.getElementById("lancRapidoTitular");
   if (selTit) selTit.value = "EMTEC";
 
-  selecionarCategoriaRapida("MO");
+  // Não seleciona categoria por padrão para evitar classificação errada inadvertida
+  categoriaRapidaAtiva = "";
+  ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
+    const btn = document.getElementById(`btnCatRapida_${cat}`);
+    if (btn) btn.className = "py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5";
+  });
+  const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
+  if (avisoCat) avisoCat.classList.add("hidden");
 
   const inputValor = document.getElementById("lancRapidoValor");
   if (inputValor) {
@@ -1010,6 +1035,8 @@ function selecionarCategoriaRapida(tipo) {
       btn.className = "py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5";
     }
   });
+  const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
+  if (avisoCat) avisoCat.classList.add("hidden");
 }
 
 function toggleOpcoesAvancadasRapidas() {
@@ -1058,6 +1085,13 @@ function salvarLancamentoRapido(e) {
     return;
   }
 
+  if (!categoriaRapidaAtiva) {
+    const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
+    if (avisoCat) avisoCat.classList.remove("hidden");
+    alert("Por favor, selecione uma categoria para a despesa (Mão de Obra, Material, Equipamento ou Outros).");
+    return;
+  }
+
   const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva);
 
   if (idEdicao) {
@@ -1102,7 +1136,7 @@ function salvarLancamentoRapido(e) {
         emp.valorPago = Number(emp.valorPago || 0) + valor;
       }
     }
-    mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} registrada!`);
+    mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} salva no aparelho!`);
   }
 
   salvarEstado();
@@ -1263,30 +1297,35 @@ function renderizarAbaMedicoes(obra, m) {
           const liq = med.valorLiquido ? Number(med.valorLiquido) : bruto * (1 - desc / 100);
           const isRec = med.status === "Recebida";
           return `
-            <div class="bg-white border border-[#E2E8F0] rounded-2xl px-4 py-3 shadow-sm space-y-2">
+            <div class="bg-white border border-[#E2E8F0] rounded-2xl px-4 py-3.5 shadow-sm space-y-2.5">
               <div class="flex items-center justify-between">
                 <div class="font-bold text-sm text-[#23396B]">${med.titulo}</div>
                 <button onclick="alternarStatusMedicao('${med.id}')"
-                  class="px-3 py-1 rounded-full text-[11px] font-bold ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E]"}">
-                  ${isRec ? "Recebida" : "Prevista"}
+                  class="px-3 py-1 rounded-full text-[11px] font-bold ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E] border border-amber-300"}">
+                  ${isRec ? "Recebida na Conta" : "A Receber (Prevista)"}
                 </button>
               </div>
-              <div class="grid grid-cols-3 gap-2 text-xs">
+              <div class="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-slate-100">
                 <div>
-                  <span class="text-[#6C757D] block">Bruto</span>
+                  <span class="text-[#64748B] block text-[10px] font-bold uppercase">Bruto Faturado</span>
                   <span class="font-bold text-[#23396B]">${formatBRL(bruto)}</span>
                 </div>
                 <div>
-                  <span class="text-[#6C757D] block">Desconto NF</span>
+                  <span class="text-[#64748B] block text-[10px] font-bold uppercase">Retenção NF</span>
                   <span class="font-semibold text-[#64748B]">-${desc}%</span>
                 </div>
                 <div>
-                  <span class="text-[#6C757D] block">Líquido</span>
-                  <span class="font-display font-extrabold text-[#16A34A]">${formatBRL(liq)}</span>
+                  <span class="text-[10px] font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
+                    ${isRec ? "Líquido Recebido" : "Líquido a Receber"}
+                  </span>
+                  <span class="font-display font-extrabold ${isRec ? "text-[#16A34A]" : "text-amber-600"}">${formatBRL(liq)}</span>
                 </div>
               </div>
-              ${med.observacao ? `<div class="text-[11px] text-[#6C757D]">${med.observacao}</div>` : ""}
-              <div class="text-right">
+              ${med.observacao ? `<div class="text-[11px] text-[#64748B] italic">${med.observacao}</div>` : ""}
+              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                <button onclick="alternarStatusMedicao('${med.id}')" class="text-[11px] font-bold text-[#4395D8]">
+                  ${isRec ? "Marcar como pendente" : "Marcar como recebida"}
+                </button>
                 <button onclick="excluirMedicao('${med.id}')" class="text-[11px] text-rose-600 font-semibold">Excluir</button>
               </div>
             </div>
@@ -1332,7 +1371,7 @@ function salvarMedicao(e) {
   const titulo = document.getElementById("medTitulo")?.value.trim();
   const valorBruto = parseFloat(document.getElementById("medValorBruto")?.value || 0);
   const descontoNotaPerc = parseFloat(document.getElementById("medDescPerc")?.value || 7.5);
-  const status = document.getElementById("medStatus")?.value || "Recebida";
+  const status = document.getElementById("medStatus")?.value || "Pendente";
   const valorLiquido = Math.round(valorBruto * (1 - descontoNotaPerc / 100) * 100) / 100;
 
   if (!obra.medicoes) obra.medicoes = [];
@@ -1385,19 +1424,46 @@ function renderizarAbaResumo(obra, m) {
   const container = document.getElementById("orcamentoComparativoLista");
   if (!container) return;
 
+  const orc = obra.orcamentoPrevisto || {};
+  // Se houver tetos antigos com ALIM/TRANSP separados, consolida nos pilares oficiais sem sobreposição
+  const tetoMO = Number(orc.MO || 0) + Number(orc.ALIM || 0);
+  const tetoMAT = Number(orc.MAT || 0);
+  const tetoEQUIP = Number(orc.EQUIP || 0);
+  const tetoOUTROS = Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0);
+
   const categorias = [
-    { key: "MAT", nome: "Material", gasto: m.porTipoOficial.MAT },
-    { key: "MO", nome: "Mão de Obra Geral", gasto: m.porTipoOficial.MO },
-    { key: "EQUIP", nome: "Equipamentos & Ferramentas", gasto: m.porTipoOficial.EQUIP },
-    { key: "ALIM", nome: "Alimentação de Equipe", gasto: m.porSubtipoReal.ALIM },
-    { key: "TRANSP", nome: "Combustível & Transporte", gasto: m.porSubtipoReal.TRANSP },
-    { key: "OUTROS", nome: "Outros & Taxas", gasto: m.porTipoOficial.OUTROS }
+    {
+      key: "MAT",
+      nome: "Material (MAT)",
+      gasto: m.porTipoOficial.MAT,
+      teto: tetoMAT,
+      nota: "Insumos e materiais de construção"
+    },
+    {
+      key: "MO",
+      nome: "Mão de Obra Geral (MO)",
+      gasto: m.porTipoOficial.MO,
+      teto: tetoMO,
+      nota: `Inclui R$ ${Number(m.porSubtipoReal.ALIM || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2})} em refeições de equipe`
+    },
+    {
+      key: "EQUIP",
+      nome: "Equipamento (EQUIP)",
+      gasto: m.porTipoOficial.EQUIP,
+      teto: tetoEQUIP,
+      nota: "Locação de ferramentas, caçambas e andaimes"
+    },
+    {
+      key: "OUTROS",
+      nome: "Outros & Taxas (OUTROS)",
+      gasto: m.porTipoOficial.OUTROS,
+      teto: tetoOUTROS,
+      nota: `Taxas, ART e R$ ${Number(m.porSubtipoReal.TRANSP || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2})} em combustível/transporte`
+    }
   ];
 
-  const orc = obra.orcamentoPrevisto || {};
-
   container.innerHTML = categorias.map(c => {
-    const teto = Number(orc[c.key] || 0);
+    const teto = c.teto;
     const perc = teto > 0 ? (c.gasto / teto) * 100 : 0;
     const saldoCat = teto - c.gasto;
 
@@ -1408,7 +1474,10 @@ function renderizarAbaResumo(obra, m) {
     return `
       <div class="p-3.5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
         <div class="flex items-center justify-between">
-          <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
+          <div>
+            <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
+            <span class="block text-[11px] text-[#64748B]">${c.nota}</span>
+          </div>
           <div class="flex items-center gap-2">
             <span class="text-[11px] font-semibold uppercase text-[#6C757D]">Teto R$:</span>
             <input type="number" step="100" data-orc-key="${c.key}" value="${teto}"
@@ -1476,6 +1545,8 @@ function renderizarAbaResumo(obra, m) {
 function salvarTetosOrcamento() {
   const obra = getObraAtual();
   if (!obra.orcamentoPrevisto) obra.orcamentoPrevisto = {};
+  delete obra.orcamentoPrevisto.ALIM;
+  delete obra.orcamentoPrevisto.TRANSP;
   document.querySelectorAll("[data-orc-key]").forEach(inp => {
     const k = inp.getAttribute("data-orc-key");
     obra.orcamentoPrevisto[k] = parseFloat(inp.value || 0);
@@ -1593,12 +1664,19 @@ function excluirEmpreita(id) {
 function renderizarSeletorObras() {
   const sel = document.getElementById("obraSelect");
   if (!sel) return;
-  sel.innerHTML = estado.obras.map(o =>
+  const options = estado.obras.map(o =>
     `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>${o.nome}</option>`
   ).join("");
+  sel.innerHTML = options + `<option value="__NOVA_OBRA__">+ Cadastrar Nova Obra...</option>`;
 }
 
 function trocarObra(id) {
+  if (id === "__NOVA_OBRA__") {
+    const sel = document.getElementById("obraSelect");
+    if (sel) sel.value = obraAtualId;
+    abrirModalNovaObra();
+    return;
+  }
   obraAtualId = id;
   limparFormLancamento();
   atualizarTudo();
@@ -1615,13 +1693,11 @@ function alternarStatusObra() {
 
 function mudarAba(abaId) {
   // Abas disponíveis
-  const abas = ["resumo", "lancamentos", "medicoes", "empreitas", "auditoria"];
+  const abas = ["resumo", "lancamentos", "medicoes", "empreitas", "auditoria", "mais"];
 
-  const modoRelatorios = abaId === "relatorios_menu";
-  if (modoRelatorios) {
-    abaId = "resumo";
+  if (abaId === "relatorios_menu") {
+    abaId = "mais";
   }
-  document.body.classList.toggle("mob-rel", modoRelatorios);
 
   abas.forEach(id => {
     const sec = document.getElementById(`aba-${id}`);
@@ -1642,16 +1718,16 @@ function mudarAba(abaId) {
     }
   });
 
-  // Atualizar Bottom Nav no celular
+  // Atualizar Bottom Nav no celular (5 ações objetivas)
   const navMobResumo = document.getElementById("navMobResumo");
   const navMobLanc = document.getElementById("navMobLanc");
   const navMobMed = document.getElementById("navMobMed");
-  const navMobRel = document.getElementById("navMobRel");
+  const navMobMais = document.getElementById("navMobMais");
 
-  if (navMobResumo) navMobResumo.className = (abaId === "resumo" && !modoRelatorios) ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
-  if (navMobLanc) navMobLanc.className = abaId === "lancamentos" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
-  if (navMobMed) navMobMed.className = abaId === "medicoes" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
-  if (navMobRel) navMobRel.className = (modoRelatorios || abaId === "empreitas" || abaId === "auditoria") ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70";
+  if (navMobResumo) navMobResumo.className = abaId === "resumo" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
+  if (navMobLanc) navMobLanc.className = abaId === "lancamentos" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
+  if (navMobMed) navMobMed.className = abaId === "medicoes" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
+  if (navMobMais) navMobMais.className = (abaId === "mais" || abaId === "empreitas" || abaId === "auditoria") ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1716,12 +1792,10 @@ function criarNovaObra(e) {
     dataInicio: new Date().toISOString().split("T")[0],
     aliquotaImposto,
     orcamentoPrevisto: {
-      MAT: Math.round(tetoCusto * 0.5),
-      MO: Math.round(tetoCusto * 0.35),
+      MAT: Math.round(tetoCusto * 0.50),
+      MO: Math.round(tetoCusto * 0.38),
       EQUIP: Math.round(tetoCusto * 0.05),
-      ALIM: Math.round(tetoCusto * 0.04),
-      TRANSP: Math.round(tetoCusto * 0.03),
-      OUTROS: Math.round(tetoCusto * 0.03)
+      OUTROS: Math.round(tetoCusto * 0.07)
     },
     medicoes: valorContrato > 0 ? [
       {

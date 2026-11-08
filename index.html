@@ -368,19 +368,16 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
 
-        <!-- Botão Nova Obra Desktop -->
-        <button onclick="abrirModalNovaObra()" class="ed-btn hidden sm:inline-flex py-1.5 px-3.5 text-xs">
+        <!-- Botão Nova Obra (Acessível em Todos os Aparelhos) -->
+        <button onclick="abrirModalNovaObra()" id="btnNovaObraHeader" class="ed-btn inline-flex py-1.5 px-2.5 sm:px-3.5 text-xs font-extrabold shadow-sm shrink-0" title="Cadastrar Nova Obra">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          <span>Nova Obra</span>
+          <span class="hidden xs:inline sm:inline">Nova Obra</span>
         </button>
 
         <!-- Botão Backup / Nuvem -->
         <button onclick="abrirModalNuvem()" class="p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Backup e Nuvem">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
         </button>
-
-        <!-- Logout removido — PIN desativado nesta versão -->
-        <!-- botão de sincronização permanece -->
       </div>
     </div>
   </header>
@@ -389,60 +386,6 @@
   <!-- MAIN WORKSPACE -->
   <!-- ===================================================================== -->
   <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex-1 space-y-6">
-
-    <!-- =================================================================== -->
-    <!-- CARD RESUMO EXECUTIVO MOBILE (PRIORIDADE NÚMERO 1: CELULAR) -->
-    <!-- =================================================================== -->
-    <section id="heroMobile" class="md:hidden ed-card p-5 border-2 border-[#23396B]/20 bg-gradient-to-b from-white to-[#F8FAFC] space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span>
-          <span id="mobObraNome" class="font-display font-extrabold text-sm text-[#23396B]">Reforma Piscina</span>
-        </div>
-        <span id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0 text-right">
-          <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-[10px] font-bold text-[#16A34A]">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>Conectado
-          </span>
-          <span id="cloudBadgeMobHora" class="text-[9px] text-[#64748B] font-medium leading-none hidden"></span>
-        </span>
-      </div>
-
-      <!-- Saldo Atual da Obra -->
-      <div>
-        <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] block">Resultado Líquido da Obra</span>
-        <div id="mobSaldoAtual" class="font-display text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5">
-          R$ 20.835,81
-        </div>
-        <p class="text-[11px] text-[#64748B] mt-0.5">Receita líquida menos custos realizados até hoje.</p>
-      </div>
-
-      <!-- Grid 2 Colunas: Custo Realizado × Receita Líquida -->
-      <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-          <span class="text-[10px] font-bold uppercase text-[#64748B] block">Custo Realizado</span>
-          <span id="mobCustoReal" class="font-display text-sm font-extrabold text-[#0F172A] block mt-0.5">R$ 68.704,19</span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-          <span class="text-[10px] font-bold uppercase text-[#64748B] block">Receita Líquida</span>
-          <span id="mobReceitaLiq" class="font-display text-sm font-extrabold text-[#16A34A] block mt-0.5">R$ 89.540,00</span>
-        </div>
-      </div>
-
-      <!-- Viabilidade Projetada até o Fim da Obra -->
-      <div class="p-3 rounded-xl bg-[#23396B]/5 border border-[#23396B]/15 text-xs">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#23396B] block">Previsão até o Fim da Obra:</span>
-        <div class="flex items-center justify-between mt-1">
-          <span class="text-[#475569]">Margem Final Projetada:</span>
-          <span id="mobMargemProj" class="font-bold text-[#16A34A]">+23.3% previsto</span>
-        </div>
-      </div>
-
-      <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) -->
-      <button onclick="abrirModalLancamentoRapido()" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-lg">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-        <span>Registrar Despesa</span>
-      </button>
-    </section>
 
     <!-- =================================================================== -->
     <!-- HERO EXECUTIVE PANEL (DESKTOP) -->
@@ -554,8 +497,61 @@
     <!-- ABA 1: VISÃO DA OBRA (HOME SIMPLIFICADA) -->
     <!-- =================================================================== -->
     <section id="aba-resumo" class="space-y-6">
-      <!-- Mini Cards de Categorias -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5" id="miniCardsCategorias">
+      
+      <!-- CARD RESUMO EXECUTIVO MOBILE (Visível Apenas na Aba Obra) -->
+      <div id="heroMobile" class="md:hidden ed-card p-5 border-2 border-[#23396B]/20 bg-gradient-to-b from-white to-[#F8FAFC] space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span>
+            <span id="mobObraNome" class="font-display font-extrabold text-sm text-[#23396B]">Reforma Piscina</span>
+          </div>
+          <span id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0 text-right">
+            <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-[10px] font-bold text-[#16A34A]">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>Conectado
+            </span>
+            <span id="cloudBadgeMobHora" class="text-[9px] text-[#64748B] font-medium leading-none hidden"></span>
+          </span>
+        </div>
+
+        <!-- Saldo Atual da Obra -->
+        <div>
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] block">Saldo em Caixa Hoje</span>
+          <div id="mobSaldoAtual" class="font-display text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5">
+            R$ 20.835,81
+          </div>
+          <p class="text-[11px] text-[#64748B] mt-0.5">Receita líquida recebida menos gastos pagos até hoje.</p>
+        </div>
+
+        <!-- Grid 2 Colunas: Custo Realizado × Receita Líquida -->
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] font-bold uppercase text-[#64748B] block">Total Gasto</span>
+            <span id="mobCustoReal" class="font-display text-sm font-extrabold text-[#0F172A] block mt-0.5">R$ 68.704,19</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] font-bold uppercase text-[#64748B] block">Recebido Cliente</span>
+            <span id="mobReceitaLiq" class="font-display text-sm font-extrabold text-[#16A34A] block mt-0.5">R$ 89.540,00</span>
+          </div>
+        </div>
+
+        <!-- Viabilidade Projetada até o Fim da Obra -->
+        <div class="p-3 rounded-xl bg-[#23396B]/5 border border-[#23396B]/15 text-xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#23396B] block">Lucro Previsto Final:</span>
+          <div class="flex items-center justify-between mt-1">
+            <span class="text-[#475569]">Margem com Empreitas:</span>
+            <span id="mobMargemProj" class="font-bold text-[#16A34A]">+12.7% previsto</span>
+          </div>
+        </div>
+
+        <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) -->
+        <button onclick="abrirModalLancamentoRapido()" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          <span>Registrar Despesa</span>
+        </button>
+      </div>
+
+      <!-- Mini Cards de Categorias (4 Pilares Oficiais Sem Sobreposição) -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5" id="miniCardsCategorias">
       </div>
 
       <!-- Grid 2 Colunas: Últimas Despesas (Esq) + Reembolsos a Fazer (Dir) -->
@@ -608,11 +604,11 @@
     <!-- =================================================================== -->
     <section id="aba-lancamentos" class="hidden space-y-6">
       
-      <!-- Formulário Completo Desktop -->
-      <div class="ed-card p-6 space-y-4 border-2 border-[#23396B]/10">
+      <!-- Formulário Completo Desktop (Oculto no Mobile para Dar Prioridade Direta às Despesas) -->
+      <div class="hidden md:block ed-card p-6 space-y-4 border-2 border-[#23396B]/10">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <span class="ed-eyebrow">LANÇAMENTO RÁPIDO</span>
+            <span class="ed-eyebrow">LANÇAMENTO COMPLETO</span>
             <h3 class="font-display text-base sm:text-lg font-bold text-[#23396B] mt-0.5" id="formLancTitulo">
               Registrar Despesa de Obra
             </h3>
@@ -704,7 +700,18 @@
       </div>
 
       <!-- Tabela de Lançamentos -->
-      <div class="ed-card p-6 space-y-4">
+      <div class="ed-card p-5 sm:p-6 space-y-4">
+        <!-- Topo Mobile: Título Direto + Botão Lançar -->
+        <div class="md:hidden flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <span class="ed-eyebrow">REGISTRO DA OBRA</span>
+            <h3 class="font-display text-base font-extrabold text-[#23396B]">Despesas Lançadas</h3>
+          </div>
+          <button onclick="abrirModalLancamentoRapido()" class="ed-btn py-1.5 px-3 text-xs font-extrabold shadow-sm">
+            + Nova Despesa
+          </button>
+        </div>
+
         <!-- Filtros Rápidos -->
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div class="flex flex-wrap items-center gap-2.5 flex-1">
@@ -736,10 +743,10 @@
           </div>
         </div>
 
-        <!-- Tabela Responsiva -->
+        <!-- Tabela Responsiva (Cabeçalho Oculto no Mobile para Eliminar Rolagem Horizontal) -->
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
-            <thead>
+            <thead class="hidden md:table-header-group">
               <tr class="border-b border-[#CBD5E1] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8FAFC]">
                 <th class="py-3 px-3">Data</th>
                 <th class="py-3 px-3">Descrição / Pagamento</th>
@@ -758,7 +765,7 @@
     <!-- ABA 3: CONTRATOS & MEDIÇÕES -->
     <!-- =================================================================== -->
     <section id="aba-medicoes" class="hidden space-y-6">
-      <div class="ed-card p-6 space-y-4">
+      <div class="ed-card p-5 sm:p-6 space-y-4">
         <div class="border-b border-slate-100 pb-3">
           <span class="ed-eyebrow">FATURAMENTO</span>
           <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5 mb-1">Registrar Medição do Contrato</h3>
@@ -777,8 +784,8 @@
           </div>
           <div class="sm:col-span-2">
             <select id="medStatus" class="ed-input text-xs">
-              <option value="Recebida" selected>Recebida</option>
-              <option value="Pendente">Prevista</option>
+              <option value="Pendente" selected>A receber (Prevista)</option>
+              <option value="Recebida">Recebida em conta</option>
             </select>
           </div>
           <div class="sm:col-span-12 flex justify-end">
@@ -788,7 +795,7 @@
 
         <div class="overflow-x-auto pt-4">
           <table class="w-full text-left border-collapse">
-            <thead>
+            <thead class="hidden md:table-header-group">
               <tr class="border-b border-[#CBD5E1] text-[11px] font-bold uppercase tracking-wider text-[#23396B] bg-[#F8FAFC]">
                 <th class="py-3 px-4">Medição</th>
                 <th class="py-3 px-4">Status</th>
@@ -808,6 +815,13 @@
     <!-- ABA 4: EMPREITEIROS & TITULARES -->
     <!-- =================================================================== -->
     <section id="aba-empreitas" class="hidden space-y-6">
+      <!-- Botão Voltar para Mais (Mobile) -->
+      <div class="md:hidden">
+        <button onclick="mudarAba('mais')" class="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#4395D8] hover:text-[#23396B] transition py-1">
+          &larr; Voltar para Mais Ferramentas
+        </button>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div class="lg:col-span-7 ed-card p-6 space-y-4">
           <div class="border-b border-slate-100 pb-3">
@@ -852,6 +866,13 @@
     <!-- ABA 5: RELATÓRIOS & AUDITORIA (ANÁLISE AVANÇADA FORA DA TELA PRINCIPAL) -->
     <!-- =================================================================== -->
     <section id="aba-auditoria" class="hidden space-y-6">
+      <!-- Botão Voltar para Mais (Mobile) -->
+      <div class="md:hidden">
+        <button onclick="mudarAba('mais')" class="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#4395D8] hover:text-[#23396B] transition py-1">
+          &larr; Voltar para Mais Ferramentas
+        </button>
+      </div>
+
       <!-- Bloco Analítico (Gráfico e Tetos Orçamentários) -->
       <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Gráfico de Rosca -->
@@ -958,6 +979,77 @@
       </div>
     </section>
 
+    <!-- =================================================================== -->
+    <!-- ABA 6: MAIS (HUB DE FERRAMENTAS & NAVEGAÇÃO COMPLETA NO CELULAR) -->
+    <!-- =================================================================== -->
+    <section id="aba-mais" class="hidden space-y-4">
+      <div class="border-b border-slate-100 pb-3">
+        <span class="ed-eyebrow">FERRAMENTAS DA OBRA</span>
+        <h3 class="font-display text-xl font-extrabold text-[#23396B]">Menu de Acesso</h3>
+        <p class="text-xs text-[#64748B]">Consulte relatórios, acompanhe empreiteiros ou configure novas obras.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+        
+        <!-- Opção 1: Relatórios & Gráficos -->
+        <button onclick="mudarAba('auditoria')" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#4395D8] transition group">
+          <div class="w-12 h-12 rounded-2xl bg-[#23396B]/10 text-[#23396B] group-hover:bg-[#23396B] group-hover:text-white flex items-center justify-center shrink-0 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Relatórios</h4>
+              <span class="text-xs text-[#4395D8] font-bold">&rarr;</span>
+            </div>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Custos, limites e resultados</p>
+          </div>
+        </button>
+
+        <!-- Opção 2: Empreiteiros e Pagamentos -->
+        <button onclick="mudarAba('empreitas')" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#4395D8] transition group">
+          <div class="w-12 h-12 rounded-2xl bg-[#FF8C00]/15 text-[#FF8C00] group-hover:bg-[#FF8C00] group-hover:text-[#0F172A] flex items-center justify-center shrink-0 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Empreiteiros e pagamentos</h4>
+              <span class="text-xs text-[#4395D8] font-bold">&rarr;</span>
+            </div>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Contratos, valores pagos e pendências</p>
+          </div>
+        </button>
+
+        <!-- Opção 3: Cadastrar Obra -->
+        <button onclick="abrirModalNovaObra()" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#16A34A] transition group">
+          <div class="w-12 h-12 rounded-2xl bg-[#16A34A]/15 text-[#16A34A] group-hover:bg-[#16A34A] group-hover:text-white flex items-center justify-center shrink-0 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Cadastrar obra</h4>
+              <span class="text-xs text-[#16A34A] font-bold">+</span>
+            </div>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Adicionar uma nova obra</p>
+          </div>
+        </button>
+
+        <!-- Opção 4: Configurações e Backup -->
+        <button onclick="abrirModalNuvem()" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#4395D8] transition group">
+          <div class="w-12 h-12 rounded-2xl bg-slate-100 text-[#475569] group-hover:bg-[#23396B] group-hover:text-white flex items-center justify-center shrink-0 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Configurações e backup</h4>
+              <span class="text-xs text-[#4395D8] font-bold">&rarr;</span>
+            </div>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Acesso, segurança e dados</p>
+          </div>
+        </button>
+
+      </div>
+    </section>
+
   </main>
 
   <!-- ===================================================================== -->
@@ -1029,10 +1121,10 @@
 
         <!-- Categoria em Pills de 1 Toque -->
         <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1.5">Selecione a Categoria (1 toque)</label>
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1.5">Selecione a Categoria (1 toque) *</label>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button type="button" id="btnCatRapida_MO" onclick="selecionarCategoriaRapida('MO')"
-              class="py-2.5 px-3 rounded-2xl text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-sm flex items-center justify-center gap-1.5">
+              class="py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5">
               <span>Mão de Obra</span>
             </button>
             <button type="button" id="btnCatRapida_MAT" onclick="selecionarCategoriaRapida('MAT')"
@@ -1048,6 +1140,7 @@
               <span>Outros</span>
             </button>
           </div>
+          <p id="avisoCategoriaObrigatoria" class="hidden text-xs text-rose-600 font-bold mt-1.5">⚠️ Selecione uma categoria para salvar a despesa.</p>
         </div>
 
         <!-- Data do Lançamento -->
@@ -1104,7 +1197,7 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- BOTTOM NAVIGATION BAR (FIXO NO CELULAR - EXPERIÊNCIA NATIVA) -->
+  <!-- BOTTOM NAVIGATION BAR (FIXO NO CELULAR - 5 AÇÕES OBJETIVAS) -->
   <!-- ===================================================================== -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#23396B] border-t border-[#4395D8]/30 px-3 py-2 flex items-center justify-around shadow-2xl backdrop-blur-md no-print">
     <button onclick="mudarAba('resumo')" id="navMobResumo" class="flex flex-col items-center gap-1 text-[#FF8C00] font-bold transition">
@@ -1127,9 +1220,9 @@
       <span class="text-[10px] font-bold uppercase tracking-wider">Medições</span>
     </button>
 
-    <button onclick="mudarAba('relatorios_menu')" id="navMobRel" class="flex flex-col items-center gap-1 text-white/70 hover:text-white transition">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-      <span class="text-[10px] font-bold uppercase tracking-wider">Relatórios</span>
+    <button onclick="mudarAba('mais')" id="navMobMais" class="flex flex-col items-center gap-1 text-white/70 hover:text-white transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      <span class="text-[10px] font-bold uppercase tracking-wider">Mais</span>
     </button>
   </nav>
 
