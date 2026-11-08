@@ -425,7 +425,6 @@ function atualizarTudo() {
     if (kpiSaldoSub) {
       kpiSaldoSub.textContent = `Receita Líquida Recebida − Custos Realizados da Obra | Empreitas pendentes: ${formatBRL(m.saldoEmpreitasPendente)} | EAC: ${formatBRL(m.custoTotalProjetado)}`;
     }
-    }
 
     if (m.saldoProjetadoFinal < 0) {
       badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] cursor-pointer shadow-sm";
