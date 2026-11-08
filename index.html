@@ -269,8 +269,52 @@
 <body class="min-h-screen flex flex-col">
 
   <!-- ===================================================================== -->
-  <!-- PIN GATE DESATIVADO — autenticação adiada para próxima versão -->
+  <!-- MODAL DE IDENTIFICAÇÃO / LOGIN SIMPLES (MELO / PILAR) -->
   <!-- ===================================================================== -->
+  <div id="modalPerfilUsuario" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 border border-[#CBD5E1] shadow-2xl">
+      <div class="w-12 h-12 rounded-2xl bg-[#23396B] text-white flex items-center justify-center mx-auto text-lg font-extrabold shadow-md">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      </div>
+      <div>
+        <h3 class="font-display text-lg font-extrabold text-[#23396B]">Quem está acessando?</h3>
+        <p class="text-xs text-[#64748B] mt-0.5">Selecione para vincular despesas e reembolsos automaticamente</p>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <button type="button" onclick="selecionarPerfilCard('Pilar')" id="cardPerfilPilar"
+          class="p-3.5 rounded-2xl border-2 border-[#FF8C00] bg-[#FF8C00]/10 flex flex-col items-center gap-1 transition">
+          <span class="w-9 h-9 rounded-full bg-[#FF8C00] text-[#0F172A] flex items-center justify-center font-extrabold text-sm">P</span>
+          <span class="font-display font-extrabold text-sm text-[#23396B]">Pilar</span>
+          <span class="text-[10px] text-[#64748B] font-semibold">Financeiro</span>
+        </button>
+
+        <button type="button" onclick="selecionarPerfilCard('Melo')" id="cardPerfilMelo"
+          class="p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:border-[#23396B] flex flex-col items-center gap-1 transition">
+          <span class="w-9 h-9 rounded-full bg-[#23396B] text-white flex items-center justify-center font-extrabold text-sm">M</span>
+          <span class="font-display font-extrabold text-sm text-[#23396B]">Melo</span>
+          <span class="text-[10px] text-[#64748B] font-semibold">Engenheiro / Obra</span>
+        </button>
+      </div>
+
+      <div class="pt-1 text-left space-y-1.5">
+        <label class="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider">PIN de Acesso (Segurança)</label>
+        <input type="password" id="inputPinPerfil" maxlength="6" inputmode="numeric" placeholder="1234" value="1234"
+          class="w-full text-center tracking-[0.4em] text-lg font-extrabold rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
+        <p id="erroPinPerfil" class="hidden text-xs text-rose-600 font-bold text-center">PIN incorreto. (Padrão: 1234)</p>
+      </div>
+
+      <label class="flex items-center justify-center gap-2 text-xs text-[#475569] cursor-pointer">
+        <input type="checkbox" id="checkLembrarPerfil" checked class="rounded border-slate-300 text-[#FF8C00]" />
+        <span>Lembrar neste aparelho</span>
+      </label>
+
+      <button onclick="confirmarPerfilUsuario()" class="ed-btn w-full py-2.5 text-sm font-extrabold shadow-md">
+        Entrar no Sistema
+      </button>
+    </div>
+  </div>
+
   <div id="pinGateModal" class="hidden"></div>
 
   <!-- ===================================================================== -->
@@ -313,8 +357,14 @@
           </select>
         </div>
 
+        <!-- Perfil do Usuário Ativo (Melo / Pilar) -->
+        <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B]" title="Clique para alternar entre Melo e Pilar">
+          <span id="avatarUsuarioPill" class="w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-[10px] flex items-center justify-center">P</span>
+          <span id="nomeUsuarioPill">Pilar</span>
+        </button>
+
         <!-- Botão Sincronizar Agora -->
-        <button onclick="sincronizarComNuvem(true)" class="p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Forçar Sincronização com Nuvem">
+        <button onclick="sincronizarComNuvem(true)" class="p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Sincronizar com Nuvem Agora">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
 
@@ -435,7 +485,7 @@
         <!-- KPI 1 -->
         <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between text-white/80">
-            <span class="text-[11px] font-bold uppercase tracking-wider">Medição Líquida</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider">Recebido do Cliente</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiDescNotaTag">-7.5% NF</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiMedicaoLiquida">R$ 0,00</div>
@@ -445,49 +495,32 @@
         <!-- KPI 2 -->
         <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between text-white/80">
-            <span class="text-[11px] font-bold uppercase tracking-wider">Custo Realizado</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider">Total Gasto até Hoje</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white/90" id="kpiQtdLancamentos">0 registros</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiCustoTotal">R$ 0,00</div>
-          <div class="text-[11px] text-white/70 mt-1 truncate" id="kpiCustoSub">Auditado e Conferido</div>
+          <div class="text-[11px] text-white/70 mt-1 truncate" id="kpiCustoSub">Materiais, Mão de Obra e Suprimentos</div>
         </div>
 
         <!-- KPI 3: Saldo / Margem -->
         <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs" id="cardSaldoBox">
           <div class="flex items-center justify-between gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-[#86EFAC] whitespace-nowrap" id="cardSaldoLabel">Resultado Líquido</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[#86EFAC] whitespace-nowrap" id="cardSaldoLabel">Saldo em Caixa Hoje</span>
             <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] shrink-0" id="kpiMargemPerc">0% margem</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiSaldoFinal">R$ 0,00</div>
-          <div class="text-[11px] text-emerald-200/90 mt-1" id="kpiSaldoSub">Receita Líquida − Custos da Obra</div>
+          <div class="text-[11px] text-emerald-200/90 mt-1" id="kpiSaldoSub">Dinheiro livre na conta da obra agora</div>
         </div>
 
         <!-- KPI 4 -->
         <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between text-white/80">
-            <span class="text-[11px] font-bold uppercase tracking-wider">Teto Orçamentário</span>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white/90" id="kpiTetoPercBadge">0% teto</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider">Lucro Previsto Final</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiTetoPercBadge">+12.7%</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiTetoValor">R$ 0,00</div>
-          <div class="w-full bg-white/20 h-1.5 rounded-full mt-2 overflow-hidden">
-            <div id="kpiTetoBar" class="bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-          </div>
-          <div class="text-[11px] text-white/70 mt-1 truncate" id="kpiTetoSub">Saldo orçado disponível</div>
+          <div class="text-[11px] text-white/70 mt-1 truncate" id="kpiTetoSub">Descontando empreitas pendentes</div>
         </div>
-      </div>
-
-      <!-- Banner Auditoria Forense -->
-      <div id="alertaAuditoriaBanner" class="relative z-10 mt-5 rounded-xl bg-white/[0.08] border border-[#4395D8]/35 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <span class="w-2.5 h-2.5 rounded-full bg-[#FF8C00] shrink-0"></span>
-          <p class="text-xs text-white/95 leading-relaxed">
-            <strong id="alertaAuditoriaTitulo" class="font-bold text-white">Conferência Técnica:</strong>
-            <span id="alertaAuditoriaTexto" class="text-white/85">Carregando auditoria...</span>
-          </p>
-        </div>
-        <button onclick="mudarAba('auditoria')" class="shrink-0 text-xs font-extrabold text-[#FF8C00] hover:underline no-print">
-          Ver Prova Forense &rarr;
-        </button>
       </div>
     </section>
 
@@ -497,11 +530,11 @@
     <nav class="hidden md:flex flex-wrap items-center gap-2.5 no-print">
       <button onclick="mudarAba('resumo')" id="tabBtn_resumo" class="tab-btn active">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#FF8C00]"></span>
-        <span>Resumo & Viabilidade</span>
+        <span>Visão da Obra</span>
       </button>
       <button onclick="mudarAba('lancamentos')" id="tabBtn_lancamentos" class="tab-btn">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
-        <span>Lançamentos & Despesas</span>
+        <span>Todas as Despesas</span>
       </button>
       <button onclick="mudarAba('medicoes')" id="tabBtn_medicoes" class="tab-btn">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
@@ -509,56 +542,64 @@
       </button>
       <button onclick="mudarAba('empreitas')" id="tabBtn_empreitas" class="tab-btn">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
-        <span>Empreiteiros & Titulares</span>
+        <span>Empreiteiros & Reembolsos</span>
       </button>
       <button onclick="mudarAba('auditoria')" id="tabBtn_auditoria" class="tab-btn">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
-        <span>Auditoria Forense (Excel)</span>
+        <span>Relatórios & Auditoria</span>
       </button>
     </nav>
 
     <!-- =================================================================== -->
-    <!-- ABA 1: RESUMO & VIABILIDADE (GRÁFICOS E LIMITES) -->
+    <!-- ABA 1: VISÃO DA OBRA (HOME SIMPLIFICADA) -->
     <!-- =================================================================== -->
     <section id="aba-resumo" class="space-y-6">
       <!-- Mini Cards de Categorias -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5" id="miniCardsCategorias">
       </div>
 
-      <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Gráfico de Rosca -->
-        <div class="lg:col-span-5 ed-card p-6 flex flex-col justify-between">
-          <div class="border-b border-slate-100 pb-3">
-            <span class="ed-eyebrow">DISTRIBUIÇÃO</span>
-            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Composição Real dos Custos</h3>
-            <p class="text-xs text-[#64748B]">Custos por categoria analítica apurados na obra.</p>
-          </div>
-          <div class="relative h-64 sm:h-72 my-4">
-            <canvas id="chartCategorias"></canvas>
-          </div>
-          <div class="pt-3 border-t border-slate-100 text-xs text-[#64748B] text-center">
-            Mão de obra e materiais representam a maior fatia do desembolso.
-          </div>
-        </div>
-
-        <!-- Orçado vs Realizado -->
-        <div class="lg:col-span-7 ed-card p-6 space-y-4">
+      <!-- Grid 2 Colunas: Últimas Despesas (Esq) + Reembolsos a Fazer (Dir) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Coluna Esquerda: Últimas Despesas Lançadas (Acesso Rápido para Pilar e Melo) -->
+        <div class="lg:col-span-7 ed-card p-5 sm:p-6 space-y-4">
           <div class="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <span class="ed-eyebrow">CONTROLE DE ORÇAMENTO</span>
-              <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Previsão vs. Desembolso Real</h3>
-              <p class="text-xs text-[#64748B]">Compare os limites orçados com o valor executado.</p>
+              <span class="ed-eyebrow">LANÇAMENTOS RECENTES</span>
+              <h3 class="font-display text-base sm:text-lg font-bold text-[#23396B] mt-0.5">Últimas Despesas Registradas</h3>
+              <p class="text-xs text-[#64748B]">Consulte ou corrija os lançamentos mais recentes da obra.</p>
             </div>
-            <button onclick="salvarTetosOrcamento()" class="ed-btn--navy py-1.5 px-3.5 text-xs no-print">
-              Salvar Tetos
+            <button onclick="abrirModalLancamentoRapido()" class="ed-btn py-1.5 px-3 text-xs">
+              <span>+ Registrar</span>
             </button>
           </div>
 
-          <div class="space-y-3" id="orcamentoComparativoLista"></div>
+          <!-- Lista de Cards das Últimas Despesas -->
+          <div id="listaUltimasDespesasHome" class="space-y-2.5"></div>
 
-          <div class="p-4 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs space-y-2 mt-4" id="resumoComparativoBox">
+          <div class="pt-2 border-t border-slate-100 text-center">
+            <button onclick="mudarAba('lancamentos')" class="text-xs font-extrabold text-[#4395D8] hover:text-[#23396B] transition">
+              Ver todas as despesas da obra &rarr;
+            </button>
           </div>
         </div>
+
+        <!-- Coluna Direita: Reembolsos e Prestação de Contas -->
+        <div class="lg:col-span-5 ed-card p-5 sm:p-6 space-y-4">
+          <div class="border-b border-slate-100 pb-3">
+            <span class="ed-eyebrow">REEMBOLSOS & PRESTAÇÃO</span>
+            <h3 class="font-display text-base sm:text-lg font-bold text-[#23396B] mt-0.5">Gastos do Próprio Bolso</h3>
+            <p class="text-xs text-[#64748B]">Valores pagos por Melo ou Pilar a serem reembolsados pela obra.</p>
+          </div>
+
+          <div id="listaReembolsosHome" class="space-y-3"></div>
+
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-[#475569] space-y-1">
+            <div class="font-bold text-[#23396B]">Como funciona:</div>
+            <p>Ao registrar uma despesa, indique quem pagou (Melo ou Pilar) para que o sistema calcule automaticamente o valor a reembolsar.</p>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -808,9 +849,47 @@
     </section>
 
     <!-- =================================================================== -->
-    <!-- ABA 5: AUDITORIA FORENSE (PROVA PERICIAL DO EXCEL) -->
+    <!-- ABA 5: RELATÓRIOS & AUDITORIA (ANÁLISE AVANÇADA FORA DA TELA PRINCIPAL) -->
     <!-- =================================================================== -->
     <section id="aba-auditoria" class="hidden space-y-6">
+      <!-- Bloco Analítico (Gráfico e Tetos Orçamentários) -->
+      <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Gráfico de Rosca -->
+        <div class="lg:col-span-5 ed-card p-6 flex flex-col justify-between">
+          <div class="border-b border-slate-100 pb-3">
+            <span class="ed-eyebrow">DISTRIBUIÇÃO</span>
+            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Composição Real dos Custos</h3>
+            <p class="text-xs text-[#64748B]">Custos por categoria analítica apurados na obra.</p>
+          </div>
+          <div class="relative h-64 sm:h-72 my-4">
+            <canvas id="chartCategorias"></canvas>
+          </div>
+          <div class="pt-3 border-t border-slate-100 text-xs text-[#64748B] text-center">
+            Mão de obra e materiais representam a maior fatia do desembolso.
+          </div>
+        </div>
+
+        <!-- Orçado vs Realizado -->
+        <div class="lg:col-span-7 ed-card p-6 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <span class="ed-eyebrow">CONTROLE DE ORÇAMENTO</span>
+              <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Previsão vs. Desembolso Real</h3>
+              <p class="text-xs text-[#64748B]">Compare os limites orçados com o valor executado.</p>
+            </div>
+            <button onclick="salvarTetosOrcamento()" class="ed-btn--navy py-1.5 px-3.5 text-xs no-print">
+              Salvar Tetos
+            </button>
+          </div>
+
+          <div class="space-y-3" id="orcamentoComparativoLista"></div>
+
+          <div class="p-4 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs space-y-2 mt-4" id="resumoComparativoBox">
+          </div>
+        </div>
+      </div>
+
+      <!-- Relatório de Conferência Forense do Excel -->
       <div class="ed-card p-6 sm:p-7 space-y-5">
         <div class="border-b border-slate-100 pb-4">
           <span class="ed-eyebrow">RELATÓRIO DE CONFERÊNCIA FORENSE</span>
@@ -865,6 +944,17 @@
             </p>
           </div>
         </div>
+
+        <!-- Ações de Exportação -->
+        <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-100 no-print">
+          <button onclick="exportarExcelObra()" class="ed-btn py-2 px-4 text-xs font-bold">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span>Baixar Planilha Excel (.xlsx)</span>
+          </button>
+          <button onclick="exportarBackupJSON()" class="ed-btn--navy py-2 px-4 text-xs font-bold">
+            <span>Exportar Backup JSON</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -879,12 +969,13 @@
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
         <div>
           <span class="text-[10px] font-extrabold uppercase tracking-wider text-[#FF8C00]">FLUXO RÁPIDO</span>
-          <h3 class="font-display text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
+          <h3 id="modalLancRapidoTitulo" class="font-display text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
         </div>
         <button onclick="fecharModalLancamentoRapido()" class="w-8 h-8 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-lg flex items-center justify-center">✕</button>
       </div>
 
       <form onsubmit="salvarLancamentoRapido(event)" class="space-y-4">
+        <input type="hidden" id="lancRapidoIdEdicao" />
         
         <!-- Campo de Valor com Destaque -->
         <div>
@@ -892,7 +983,30 @@
           <div class="relative">
             <span class="absolute left-4 top-1/2 -translate-y-1/2 font-display text-xl font-extrabold text-[#64748B]">R$</span>
             <input type="number" step="0.01" id="lancRapidoValor" required placeholder="0,00" inputmode="decimal"
+              oninput="checarDuplicidadeAoDigitar()"
               class="w-full pl-12 pr-4 py-3 text-2xl font-display font-extrabold rounded-2xl border-2 border-[#CBD5E1] focus:border-[#4395D8] bg-[#F8FAFC] text-[#23396B] focus:outline-none transition" />
+          </div>
+        </div>
+
+        <!-- Alerta de Possível Despesa Duplicada (Não bloqueia, apenas previne erro) -->
+        <div id="avisoDuplicidadeRapido" class="hidden p-3 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
+          <span class="text-base shrink-0">⚠️</span>
+          <div class="flex-1">
+            <span class="font-bold block">Atenção: Possível despesa duplicada!</span>
+            <span id="textoDuplicidadeRapido" class="text-[11px] text-amber-800">Já existe um lançamento recente com este mesmo valor.</span>
+          </div>
+        </div>
+
+        <!-- Sugestões Rápidas em 1 Toque -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-1.5">Sugestões Rápidas de 1 Toque:</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="aplicarSugestaoRapida('Almoço equipe', 'OUTROS', 'ALIM')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🍛 Almoço</button>
+            <button type="button" onclick="aplicarSugestaoRapida('Cimento e Argamassa', 'MAT', 'MAT')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🧱 Cimento</button>
+            <button type="button" onclick="aplicarSugestaoRapida('Combustível / Gasolina', 'OUTROS', 'TRANSP')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">⛽ Gasolina</button>
+            <button type="button" onclick="aplicarSugestaoRapida('Areia e Brita', 'MAT', 'MAT')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🪨 Areia</button>
+            <button type="button" onclick="aplicarSugestaoRapida('Diária de obra', 'MO', 'MO')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">👷 Diária</button>
+            <button type="button" onclick="aplicarSugestaoRapida('Contêiner de entulho', 'EQUIP', 'EQUIP')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🚜 Contêiner</button>
           </div>
         </div>
 
@@ -900,11 +1014,12 @@
         <div>
           <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1">Descrição / O que foi comprado? *</label>
           <input type="text" id="lancRapidoDescricao" required placeholder="Ex: Almoço da equipe, Cimento, Gasolina..." list="sugestoesDespesas"
+            oninput="checarDuplicidadeAoDigitar()"
             class="ed-input text-sm font-semibold" />
           <datalist id="sugestoesDespesas">
             <option value="Almoço equipe">
-            <option value="Cimento">
-            <option value="Combustível equipe">
+            <option value="Cimento e Argamassa">
+            <option value="Combustível / Gasolina">
             <option value="Areia e brita">
             <option value="Diária servente">
             <option value="Tubulação e conexões">
@@ -951,12 +1066,13 @@
           <div id="opcoesAvancadasRapidas" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-3 bg-[#F8FAFC] p-3 rounded-2xl border border-[#CBD5E1]">
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Titular</label>
-                <select id="lancRapidoTitular" class="ed-input text-xs">
-                  <option value="EMTEC" selected>EMTEC (Padrão)</option>
-                  <option value="MELO">Melo</option>
-                  <option value="ELON">Elon</option>
-                  <option value="IAGO">Iago</option>
+                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Quem Pagou?</label>
+                <select id="lancRapidoTitular" class="ed-input text-xs font-semibold">
+                  <option value="EMTEC" selected>EMTEC (Conta da Obra)</option>
+                  <option value="PILAR">PILAR (Do meu bolso - Reembolso)</option>
+                  <option value="MELO">MELO (Do meu bolso - Reembolso)</option>
+                  <option value="IAGO">IAGO (Caixa de Campo)</option>
+                  <option value="ELON">ELON</option>
                 </select>
               </div>
               <div>
@@ -980,7 +1096,7 @@
 
         <!-- Botão Salvar com Destaque Máximo -->
         <button type="submit" class="ed-btn w-full py-4 text-base font-extrabold shadow-xl">
-          <span>Salvar Despesa Agora</span>
+          <span id="btnSalvarLancRapidoTexto">Salvar Despesa Agora</span>
         </button>
       </form>
 

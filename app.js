@@ -1,10 +1,11 @@
 // ==========================================================================
 // EMTEC Engenharia — Controle Financeiro e Viabilidade de Obras
-// Sincronização em Nuvem (Vercel Blob), Segurança por PIN, Mobile-First & EVM
+// Sincronização em Nuvem (Vercel Blob), Perfis Melo/Pilar, Mobile-First
 // ==========================================================================
 
 const STORAGE_KEY = "EMTEC_SISTEMA_CUSTOS_V1";
 const PIN_STORAGE_KEY = "emtec_auth_pin";
+const USUARIO_STORAGE_KEY = "emtec_usuario_ativo";
 const DEFAULT_PIN = "1234";
 
 let estado = carregarEstadoLocal();
@@ -12,57 +13,107 @@ let obraAtualId = estado.obras[0]?.id || "";
 let chartInstance = null;
 let categoriaRapidaAtiva = "MO";
 let isSincronizando = false;
+let perfilAtivo = localStorage.getItem(USUARIO_STORAGE_KEY) || "Pilar";
+let perfilSelecionadoNoModal = perfilAtivo;
 
 // --------------------------------------------------------------------------
-// 1. SEGURANÇA E AUTENTICAÇÃO POR PIN
+// 1. GESTÃO DE PERFIL (MELO / PILAR) & AUTENTICAÇÃO
 // --------------------------------------------------------------------------
-function verificarAuth() {
-  const pinSalvo = localStorage.getItem(PIN_STORAGE_KEY);
-  const modal = document.getElementById("pinGateModal");
-  if (!modal) return true;
+function carregarPerfilUsuario() {
+  perfilAtivo = localStorage.getItem(USUARIO_STORAGE_KEY) || "Pilar";
+  perfilSelecionadoNoModal = perfilAtivo;
 
-  if (pinSalvo && pinSalvo === DEFAULT_PIN) {
-    modal.classList.add("hidden");
-    return true;
-  } else {
-    modal.classList.remove("hidden");
-    const input = document.getElementById("inputPinAcesso");
-    if (input) setTimeout(() => input.focus(), 200);
-    return false;
+  const nomePill = document.getElementById("nomeUsuarioPill");
+  const avatarPill = document.getElementById("avatarUsuarioPill");
+
+  if (nomePill) nomePill.textContent = perfilAtivo;
+  if (avatarPill) {
+    if (perfilAtivo === "Melo") {
+      avatarPill.textContent = "M";
+      avatarPill.className = "w-5 h-5 rounded-full bg-[#23396B] text-white font-extrabold text-[10px] flex items-center justify-center";
+    } else {
+      avatarPill.textContent = "P";
+      avatarPill.className = "w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-[10px] flex items-center justify-center";
+    }
   }
+}
+
+function abrirModalPerfil() {
+  const m = document.getElementById("modalPerfilUsuario");
+  if (!m) return;
+  m.classList.remove("hidden");
+  m.classList.add("flex");
+  selecionarPerfilCard(perfilAtivo);
+  const err = document.getElementById("erroPinPerfil");
+  if (err) err.classList.add("hidden");
+}
+
+function fecharModalPerfil() {
+  const m = document.getElementById("modalPerfilUsuario");
+  if (!m) return;
+  m.classList.add("hidden");
+  m.classList.remove("flex");
+}
+
+function selecionarPerfilCard(nome) {
+  perfilSelecionadoNoModal = nome;
+  const cardPilar = document.getElementById("cardPerfilPilar");
+  const cardMelo = document.getElementById("cardPerfilMelo");
+
+  if (nome === "Pilar") {
+    if (cardPilar) {
+      cardPilar.className = "p-3.5 rounded-2xl border-2 border-[#FF8C00] bg-[#FF8C00]/10 flex flex-col items-center gap-1 transition shadow-sm";
+    }
+    if (cardMelo) {
+      cardMelo.className = "p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:border-[#23396B] flex flex-col items-center gap-1 transition opacity-70";
+    }
+  } else {
+    if (cardPilar) {
+      cardPilar.className = "p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:border-[#FF8C00] flex flex-col items-center gap-1 transition opacity-70";
+    }
+    if (cardMelo) {
+      cardMelo.className = "p-3.5 rounded-2xl border-2 border-[#23396B] bg-[#23396B]/10 flex flex-col items-center gap-1 transition shadow-sm";
+    }
+  }
+}
+
+function confirmarPerfilUsuario() {
+  const pinInput = document.getElementById("inputPinPerfil");
+  const pinVal = (pinInput?.value || "").trim();
+  const erroMsg = document.getElementById("erroPinPerfil");
+  const checkLembrar = document.getElementById("checkLembrarPerfil");
+
+  if (pinVal && pinVal !== DEFAULT_PIN) {
+    if (erroMsg) erroMsg.classList.remove("hidden");
+    return;
+  }
+
+  perfilAtivo = perfilSelecionadoNoModal;
+  if (checkLembrar && checkLembrar.checked) {
+    localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
+    localStorage.setItem(PIN_STORAGE_KEY, DEFAULT_PIN);
+  } else {
+    localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
+  }
+
+  carregarPerfilUsuario();
+  fecharModalPerfil();
+  mostrarNotificacaoToast(`Conectado como ${perfilAtivo}`);
+  sincronizarComNuvem(true);
+}
+
+function verificarAuth() {
+  return true;
 }
 
 function autenticarPIN(e) {
   if (e) e.preventDefault();
-  const input = document.getElementById("inputPinAcesso");
-  const checkLembrar = document.getElementById("checkLembrarPin");
-  const erroMsg = document.getElementById("pinErroMsg");
-  const pin = (input?.value || "").trim();
-
-  if (pin === DEFAULT_PIN) {
-    if (checkLembrar && checkLembrar.checked) {
-      localStorage.setItem(PIN_STORAGE_KEY, pin);
-    } else {
-      sessionStorage.setItem(PIN_STORAGE_KEY, pin);
-    }
-    if (erroMsg) erroMsg.classList.add("hidden");
-    document.getElementById("pinGateModal").classList.add("hidden");
-    // Inicializar sincronização com a nuvem após login
-    sincronizarComNuvem(true);
-  } else {
-    if (erroMsg) erroMsg.classList.remove("hidden");
-    if (input) {
-      input.value = "";
-      input.focus();
-    }
-  }
+  fecharModalPerfil();
 }
 
 function logout() {
-  if (confirm("Deseja sair do sistema neste aparelho?")) {
-    localStorage.removeItem(PIN_STORAGE_KEY);
-    sessionStorage.removeItem(PIN_STORAGE_KEY);
-    location.reload();
+  if (confirm("Deseja alternar ou sair do perfil neste aparelho?")) {
+    abrirModalPerfil();
   }
 }
 
@@ -133,7 +184,7 @@ function atualizarBadgeNuvem(status, dataHora) {
   }
 }
 
-async function sincronizarComNuvem(forcarDownload = false) {
+async function sincronizarComNuvem(forcarDownload = false, tentativa = 1) {
   if (isSincronizando) return;
   isSincronizando = true;
   atualizarBadgeNuvem("syncing");
@@ -171,7 +222,12 @@ async function sincronizarComNuvem(forcarDownload = false) {
 
     await enviarParaNuvem(pin);
   } catch (err) {
-    console.warn("Nuvem Vercel Blob offline ou indisponível:", err);
+    console.warn("Tentativa de sincronização falhou:", err);
+    if (tentativa === 1) {
+      isSincronizando = false;
+      setTimeout(() => sincronizarComNuvem(forcarDownload, 2), 1200);
+      return;
+    }
     atualizarBadgeNuvem("offline");
   } finally {
     isSincronizando = false;
@@ -456,49 +512,26 @@ function atualizarTudo() {
     }
   }
 
-  // Teto Orçamentário
-  const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
+  // KPI 4: Lucro Previsto Final
   const kpiTetoValor = document.getElementById("kpiTetoValor");
-  if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.tetoTotal);
+  if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.saldoProjetadoFinal);
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   const barTeto = document.getElementById("kpiTetoBar");
-  if (badgeTeto) badgeTeto.textContent = `${percTeto.toFixed(1)}% utilizado`;
+  if (badgeTeto) {
+    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}%`;
+    badgeTeto.className = m.saldoProjetadoFinal >= 0
+      ? "text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
+      : "text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
+  }
   if (barTeto) {
+    const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
     barTeto.style.width = `${Math.min(percTeto, 100)}%`;
-    if (percTeto < 80) {
-      barTeto.className = "bg-[#16A34A] h-1.5 rounded-full transition-all duration-300";
-    } else if (percTeto <= 100) {
-      barTeto.className = "bg-[#FF8C00] h-1.5 rounded-full transition-all duration-300";
-    } else {
-      barTeto.className = "bg-rose-500 h-1.5 rounded-full transition-all duration-300";
-    }
   }
 
-  const restanteTeto = m.tetoTotal - m.custoTotal;
   const kpiTetoSub = document.getElementById("kpiTetoSub");
   if (kpiTetoSub) {
-    kpiTetoSub.textContent = restanteTeto >= 0
-      ? `Saldo disponível no teto: ${formatBRL(restanteTeto)}`
-      : `Excedente sobre o limite: ${formatBRL(Math.abs(restanteTeto))}`;
-  }
-
-  // Banner Auditoria Forense
-  const bannerAud = document.getElementById("alertaAuditoriaBanner");
-  if (bannerAud) {
-    if (obra.id === "obra-piscina") {
-      bannerAud.classList.remove("hidden");
-      document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Reforma Piscina:";
-      document.getElementById("alertaAuditoriaTexto").textContent =
-        "Os 5 lançamentos de Equipamento (R$ 1.123,00) ignorados na fórmula do Excel original foram somados. Custo real: R$ 68.704,19 | Saldo líquido: R$ 20.835,81.";
-    } else if (obra.id === "obra-caixa-forro") {
-      bannerAud.classList.remove("hidden");
-      document.getElementById("alertaAuditoriaTitulo").textContent = "Conferência Aba IAGO (Caixa Obra):";
-      document.getElementById("alertaAuditoriaTexto").textContent =
-        "O resumo da planilha original apontou para a coluna C (Entradas) totalizando R$ 790,00, omitindo as saídas reais da coluna D que somam R$ 3.270,26.";
-    } else {
-      bannerAud.classList.add("hidden");
-    }
+    kpiTetoSub.textContent = `Empreitas a pagar: ${formatBRL(m.saldoEmpreitasPendente)} | Contrato: ${formatBRL(m.receitaContratoTotal)}`;
   }
 
   // Preencher Select de Empreitas
@@ -514,6 +547,8 @@ function atualizarTudo() {
   if (selEmpRapido) selEmpRapido.innerHTML = optEmpreitas;
 
   renderizarMiniCards(m);
+  renderizarUltimasDespesasHome(obra);
+  renderizarReembolsosHome(obra, m);
   renderizarTabelaLancamentos();
   renderizarAbaResumo(obra, m);
   renderizarAbaMedicoes(obra, m);
@@ -543,6 +578,145 @@ function renderizarMiniCards(m) {
       <div class="text-[11px] text-[#6C757D] mt-0.5">${c.sub}</div>
     </div>
   `).join("");
+}
+
+function renderizarUltimasDespesasHome(obra) {
+  const container = document.getElementById("listaUltimasDespesasHome");
+  if (!container) return;
+
+  const lancs = (obra.lancamentos || [])
+    .filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA")
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
+    .slice(0, 6);
+
+  if (lancs.length === 0) {
+    container.innerHTML = `
+      <div class="py-8 text-center text-xs text-[#64748B] bg-slate-50 rounded-2xl border border-slate-100">
+        Nenhuma despesa registrada ainda nesta obra.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = lancs.map(item => {
+    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+    let tagBg = "bg-[#23396B]/10 text-[#23396B]";
+    if (item.tipo === "MO") tagBg = "bg-[#4395D8]/15 text-[#23396B]";
+    if (item.tipo === "MAT") tagBg = "bg-[#23396B]/15 text-[#23396B]";
+    if (item.tipo === "EQUIP") tagBg = "bg-[#FF8C00]/20 text-[#0F172A] font-bold";
+    if (sub === "ALIM") tagBg = "bg-[#16A34A]/15 text-[#16A34A]";
+    if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
+
+    const titularTag = item.titular === "PILAR" || item.titular === "MELO"
+      ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FF8C00]/15 text-[#B45309]">Bolso ${item.titular}</span>`
+      : `<span class="text-[10px] text-[#64748B]">${item.titular || "EMTEC"}</span>`;
+
+    return `
+      <div class="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#4395D8] transition shadow-xs flex items-center justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${tagBg}">${item.tipo}</span>
+            <span class="text-[11px] text-[#64748B] font-semibold">${formatDataBR(item.data)}</span>
+            ${titularTag}
+          </div>
+          <div class="font-bold text-xs sm:text-sm text-[#23396B] truncate mt-1">${item.descricao}</div>
+        </div>
+
+        <div class="text-right shrink-0">
+          <div class="font-display text-sm sm:text-base font-extrabold text-[#23396B]">${formatBRL(item.valor)}</div>
+          <div class="flex items-center justify-end gap-2.5 mt-0.5">
+            <button onclick="abrirEdicaoRapida('${item.id}')" class="text-[11px] font-bold text-[#4395D8] hover:text-[#23396B] transition">Editar</button>
+            <button onclick="excluirLancamento('${item.id}')" class="text-[11px] font-semibold text-rose-600 hover:text-rose-800 transition">Excluir</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderizarReembolsosHome(obra, m) {
+  const container = document.getElementById("listaReembolsosHome");
+  if (!container) return;
+
+  const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
+
+  let totalPilar = 0;
+  let totalMelo = 0;
+  let countPilar = 0;
+  let countMelo = 0;
+
+  for (const item of saidas) {
+    const t = (item.titular || "").toUpperCase();
+    const v = Number(item.valor || 0);
+    if (t === "PILAR") {
+      totalPilar += v;
+      countPilar++;
+    } else if (t === "MELO") {
+      totalMelo += v;
+      countMelo++;
+    }
+  }
+
+  const adiantamentosIago = (obra.lancamentos || [])
+    .filter(l => !l.deletado && (l.movimento === "ENTRADA_CAIXA" || l.titular === "IAGO"))
+    .reduce((acc, l) => acc + Number(l.valor || 0), 0);
+
+  container.innerHTML = `
+    <!-- Card Reembolso Pilar -->
+    <div class="p-3.5 rounded-2xl bg-white border ${totalPilar > 0 ? "border-[#FF8C00]/40 bg-[#FF8C00]/5" : "border-slate-200"} space-y-1.5 transition">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center">P</span>
+          <div>
+            <span class="font-display font-extrabold text-xs text-[#23396B]">Pilar (Reembolso)</span>
+            <span class="text-[10px] text-[#64748B] block">${countPilar} despesa(s) do próprio bolso</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(totalPilar)}</div>
+          <span class="text-[10px] font-bold ${totalPilar > 0 ? "text-[#FF8C00]" : "text-[#16A34A]"}">
+            ${totalPilar > 0 ? "A Reembolsar pela EMTEC" : "Nenhum valor pendente"}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Reembolso Melo -->
+    <div class="p-3.5 rounded-2xl bg-white border ${totalMelo > 0 ? "border-[#23396B]/30 bg-[#23396B]/5" : "border-slate-200"} space-y-1.5 transition">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-[#23396B] text-white font-extrabold text-xs flex items-center justify-center">M</span>
+          <div>
+            <span class="font-display font-extrabold text-xs text-[#23396B]">Melo (Reembolso)</span>
+            <span class="text-[10px] text-[#64748B] block">${countMelo} despesa(s) do próprio bolso</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(totalMelo)}</div>
+          <span class="text-[10px] font-bold ${totalMelo > 0 ? "text-[#23396B]" : "text-[#16A34A]"}">
+            ${totalMelo > 0 ? "A Reembolsar pela EMTEC" : "Nenhum valor pendente"}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Caixa de Campo Iago -->
+    <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-1.5 transition">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-slate-200 text-[#0F172A] font-extrabold text-xs flex items-center justify-center">I</span>
+          <div>
+            <span class="font-display font-extrabold text-xs text-[#23396B]">Caixa de Campo (Iago)</span>
+            <span class="text-[10px] text-[#64748B] block">Adiantamentos operacionais</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-display text-base font-extrabold text-[#0F172A]">${formatBRL(adiantamentosIago)}</div>
+          <span class="text-[10px] text-[#64748B]">Total adiantado em campo</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // --------------------------------------------------------------------------
@@ -687,24 +861,142 @@ function renderizarTabelaLancamentos() {
 }
 
 // --------------------------------------------------------------------------
-// 6. LANÇAMENTO RÁPIDO DE 5 SEGUNDOS (MOBILE BOTTOM SHEET & DESKTOP)
+// 6. LANÇAMENTO RÁPIDO E DETECTOR DE DUPLICIDADES
 // --------------------------------------------------------------------------
+function aplicarSugestaoRapida(descricao, tipo, subtipo) {
+  const descInput = document.getElementById("lancRapidoDescricao");
+  if (descInput) descInput.value = descricao;
+
+  selecionarCategoriaRapida(tipo);
+  checarDuplicidadeAoDigitar();
+
+  const valInput = document.getElementById("lancRapidoValor");
+  if (valInput) valInput.focus();
+}
+
+function checarDuplicidadeAoDigitar() {
+  const aviso = document.getElementById("avisoDuplicidadeRapido");
+  const texto = document.getElementById("textoDuplicidadeRapido");
+  if (!aviso || !texto) return;
+
+  const idEdicao = document.getElementById("lancRapidoIdEdicao")?.value;
+  const valor = parseFloat(document.getElementById("lancRapidoValor")?.value || 0);
+  const desc = (document.getElementById("lancRapidoDescricao")?.value || "").toLowerCase().trim();
+
+  if (isNaN(valor) || valor <= 0) {
+    aviso.classList.add("hidden");
+    return;
+  }
+
+  const obra = getObraAtual();
+  const match = (obra.lancamentos || []).find(l => {
+    if (l.deletado || l.movimento === "ENTRADA_CAIXA") return false;
+    if (idEdicao && l.id === idEdicao) return false;
+
+    const mesmoValor = Math.abs(Number(l.valor) - valor) < 0.01;
+    const descSimilar = desc.length >= 4 && l.descricao.toLowerCase().includes(desc);
+
+    return mesmoValor || (descSimilar && Math.abs(Number(l.valor) - valor) < 5.00);
+  });
+
+  if (match) {
+    texto.textContent = `Já existe despesa de ${formatBRL(match.valor)} ("${match.descricao}") em ${formatDataBR(match.data)} paga por ${match.titular || "EMTEC"}. Verifique se não é repetição.`;
+    aviso.classList.remove("hidden");
+  } else {
+    aviso.classList.add("hidden");
+  }
+}
+
 function abrirModalLancamentoRapido() {
   const modal = document.getElementById("modalLancamentoRapido");
   if (!modal) return;
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
+  // Reset do modo edição para novo lançamento
+  const idEd = document.getElementById("lancRapidoIdEdicao");
+  if (idEd) idEd.value = "";
+
+  const titModal = document.getElementById("modalLancRapidoTitulo");
+  if (titModal) titModal.textContent = "Registrar Despesa";
+
+  const btnTexto = document.getElementById("btnSalvarLancRapidoTexto");
+  if (btnTexto) btnTexto.textContent = "Salvar Despesa Agora";
+
+  const aviso = document.getElementById("avisoDuplicidadeRapido");
+  if (aviso) aviso.classList.add("hidden");
+
   const hoje = new Date().toISOString().split("T")[0];
   const inputData = document.getElementById("lancRapidoData");
-  if (inputData && !inputData.value) inputData.value = hoje;
+  if (inputData) inputData.value = hoje;
+
+  // Pré-selecionar titular com base no perfil ativo
+  const selTit = document.getElementById("lancRapidoTitular");
+  if (selTit) {
+    if (perfilAtivo === "Pilar") {
+      selTit.value = "PILAR";
+    } else if (perfilAtivo === "Melo") {
+      selTit.value = "MELO";
+    } else {
+      selTit.value = "EMTEC";
+    }
+  }
 
   selecionarCategoriaRapida("MO");
 
   const inputValor = document.getElementById("lancRapidoValor");
   if (inputValor) {
+    inputValor.value = "";
     setTimeout(() => inputValor.focus(), 150);
   }
+  const inputDesc = document.getElementById("lancRapidoDescricao");
+  if (inputDesc) inputDesc.value = "";
+}
+
+function abrirEdicaoRapida(id) {
+  const obra = getObraAtual();
+  const item = (obra.lancamentos || []).find(l => l.id === id);
+  if (!item) return;
+
+  const modal = document.getElementById("modalLancamentoRapido");
+  if (!modal) return;
+
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+
+  const titModal = document.getElementById("modalLancRapidoTitulo");
+  if (titModal) titModal.textContent = "Editar Despesa";
+
+  const btnTexto = document.getElementById("btnSalvarLancRapidoTexto");
+  if (btnTexto) btnTexto.textContent = "Salvar Alterações";
+
+  const idEd = document.getElementById("lancRapidoIdEdicao");
+  if (idEd) idEd.value = item.id;
+
+  const inputValor = document.getElementById("lancRapidoValor");
+  if (inputValor) inputValor.value = item.valor;
+
+  const inputDesc = document.getElementById("lancRapidoDescricao");
+  if (inputDesc) inputDesc.value = item.descricao;
+
+  const inputData = document.getElementById("lancRapidoData");
+  if (inputData) inputData.value = item.data;
+
+  const selTit = document.getElementById("lancRapidoTitular");
+  if (selTit) selTit.value = item.titular || "EMTEC";
+
+  const selPag = document.getElementById("lancRapidoPagamento");
+  if (selPag) selPag.value = item.pagamento || "PIX";
+
+  const selEmp = document.getElementById("lancRapidoEmpreitaId");
+  if (selEmp) selEmp.value = item.empreitaId || "";
+
+  selecionarCategoriaRapida(item.tipo);
+
+  const aviso = document.getElementById("avisoDuplicidadeRapido");
+  if (aviso) aviso.classList.add("hidden");
+
+  if (inputValor) setTimeout(() => inputValor.focus(), 150);
 }
 
 function fecharModalLancamentoRapido() {
@@ -745,6 +1037,7 @@ function salvarLancamentoRapido(e) {
   const obra = getObraAtual();
   if (!obra) return;
 
+  const idEdicao = document.getElementById("lancRapidoIdEdicao")?.value;
   const valorInput = document.getElementById("lancRapidoValor");
   const descInput = document.getElementById("lancRapidoDescricao");
   const dataInput = document.getElementById("lancRapidoData");
@@ -773,43 +1066,61 @@ function salvarLancamentoRapido(e) {
 
   const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva);
 
-  const novo = {
-    id: "lanc-" + Date.now(),
-    descricao,
-    tipo: categoriaRapidaAtiva,
-    subtipo,
-    valor,
-    data,
-    dataOriginal: data,
-    pagamento,
-    titular,
-    movimento: "SAIDA",
-    empreitaId: empreitaId || undefined,
-    atualizadoEm: new Date().toISOString()
-  };
-
-  if (!obra.lancamentos) obra.lancamentos = [];
-  obra.lancamentos.unshift(novo);
-
-  // Se vinculado a empreita, abater automaticamente no valor pago
-  if (empreitaId && obra.empreitas) {
-    const emp = obra.empreitas.find(e => e.id === empreitaId);
-    if (emp) {
-      emp.valorPago = Number(emp.valorPago || 0) + valor;
+  if (idEdicao) {
+    const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
+    if (idx !== -1) {
+      obra.lancamentos[idx] = {
+        ...obra.lancamentos[idx],
+        descricao,
+        tipo: categoriaRapidaAtiva,
+        subtipo,
+        valor,
+        data,
+        pagamento,
+        titular,
+        empreitaId: empreitaId || undefined,
+        atualizadoEm: new Date().toISOString()
+      };
     }
+    mostrarNotificacaoToast(`Despesa atualizada com sucesso!`);
+  } else {
+    const novo = {
+      id: "lanc-" + Date.now(),
+      descricao,
+      tipo: categoriaRapidaAtiva,
+      subtipo,
+      valor,
+      data,
+      dataOriginal: data,
+      pagamento,
+      titular,
+      movimento: "SAIDA",
+      empreitaId: empreitaId || undefined,
+      atualizadoEm: new Date().toISOString()
+    };
+
+    if (!obra.lancamentos) obra.lancamentos = [];
+    obra.lancamentos.unshift(novo);
+
+    if (empreitaId && obra.empreitas) {
+      const emp = obra.empreitas.find(e => e.id === empreitaId);
+      if (emp) {
+        emp.valorPago = Number(emp.valorPago || 0) + valor;
+      }
+    }
+    mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} registrada!`);
   }
 
   salvarEstado();
   atualizarTudo();
   fecharModalLancamentoRapido();
 
-  // Limpar formulário rápido
   if (valorInput) valorInput.value = "";
   if (descInput) descInput.value = "";
+  const idEdFinal = document.getElementById("lancRapidoIdEdicao");
+  if (idEdFinal) idEdFinal.value = "";
 
-  // Feedback tátil e sonoro sutil
   if (navigator.vibrate) navigator.vibrate(40);
-  mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} registrada e sincronizada!`);
 }
 
 function mostrarNotificacaoToast(msg) {
@@ -901,24 +1212,7 @@ function salvarLancamentoDesktop(e) {
 }
 
 function editarLancamento(id) {
-  const obra = getObraAtual();
-  const item = (obra.lancamentos || []).find(l => l.id === id);
-  if (!item) return;
-
-  mudarAba("lancamentos");
-  document.getElementById("lancIdEdicao").value = item.id;
-  document.getElementById("lancDescricao").value = item.descricao;
-  document.getElementById("lancValor").value = item.valor;
-  document.getElementById("lancData").value = item.data;
-  document.getElementById("lancTipo").value = item.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : item.tipo;
-  document.getElementById("lancTitular").value = item.titular || "EMTEC";
-  document.getElementById("lancPagamento").value = item.pagamento || "PIX";
-  document.getElementById("lancEmpreitaId").value = item.empreitaId || "";
-
-  document.getElementById("formLancTitulo").textContent = "Editar Despesa";
-  document.getElementById("btnCancelarEdicao").classList.remove("hidden");
-  document.getElementById("camposAvancados").classList.remove("hidden");
-  document.getElementById("lancDescricao").focus();
+  abrirEdicaoRapida(id);
 }
 
 function cancelarEdicao() {
@@ -1569,6 +1863,7 @@ function inicializarApp() {
   const inputData = document.getElementById("lancData");
   if (inputData) inputData.value = hoje;
 
+  carregarPerfilUsuario();
   renderizarSeletorObras();
   atualizarTudo();
 
@@ -1582,8 +1877,18 @@ function inicializarApp() {
     }
   });
 
-  // PIN desativado nesta versão — sincronizar direto com a nuvem
+  // Sincronização inicial com a nuvem
   sincronizarComNuvem(true);
+
+  // Sincronização periódica a cada 40 segundos
+  setInterval(() => {
+    sincronizarComNuvem(true);
+  }, 40000);
+
+  // Sincronizar ao focar na janela (ex: voltando ao app no smartphone)
+  window.addEventListener("focus", () => {
+    sincronizarComNuvem(true);
+  });
 
   // Escutar eventos de reconexão de internet
   window.addEventListener("online", () => {
