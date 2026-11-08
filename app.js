@@ -244,8 +244,8 @@ function normalizarTipoOficial(tipoEscolhido) {
 
 function calcularMetricasObra(obra) {
   if (!obra) return {};
-  const saidas = (obra.lancamentos || []).filter(l => l.movimento !== "ENTRADA_CAIXA");
-  const entradasCaixa = (obra.lancamentos || []).filter(l => l.movimento === "ENTRADA_CAIXA");
+  const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
+  const entradasCaixa = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento === "ENTRADA_CAIXA");
 
   const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0 };
   const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0 };
@@ -275,7 +275,7 @@ function calcularMetricasObra(obra) {
   let medLiquidaRecebida = 0;
   let medLiquidaTotalContrato = 0;
 
-  for (const m of (obra.medicoes || [])) {
+  for (const m of (obra.medicoes || []).filter(m => !m.deletado)) {
     const bruto = Number(m.valorBruto || 0);
     const desc = Number(m.descontoNotaPerc ?? obra.aliquotaImposto ?? 7.5);
     const liq = m.valorLiquido ? Number(m.valorLiquido) : bruto * (1 - desc / 100);
@@ -294,7 +294,7 @@ function calcularMetricasObra(obra) {
 
   // 2. Compromissos Pendentes (Empreitas Contratadas em Aberto)
   let saldoEmpreitasPendente = 0;
-  for (const emp of (obra.empreitas || [])) {
+  for (const emp of (obra.empreitas || []).filter(e => !e.deletado)) {
     const falta = Math.max(0, Number(emp.valorContratado || 0) - Number(emp.valorPago || 0));
     saldoEmpreitasPendente += falta;
   }
@@ -556,6 +556,7 @@ function renderizarTabelaLancamentos() {
   const mes = document.getElementById("filtroMes")?.value || "TODOS";
 
   let filtrados = (obra.lancamentos || []).filter(item => {
+    if (item.deletado) return false;
     if (busca && !item.descricao.toLowerCase().includes(busca) && !(item.pagamento || "").toLowerCase().includes(busca)) {
       return false;
     }
@@ -783,7 +784,8 @@ function salvarLancamentoRapido(e) {
     pagamento,
     titular,
     movimento: "SAIDA",
-    empreitaId: empreitaId || undefined
+    empreitaId: empreitaId || undefined,
+    atualizadoEm: new Date().toISOString()
   };
 
   if (!obra.lancamentos) obra.lancamentos = [];
@@ -861,7 +863,8 @@ function salvarLancamentoDesktop(e) {
         pagamento,
         titular,
         movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
-        empreitaId: empreitaId || undefined
+        empreitaId: empreitaId || undefined,
+        atualizadoEm: new Date().toISOString()
       };
     }
   } else {
@@ -876,7 +879,8 @@ function salvarLancamentoDesktop(e) {
       pagamento,
       titular,
       movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
-      empreitaId: empreitaId || undefined
+      empreitaId: empreitaId || undefined,
+      atualizadoEm: new Date().toISOString()
     };
 
     if (!obra.lancamentos) obra.lancamentos = [];
@@ -938,7 +942,11 @@ function limparFormLancamento() {
 function excluirLancamento(id) {
   if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
   const obra = getObraAtual();
-  obra.lancamentos = (obra.lancamentos || []).filter(l => l.id !== id);
+  const item = (obra.lancamentos || []).find(l => l.id === id);
+  if (item) {
+    item.deletado = true;
+    item.atualizadoEm = new Date().toISOString();
+  }
   salvarEstado();
   atualizarTudo();
   mostrarNotificacaoToast("Lançamento excluído.");
@@ -950,7 +958,7 @@ function excluirLancamento(id) {
 function renderizarAbaMedicoes(obra, m) {
   const tbody = document.getElementById("tbodyMedicoes");
   if (!tbody) return;
-  const lista = obra.medicoes || [];
+  const lista = (obra.medicoes || []).filter(med => !med.deletado);
   const isMobile = window.innerWidth < 768;
 
   if (lista.length === 0) {
@@ -1048,7 +1056,8 @@ function salvarMedicao(e) {
     descontoNotaPerc,
     valorLiquido,
     status,
-    observacao: "Medição registrada no sistema"
+    observacao: "Medição registrada no sistema",
+    atualizadoEm: new Date().toISOString()
   });
 
   document.getElementById("medTitulo").value = "";
@@ -1063,6 +1072,7 @@ function alternarStatusMedicao(id) {
   const med = (obra.medicoes || []).find(m => m.id === id);
   if (med) {
     med.status = med.status === "Recebida" ? "Pendente" : "Recebida";
+    med.atualizadoEm = new Date().toISOString();
     salvarEstado();
     atualizarTudo();
   }
@@ -1071,7 +1081,11 @@ function alternarStatusMedicao(id) {
 function excluirMedicao(id) {
   if (!confirm("Excluir esta medição?")) return;
   const obra = getObraAtual();
-  obra.medicoes = (obra.medicoes || []).filter(m => m.id !== id);
+  const med = (obra.medicoes || []).find(m => m.id === id);
+  if (med) {
+    med.deletado = true;
+    med.atualizadoEm = new Date().toISOString();
+  }
   salvarEstado();
   atualizarTudo();
 }
@@ -1189,7 +1203,7 @@ function salvarTetosOrcamento() {
 function renderizarAbaEmpreitasETitulares(obra, m) {
   const listaEmp = document.getElementById("listaEmpreitas");
   if (listaEmp) {
-    const emps = obra.empreitas || [];
+    const emps = (obra.empreitas || []).filter(e => !e.deletado);
     if (emps.length === 0) {
       listaEmp.innerHTML = `<p class="text-xs text-[#6C757D]">Nenhum contrato de empreiteiro cadastrado.</p>`;
     } else {
@@ -1259,7 +1273,8 @@ function salvarEmpreita(e) {
     servico,
     valorContratado,
     valorPago,
-    observacao: "Contrato registrado no sistema"
+    observacao: "Contrato registrado no sistema",
+    atualizadoEm: new Date().toISOString()
   });
 
   document.getElementById("empFornecedor").value = "";
@@ -1275,7 +1290,11 @@ function salvarEmpreita(e) {
 function excluirEmpreita(id) {
   if (!confirm("Excluir este contrato de empreita?")) return;
   const obra = getObraAtual();
-  obra.empreitas = (obra.empreitas || []).filter(e => e.id !== id);
+  const emp = (obra.empreitas || []).find(e => e.id === id);
+  if (emp) {
+    emp.deletado = true;
+    emp.atualizadoEm = new Date().toISOString();
+  }
   salvarEstado();
   atualizarTudo();
 }
@@ -1505,7 +1524,7 @@ function exportarExcelObra() {
   const obra = getObraAtual();
   const m = calcularMetricasObra(obra);
 
-  const rowsLanc = (obra.lancamentos || []).map(l => ({
+  const rowsLanc = (obra.lancamentos || []).filter(l => !l.deletado).map(l => ({
     "DATA": formatDataBR(l.data),
     "DESCRIÇÃO": l.descricao,
     "TIPO OFICIAL": l.tipo,

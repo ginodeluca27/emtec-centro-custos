@@ -97,36 +97,35 @@ export default async function handler(req, res) {
                 const obraCloud = obrasCloud.find(o => o.id === obraPayload.id);
                 if (!obraCloud) return obraPayload; // Obra nova — aceitar direto
 
-                // Mesclar lancamentos por id (payload ganha se mesmo id; cloud preserva ids ausentes no payload)
-                const lancCloud = obraCloud.lancamentos || [];
-                const lancPayload = obraPayload.lancamentos || [];
-                const lancMapPayload = new Map(lancPayload.map(l => [l.id, l]));
-                const lancMapCloud = new Map(lancCloud.map(l => [l.id, l]));
-                // União: todos os IDs, payload tem prioridade quando há conflito
-                const idsUniao = new Set([...lancMapCloud.keys(), ...lancMapPayload.keys()]);
-                const lancamentosMesclados = Array.from(idsUniao).map(id =>
-                  lancMapPayload.has(id) ? lancMapPayload.get(id) : lancMapCloud.get(id)
-                );
+                // -------------------------------------------------------------------
+                // Função auxiliar de merge com suporte a Soft Delete e Timestamps
+                // -------------------------------------------------------------------
+                function mesclarColecaoPorId(itensPayload, itensCloud) {
+                  const mapPayload = new Map((itensPayload || []).map(i => [i.id, i]));
+                  const mapCloud = new Map((itensCloud || []).map(i => [i.id, i]));
+                  const todosIds = new Set([...mapCloud.keys(), ...mapPayload.keys()]);
 
-                // Mesclar medicoes por id
-                const medCloud = obraCloud.medicoes || [];
-                const medPayload = obraPayload.medicoes || [];
-                const medMapPayload = new Map(medPayload.map(m => [m.id, m]));
-                const medMapCloud = new Map(medCloud.map(m => [m.id, m]));
-                const medIds = new Set([...medMapCloud.keys(), ...medMapPayload.keys()]);
-                const medicoesMescladas = Array.from(medIds).map(id =>
-                  medMapPayload.has(id) ? medMapPayload.get(id) : medMapCloud.get(id)
-                );
+                  return Array.from(todosIds).map(id => {
+                    const p = mapPayload.get(id);
+                    const c = mapCloud.get(id);
+                    if (!p) return c;
+                    if (!c) return p;
 
-                // Mesclar empreitas por id
-                const empCloud = obraCloud.empreitas || [];
-                const empPayload = obraPayload.empreitas || [];
-                const empMapPayload = new Map(empPayload.map(e => [e.id, e]));
-                const empMapCloud = new Map(empCloud.map(e => [e.id, e]));
-                const empIds = new Set([...empMapCloud.keys(), ...empMapPayload.keys()]);
-                const empreitasMescladas = Array.from(empIds).map(id =>
-                  empMapPayload.has(id) ? empMapPayload.get(id) : empMapCloud.get(id)
-                );
+                    // Se algum foi marcado como deletado, vence o mais recente
+                    if (p.deletado || c.deletado) {
+                      const dataP = p.atualizadoEm ? new Date(p.atualizadoEm).getTime() : 0;
+                      const dataC = c.atualizadoEm ? new Date(c.atualizadoEm).getTime() : 0;
+                      return dataP >= dataC ? p : c;
+                    }
+
+                    // Se ambos ativos, mescla mantendo campos mais recentes do payload
+                    return { ...c, ...p };
+                  });
+                }
+
+                const lancamentosMesclados = mesclarColecaoPorId(obraPayload.lancamentos, obraCloud.lancamentos);
+                const medicoesMescladas = mesclarColecaoPorId(obraPayload.medicoes, obraCloud.medicoes);
+                const empreitasMescladas = mesclarColecaoPorId(obraPayload.empreitas, obraCloud.empreitas);
 
                 return {
                   ...obraCloud,       // base da nuvem
