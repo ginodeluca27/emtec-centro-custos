@@ -880,7 +880,8 @@ function checarDuplicidadeAoDigitar() {
   if (!aviso || !texto) return;
 
   const idEdicao = document.getElementById("lancRapidoIdEdicao")?.value;
-  const valor = parseFloat(document.getElementById("lancRapidoValor")?.value || 0);
+  const rawVal = String(document.getElementById("lancRapidoValor")?.value || "").replace(",", ".");
+  const valor = parseFloat(rawVal);
   const desc = (document.getElementById("lancRapidoDescricao")?.value || "").toLowerCase().trim();
 
   if (isNaN(valor) || valor <= 0) {
@@ -894,7 +895,7 @@ function checarDuplicidadeAoDigitar() {
     if (idEdicao && l.id === idEdicao) return false;
 
     const mesmoValor = Math.abs(Number(l.valor) - valor) < 0.01;
-    const descSimilar = desc.length >= 4 && l.descricao.toLowerCase().includes(desc);
+    const descSimilar = desc.length >= 4 && (l.descricao || "").toLowerCase().includes(desc);
 
     return mesmoValor || (descSimilar && Math.abs(Number(l.valor) - valor) < 5.00);
   });
@@ -930,17 +931,9 @@ function abrirModalLancamentoRapido() {
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = hoje;
 
-  // Pré-selecionar titular com base no perfil ativo
+  // Padrão seguro: Conta da Obra (EMTEC).
   const selTit = document.getElementById("lancRapidoTitular");
-  if (selTit) {
-    if (perfilAtivo === "Pilar") {
-      selTit.value = "PILAR";
-    } else if (perfilAtivo === "Melo") {
-      selTit.value = "MELO";
-    } else {
-      selTit.value = "EMTEC";
-    }
-  }
+  if (selTit) selTit.value = "EMTEC";
 
   selecionarCategoriaRapida("MO");
 
@@ -1045,7 +1038,8 @@ function salvarLancamentoRapido(e) {
   const pagSelect = document.getElementById("lancRapidoPagamento");
   const empSelect = document.getElementById("lancRapidoEmpreitaId");
 
-  const valor = parseFloat(valorInput?.value || 0);
+  const rawVal = String(valorInput?.value || "").replace(",", ".");
+  const valor = parseFloat(rawVal);
   const descricao = (descInput?.value || "").trim();
   const data = dataInput?.value || new Date().toISOString().split("T")[0];
   const titular = titSelect?.value || "EMTEC";
