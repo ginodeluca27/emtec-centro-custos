@@ -366,10 +366,10 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
 
-        <!-- Botão Nova Obra (Acessível em Todos os Aparelhos) -->
-        <button onclick="abrirModalNovaObra()" id="btnNovaObraHeader" class="ed-btn inline-flex py-1.5 px-2.5 sm:px-3.5 text-xs font-extrabold shadow-sm shrink-0" title="Cadastrar Nova Obra">
+        <!-- Botão Nova Obra (Desktop - no mobile fica no menu Mais) -->
+        <button onclick="abrirModalNovaObra()" id="btnNovaObraHeader" class="hidden sm:inline-flex ed-btn py-1.5 px-3.5 text-xs font-extrabold shadow-sm shrink-0" title="Cadastrar Nova Obra">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          <span class="hidden xs:inline sm:inline">Nova Obra</span>
+          <span>Nova Obra</span>
         </button>
 
         <!-- Botão Backup / Nuvem (Desktop - no mobile fica no menu Mais) -->
@@ -548,8 +548,8 @@
         </button>
       </div>
 
-      <!-- Mini Cards de Categorias (4 Pilares Oficiais Sem Sobreposição) -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5" id="miniCardsCategorias">
+      <!-- Mini Cards de Categorias (Desktop apenas; no mobile o Resumo Executivo é direto e enxuto) -->
+      <div class="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-3.5" id="miniCardsCategorias">
       </div>
 
       <!-- Grid 2 Colunas: Últimas Despesas (Esq) + Reembolsos a Fazer (Dir) -->
@@ -773,36 +773,54 @@
     <!-- ABA 3: CONTRATOS & MEDIÇÕES -->
     <!-- =================================================================== -->
     <section id="aba-medicoes" class="hidden space-y-6">
-      <div class="ed-card p-5 sm:p-6 space-y-4">
-        <div class="border-b border-slate-100 pb-3">
-          <span class="ed-eyebrow">FATURAMENTO</span>
-          <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5 mb-1">Registrar Medição do Contrato</h3>
-          <p class="text-xs text-[#64748B]">Controle as medições faturadas com desconto de retenção de nota fiscal.</p>
+      <div class="ed-card p-4 sm:p-6 space-y-4">
+        <!-- Topo com Título e Botão de Ação -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <span class="ed-eyebrow">FATURAMENTO & CONTRATO</span>
+            <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Medições da Obra</h3>
+            <p class="text-xs text-[#64748B]">Acompanhe os valores faturados e recebidos do cliente.</p>
+          </div>
+          <button type="button" onclick="toggleFormNovaMedicao()" class="ed-btn py-2 px-3.5 text-xs font-extrabold shadow-sm">
+            <span id="btnToggleMedicaoTexto">+ Nova Medição</span>
+          </button>
         </div>
 
-        <form onsubmit="salvarMedicao(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-          <div class="sm:col-span-5">
-            <input type="text" id="medTitulo" required placeholder="Ex: 1ª Medição / Entrada..." class="ed-input text-xs" />
+        <!-- Formulário de Nova Medição (Recolhido por padrão para exibir a lista primeiro!) -->
+        <div id="containerFormMedicao" class="hidden p-4 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="font-display font-bold text-xs uppercase tracking-wider text-[#23396B]">Cadastrar Nova Medição</h4>
+            <button type="button" onclick="toggleFormNovaMedicao()" class="text-xs text-[#64748B] hover:text-[#23396B] font-bold">✕ Fechar</button>
           </div>
-          <div class="sm:col-span-3">
-            <input type="number" step="0.01" id="medValorBruto" required placeholder="Valor Bruto R$" inputmode="decimal" class="ed-input text-xs" />
-          </div>
-          <div class="sm:col-span-2">
-            <input type="number" step="0.1" id="medDescPerc" value="7.5" placeholder="Desc. NF %" inputmode="decimal" class="ed-input text-xs" />
-          </div>
-          <div class="sm:col-span-2">
-            <select id="medStatus" class="ed-input text-xs">
-              <option value="Pendente" selected>A receber (Prevista)</option>
-              <option value="Recebida">Recebida em conta</option>
-            </select>
-          </div>
-          <div class="sm:col-span-12 flex justify-end">
-            <button type="submit" class="ed-btn text-xs font-bold py-2">Cadastrar Medição</button>
-          </div>
-        </form>
+          <form onsubmit="salvarMedicao(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div class="sm:col-span-5">
+              <label class="block text-[10px] font-bold text-[#64748B] mb-1">Título da Medição *</label>
+              <input type="text" id="medTitulo" required placeholder="Ex: 2ª Medição / Entrada..." class="ed-input text-xs" />
+            </div>
+            <div class="sm:col-span-3">
+              <label class="block text-[10px] font-bold text-[#64748B] mb-1">Valor Bruto (R$) *</label>
+              <input type="number" step="0.01" id="medValorBruto" required placeholder="0,00" inputmode="decimal" class="ed-input text-xs" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-[10px] font-bold text-[#64748B] mb-1">Retenção NF (%)</label>
+              <input type="number" step="0.1" id="medDescPerc" value="7.5" placeholder="7.5" inputmode="decimal" class="ed-input text-xs" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-[10px] font-bold text-[#64748B] mb-1">Status</label>
+              <select id="medStatus" class="ed-input text-xs font-semibold">
+                <option value="Pendente" selected>A receber (Prevista)</option>
+                <option value="Recebida">Recebida em conta</option>
+              </select>
+            </div>
+            <div class="sm:col-span-12 flex items-center justify-end gap-2 pt-1 border-t border-slate-200">
+              <button type="button" onclick="toggleFormNovaMedicao()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#64748B] hover:bg-slate-200 transition">Cancelar</button>
+              <button type="submit" class="ed-btn text-xs font-extrabold py-2 px-4 shadow-sm">Salvar Medição</button>
+            </div>
+          </form>
+        </div>
 
-        <!-- Cards Mobile para Medições (Zero Rolagem Lateral) -->
-        <div id="cardsMedicoesMobile" class="md:hidden space-y-3 pt-3"></div>
+        <!-- Cards Mobile para Medições (Aparecem Primeiro!) -->
+        <div id="cardsMedicoesMobile" class="md:hidden space-y-3 pt-1"></div>
 
         <!-- Tabela Desktop -->
         <div class="hidden md:block overflow-x-auto pt-4">
@@ -922,73 +940,83 @@
         </div>
       </div>
 
-      <!-- Relatório de Conferência Forense do Excel -->
-      <div class="ed-card p-6 sm:p-7 space-y-5">
-        <div class="border-b border-slate-100 pb-4">
-          <span class="ed-eyebrow">RELATÓRIO DE CONFERÊNCIA FORENSE</span>
-          <h3 class="font-display text-xl font-extrabold text-[#23396B] mt-0.5">Divergências Corrigidas em Relação ao Arquivo Excel Original</h3>
-          <p class="text-xs text-[#64748B] mt-1">Conferência pericial realizada célula a célula sobre o arquivo <code>C. CUSTO REFORMA PISCINA.xlsx</code>.</p>
-        </div>
+      <!-- Relatório de Conferência Forense do Excel (Colapsado para Manter Relatórios Diários Limpos e Práticos) -->
+      <details class="ed-card p-5 sm:p-6 group">
+        <summary class="flex items-center justify-between font-display font-extrabold text-sm sm:text-base text-[#23396B] select-none cursor-pointer">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🔍</span>
+            <span>Auditoria Forense do Excel Original (Célula a Célula)</span>
+          </div>
+          <span class="text-xs font-bold text-[#4395D8] group-open:rotate-180 transition-transform">▼</span>
+        </summary>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <!-- Card 1 -->
-          <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
-            <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">01 • Reforma Piscina</span>
-            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">R$ 1.123,00 em Equipamentos Omitidos</h4>
-            <p class="text-xs text-[#334155] mt-2 leading-relaxed">
-              Na planilha original, a célula de resumo <strong>EQUIPAMENTO</strong> exibia <strong>R$ 0,00</strong>, deixando de somar 5 registros classificados como <code>EQUIP</code>:
-              <br>• 09/09/2026: Contêiner (R$ 400,00)
-              <br>• 22/09/2026: Contêiner (R$ 400,00)
-              <br>• 14/10/2026: Espaçadores (R$ 49,00)*
-              <br>• 19/10/2026: Misturador (R$ 40,00)
-              <br>• 19/10/2026: Drive e Refletor (R$ 234,00)
-              <br><span class="text-[11px] text-[#64748B] italic">*Nota contábil: Espaçadores constavam como EQUIP no Excel original.</span>
-              <br><strong class="text-[#23396B] block mt-2 font-bold">Custo Real Auditado: R$ 68.704,19 (Saldo Líquido Real: R$ 20.835,81).</strong>
-            </p>
+        <div class="pt-4 border-t border-slate-100 mt-4 space-y-5">
+          <div class="border-b border-slate-100 pb-3">
+            <span class="ed-eyebrow">RELATÓRIO DE CONFERÊNCIA FORENSE</span>
+            <h3 class="font-display text-lg sm:text-xl font-extrabold text-[#23396B] mt-0.5">Divergências Corrigidas em Relação ao Arquivo Excel Original</h3>
+            <p class="text-xs text-[#64748B] mt-1">Conferência pericial realizada célula a célula sobre o arquivo <code>C. CUSTO REFORMA PISCINA.xlsx</code> comprovando as divergências sanadas.</p>
           </div>
 
-          <!-- Card 2: Prova Forense Exata da Aba IAGO -->
-          <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
-            <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">02 • Aba IAGO / Caixa Obra (Prova Forense)</span>
-            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Causa-Raiz Comprovada dos R$ 790,00</h4>
-            <p class="text-xs text-[#334155] mt-2 leading-relaxed">
-              Na aba <code>IAGO</code> (intitulada <code>CAIXA OBRA</code> em A1):
-              <br>• <strong>Coluna C</strong> (Cabeçalho C2: <code>ENTRADA</code>): Registra adiantamentos de caixa ao encarregado.
-              <br>• <strong>Coluna D</strong> (Cabeçalho D2: <code>SAIDA</code>): Registra as despesas reais de campo (total de R$ 3.270,26 na célula D53).
-              <br><br>
-              <strong>O Erro de Fórmula no Excel:</strong>
-              <br>O resumo lateral utilizou:
-              <br><code>J4: =SUMIF($B$4:$B$56,"MO",$C$4:$C$56)</code> = R$ 200,00
-              <br><code>J5: =SUMIF($B$4:$B$56,"MAT",$C$4:$C$56)</code> = R$ 590,00
-              <br><code>J8: =SUM(J4:J6)</code> = <strong>R$ 790,00</strong>.
-              <br><br>
-              As fórmulas apontaram para a <strong>Coluna C (ENTRADA)</strong> em vez da <strong>Coluna D (SAIDA)</strong>! Isso omitiu R$ 2.480,26 de custos desembolsados no resumo da planilha original.
-            </p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <!-- Card 1 -->
+            <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">01 • Reforma Piscina</span>
+              <h4 class="font-display text-base font-bold text-[#23396B] mt-1">R$ 1.123,00 em Equipamentos Omitidos</h4>
+              <p class="text-xs text-[#334155] mt-2 leading-relaxed">
+                Na planilha original, a célula de resumo <strong>EQUIPAMENTO</strong> exibia <strong>R$ 0,00</strong>, deixando de somar 5 registros classificados como <code>EQUIP</code>:
+                <br>• 09/09/2026: Contêiner (R$ 400,00)
+                <br>• 22/09/2026: Contêiner (R$ 400,00)
+                <br>• 14/10/2026: Espaçadores (R$ 49,00)*
+                <br>• 19/10/2026: Misturador (R$ 40,00)
+                <br>• 19/10/2026: Drive e Refletor (R$ 234,00)
+                <br><span class="text-[11px] text-[#64748B] italic">*Nota contábil: Espaçadores constavam como EQUIP no Excel original.</span>
+                <br><strong class="text-[#23396B] block mt-2 font-bold">Custo Real Auditado: R$ 68.704,19 (Saldo Líquido Real: R$ 20.835,81).</strong>
+              </p>
+            </div>
+
+            <!-- Card 2: Prova Forense Exata da Aba IAGO -->
+            <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">02 • Aba IAGO / Caixa Obra (Prova Forense)</span>
+              <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Causa-Raiz Comprovada dos R$ 790,00</h4>
+              <p class="text-xs text-[#334155] mt-2 leading-relaxed">
+                Na aba <code>IAGO</code> (intitulada <code>CAIXA OBRA</code> em A1):
+                <br>• <strong>Coluna C</strong> (Cabeçalho C2: <code>ENTRADA</code>): Registra adiantamentos de caixa ao encarregado.
+                <br>• <strong>Coluna D</strong> (Cabeçalho D2: <code>SAIDA</code>): Registra as despesas reais de campo (total de R$ 3.270,26 na célula D53).
+                <br><br>
+                <strong>O Erro de Fórmula no Excel:</strong>
+                <br>O resumo lateral utilizou:
+                <br><code>J4: =SUMIF($B$4:$B$56,"MO",$C$4:$C$56)</code> = R$ 200,00
+                <br><code>J5: =SUMIF($B$4:$B$56,"MAT",$C$4:$C$56)</code> = R$ 590,00
+                <br><code>J8: =SUM(J4:J6)</code> = <strong>R$ 790,00</strong>.
+                <br><br>
+                As fórmulas apontaram para a <strong>Coluna C (ENTRADA)</strong> em vez da <strong>Coluna D (SAIDA)</strong>! Isso omitiu R$ 2.480,26 de custos desembolsados no resumo da planilha original.
+              </p>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">03 • Saneamento e Auditoria</span>
+              <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Datas e Subcategorias</h4>
+              <p class="text-xs text-[#334155] mt-2 leading-relaxed">
+                • Duas datas sem barra (<code>1708/2026</code> e <code>2010/2026</code>) foram corrigidas para o formato ISO.
+                <br>• Custos de <strong>Alimentação (R$ 2.387,27)</strong> e <strong>Combustível/Transporte (R$ 1.884,84)</strong> ganharam rastreamento analítico próprio.
+                <br>• Sincronização em nuvem Vercel Blob com backup automatizado.
+              </p>
+            </div>
           </div>
 
-          <!-- Card 3 -->
-          <div class="p-5 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
-            <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#FF8C00]">03 • Saneamento e Auditoria</span>
-            <h4 class="font-display text-base font-bold text-[#23396B] mt-1">Datas e Subcategorias</h4>
-            <p class="text-xs text-[#334155] mt-2 leading-relaxed">
-              • Duas datas sem barra (<code>1708/2026</code> e <code>2010/2026</code>) foram corrigidas para o formato ISO.
-              <br>• Custos de <strong>Alimentação (R$ 2.387,27)</strong> e <strong>Combustível/Transporte (R$ 1.884,84)</strong> ganharam rastreamento analítico próprio.
-              <br>• Sincronização em nuvem Vercel Blob com backup automatizado.
-            </p>
+          <!-- Ações de Exportação -->
+          <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-100 no-print">
+            <button onclick="exportarExcelObra()" class="ed-btn py-2 px-4 text-xs font-bold">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span>Baixar Planilha Excel (.xlsx)</span>
+            </button>
+            <button onclick="exportarBackupJSON()" class="ed-btn--navy py-2 px-4 text-xs font-bold">
+              <span>Exportar Backup JSON</span>
+            </button>
           </div>
         </div>
-
-        <!-- Ações de Exportação -->
-        <div class="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-100 no-print">
-          <button onclick="exportarExcelObra()" class="ed-btn py-2 px-4 text-xs font-bold">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            <span>Baixar Planilha Excel (.xlsx)</span>
-          </button>
-          <button onclick="exportarBackupJSON()" class="ed-btn--navy py-2 px-4 text-xs font-bold">
-            <span>Exportar Backup JSON</span>
-          </button>
-        </div>
-      </div>
+      </details>
     </section>
 
     <!-- =================================================================== -->
@@ -1068,58 +1096,46 @@
   <!-- MODAL DE LANÇAMENTO RÁPIDO DE 5 SEGUNDOS (MOBILE / DESKTOP) -->
   <!-- ===================================================================== -->
   <div id="modalLancamentoRapido" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-xs z-50 hidden items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#CBD5E1] shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-6 border border-[#CBD5E1] shadow-2xl max-h-[92vh] overflow-y-auto">
       
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
         <div>
           <span class="text-[10px] font-extrabold uppercase tracking-wider text-[#FF8C00]">FLUXO RÁPIDO</span>
-          <h3 id="modalLancRapidoTitulo" class="font-display text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
+          <h3 id="modalLancRapidoTitulo" class="font-display text-base sm:text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
         </div>
-        <button onclick="fecharModalLancamentoRapido()" class="w-10 h-10 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-lg flex items-center justify-center transition">✕</button>
+        <button type="button" onclick="fecharModalLancamentoRapido()" class="w-9 h-9 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-base flex items-center justify-center transition">✕</button>
       </div>
 
-      <form onsubmit="salvarLancamentoRapido(event)" class="space-y-4">
+      <form onsubmit="salvarLancamentoRapido(event)" class="space-y-3.5">
         <input type="hidden" id="lancRapidoIdEdicao" />
+        <input type="hidden" id="lancRapidoTitular" value="EMTEC" />
         
-        <!-- Campo de Valor com Destaque -->
+        <!-- 1. Campo de Valor com Destaque -->
         <div>
           <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1">Valor da Despesa (R$) *</label>
           <div class="relative">
-            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-display text-xl font-extrabold text-[#64748B]">R$</span>
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-display text-xl font-extrabold text-[#64748B]">R$</span>
             <input type="number" step="0.01" id="lancRapidoValor" required placeholder="0,00" inputmode="decimal"
               oninput="checarDuplicidadeAoDigitar()"
-              class="w-full pl-12 pr-4 py-3 text-2xl font-display font-extrabold rounded-2xl border-2 border-[#CBD5E1] focus:border-[#4395D8] bg-[#F8FAFC] text-[#23396B] focus:outline-none transition" />
+              class="w-full pl-11 pr-3 py-2.5 text-2xl font-display font-extrabold rounded-2xl border-2 border-[#CBD5E1] focus:border-[#4395D8] bg-[#F8FAFC] text-[#23396B] focus:outline-none transition" />
           </div>
         </div>
 
         <!-- Alerta de Possível Despesa Duplicada (Não bloqueia, apenas previne erro) -->
-        <div id="avisoDuplicidadeRapido" class="hidden p-3 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
-          <span class="text-base shrink-0">⚠️</span>
+        <div id="avisoDuplicidadeRapido" class="hidden p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2">
+          <span class="text-sm shrink-0">⚠️</span>
           <div class="flex-1">
-            <span class="font-bold block">Atenção: Possível despesa duplicada!</span>
-            <span id="textoDuplicidadeRapido" class="text-[11px] text-amber-800">Já existe um lançamento recente com este mesmo valor.</span>
+            <span class="font-bold block text-[11px]">Possível despesa duplicada</span>
+            <span id="textoDuplicidadeRapido" class="text-[10px] text-amber-800">Já existe um lançamento recente com este mesmo valor.</span>
           </div>
         </div>
 
-        <!-- Sugestões Rápidas em 1 Toque -->
+        <!-- 2. Descrição Rápida -->
         <div>
-          <span class="block text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-1.5">Sugestões Rápidas de 1 Toque:</span>
-          <div class="flex flex-wrap gap-1.5">
-            <button type="button" onclick="aplicarSugestaoRapida('Almoço equipe', 'OUTROS', 'ALIM')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🍛 Almoço</button>
-            <button type="button" onclick="aplicarSugestaoRapida('Cimento e Argamassa', 'MAT', 'MAT')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🧱 Cimento</button>
-            <button type="button" onclick="aplicarSugestaoRapida('Combustível / Gasolina', 'OUTROS', 'TRANSP')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">⛽ Gasolina</button>
-            <button type="button" onclick="aplicarSugestaoRapida('Areia e Brita', 'MAT', 'MAT')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🪨 Areia</button>
-            <button type="button" onclick="aplicarSugestaoRapida('Diária de obra', 'MO', 'MO')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">👷 Diária</button>
-            <button type="button" onclick="aplicarSugestaoRapida('Contêiner de entulho', 'EQUIP', 'EQUIP')" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-[#23396B] hover:bg-[#FF8C00] hover:text-[#0F172A] border border-slate-200 transition">🚜 Contêiner</button>
-          </div>
-        </div>
-
-        <!-- Descrição Rápida -->
-        <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1">Descrição / O que foi comprado? *</label>
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1">O que foi comprado / Descrição *</label>
           <input type="text" id="lancRapidoDescricao" required placeholder="Ex: Almoço da equipe, Cimento, Gasolina..." list="sugestoesDespesas"
             oninput="checarDuplicidadeAoDigitar()"
-            class="ed-input text-sm font-semibold" />
+            class="ed-input text-xs sm:text-sm font-semibold py-2.5" />
           <datalist id="sugestoesDespesas">
             <option value="Almoço equipe">
             <option value="Cimento e Argamassa">
@@ -1131,58 +1147,68 @@
           </datalist>
         </div>
 
-        <!-- Categoria em Pills de 1 Toque -->
+        <!-- 3. Categoria em Pills de 1 Toque -->
         <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1.5">Selecione a Categoria (1 toque) *</label>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1.5">Categoria (1 toque) *</label>
+          <div class="grid grid-cols-4 gap-1.5 sm:gap-2">
             <button type="button" id="btnCatRapida_MO" onclick="selecionarCategoriaRapida('MO')"
-              class="py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5">
-              <span>Mão de Obra</span>
+              class="py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
+              Mão Obra
             </button>
             <button type="button" id="btnCatRapida_MAT" onclick="selecionarCategoriaRapida('MAT')"
-              class="py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5">
-              <span>Material</span>
+              class="py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
+              Material
             </button>
             <button type="button" id="btnCatRapida_EQUIP" onclick="selecionarCategoriaRapida('EQUIP')"
-              class="py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5">
-              <span>Equipamento</span>
+              class="py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
+              Equip.
             </button>
             <button type="button" id="btnCatRapida_OUTROS" onclick="selecionarCategoriaRapida('OUTROS')"
-              class="py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5">
-              <span>Outros</span>
+              class="py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
+              Outros
             </button>
           </div>
-          <p id="avisoCategoriaObrigatoria" class="hidden text-xs text-rose-600 font-bold mt-1.5">⚠️ Selecione uma categoria para salvar a despesa.</p>
+          <p id="avisoCategoriaObrigatoria" class="hidden text-xs text-rose-600 font-bold mt-1">⚠️ Selecione uma categoria acima.</p>
         </div>
 
-        <!-- Data do Lançamento -->
+        <!-- 4. Quem Pagou? (Controle Direto de Reembolso sem Esconder!) -->
         <div>
-          <label class="block text-[11px] font-extrabold uppercase tracking-wider text-[#64748B] mb-1">Data</label>
-          <input type="date" id="lancRapidoData" class="ed-input text-xs" />
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-[11px] font-extrabold uppercase tracking-wider text-[#64748B]">Quem pagou? (Reembolso)</label>
+            <span class="text-[10px] text-[#64748B]">Melo/Pilar = Reembolso automático</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+            <button type="button" id="btnTitRapido_EMTEC" onclick="selecionarTitularRapido('EMTEC')"
+              class="py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs">
+              🏢 EMTEC
+            </button>
+            <button type="button" id="btnTitRapido_PILAR" onclick="selecionarTitularRapido('PILAR')"
+              class="py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#FF8C00]">
+              👛 Pilar
+            </button>
+            <button type="button" id="btnTitRapido_MELO" onclick="selecionarTitularRapido('MELO')"
+              class="py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#FF8C00]">
+              💼 Melo
+            </button>
+          </div>
         </div>
 
-        <!-- Opções Avançadas Opcionais -->
-        <div class="pt-1">
+        <!-- 5. Mais Opções (Colapsado para Manter a Tela Sem Rolagem) -->
+        <div class="pt-0.5">
           <button type="button" onclick="toggleOpcoesAvancadasRapidas()" class="text-xs font-bold text-[#4395D8] hover:text-[#23396B] flex items-center gap-1.5 transition">
             <span id="iconeOpcoesAvancadasRapidas" class="w-4 h-4 rounded-full bg-[#4395D8]/15 text-[#4395D8] flex items-center justify-center font-bold text-xs">+</span>
-            <span>Opções avançadas (Quem pagou / Empreiteiro)</span>
+            <span>Data, pagamento ou empreiteiro (opcional)</span>
           </button>
 
-          <div id="opcoesAvancadasRapidas" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-3 bg-[#F8FAFC] p-3 rounded-2xl border border-[#CBD5E1]">
-            <div class="grid grid-cols-2 gap-2.5">
+          <div id="opcoesAvancadasRapidas" class="hidden mt-2 pt-2.5 space-y-2.5 bg-[#F8FAFC] p-3 rounded-2xl border border-[#CBD5E1]">
+            <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Quem Pagou?</label>
-                <select id="lancRapidoTitular" class="ed-input text-xs font-semibold">
-                  <option value="EMTEC" selected>EMTEC (Conta da Obra)</option>
-                  <option value="PILAR">PILAR (Do meu bolso - Reembolso)</option>
-                  <option value="MELO">MELO (Do meu bolso - Reembolso)</option>
-                  <option value="IAGO">IAGO (Caixa de Campo)</option>
-                  <option value="ELON">ELON</option>
-                </select>
+                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Data</label>
+                <input type="date" id="lancRapidoData" class="ed-input text-xs py-1.5" />
               </div>
               <div>
-                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Pagamento</label>
-                <select id="lancRapidoPagamento" class="ed-input text-xs">
+                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Forma</label>
+                <select id="lancRapidoPagamento" class="ed-input text-xs py-1.5">
                   <option value="PIX" selected>PIX</option>
                   <option value="DINHEIRO">Dinheiro</option>
                   <option value="CARTÃO">Cartão</option>
@@ -1190,17 +1216,27 @@
                 </select>
               </div>
             </div>
-            <div>
-              <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Vincular a Empreiteiro</label>
-              <select id="lancRapidoEmpreitaId" class="ed-input text-xs">
-                <option value="">Nenhum empreiteiro</option>
-              </select>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Outro Titular</label>
+                <select id="lancRapidoTitularExtra" onchange="selecionarTitularRapido(this.value)" class="ed-input text-xs py-1.5">
+                  <option value="">Selecione...</option>
+                  <option value="IAGO">IAGO (Caixa)</option>
+                  <option value="ELON">ELON</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-[#64748B] mb-1">Empreiteiro</label>
+                <select id="lancRapidoEmpreitaId" class="ed-input text-xs py-1.5">
+                  <option value="">Nenhum</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Botão Salvar com Destaque Máximo -->
-        <button type="submit" class="ed-btn w-full py-4 text-base font-extrabold shadow-xl">
+        <!-- 6. Botão Salvar com Destaque Máximo -->
+        <button type="submit" class="ed-btn w-full py-3.5 text-sm sm:text-base font-extrabold shadow-xl">
           <span id="btnSalvarLancRapidoTexto">Salvar Despesa Agora</span>
         </button>
       </form>

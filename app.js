@@ -970,18 +970,23 @@ function abrirModalLancamentoRapido() {
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = hoje;
 
-  // Padrão seguro: Conta da Obra (EMTEC).
-  const selTit = document.getElementById("lancRapidoTitular");
-  if (selTit) selTit.value = "EMTEC";
+  // Seleciona EMTEC por padrão em 1 toque
+  selecionarTitularRapido("EMTEC");
 
   // Não seleciona categoria por padrão para evitar classificação errada inadvertida
   categoriaRapidaAtiva = "";
   ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
-    if (btn) btn.className = "py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5";
+    if (btn) btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
   });
   const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
   if (avisoCat) avisoCat.classList.add("hidden");
+
+  // Recolhe as opções opcionais (Data, Empreiteiro)
+  const opcoesAv = document.getElementById("opcoesAvancadasRapidas");
+  const iconeAv = document.getElementById("iconeOpcoesAvancadasRapidas");
+  if (opcoesAv) opcoesAv.classList.add("hidden");
+  if (iconeAv) iconeAv.textContent = "+";
 
   const inputValor = document.getElementById("lancRapidoValor");
   if (inputValor) {
@@ -1021,8 +1026,7 @@ function abrirEdicaoRapida(id) {
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = item.data;
 
-  const selTit = document.getElementById("lancRapidoTitular");
-  if (selTit) selTit.value = item.titular || "EMTEC";
+  selecionarTitularRapido(item.titular || "EMTEC");
 
   const selPag = document.getElementById("lancRapidoPagamento");
   if (selPag) selPag.value = item.pagamento || "PIX";
@@ -1045,15 +1049,47 @@ function fecharModalLancamentoRapido() {
   modal.classList.remove("flex");
 }
 
+let titularRapidoAtivo = "EMTEC";
+
+function selecionarTitularRapido(titular) {
+  if (!titular) titular = "EMTEC";
+  titularRapidoAtivo = titular;
+  const inputTit = document.getElementById("lancRapidoTitular");
+  if (inputTit) inputTit.value = titular;
+
+  ["EMTEC", "PILAR", "MELO"].forEach(t => {
+    const btn = document.getElementById(`btnTitRapido_${t}`);
+    if (!btn) return;
+    if (t === titular) {
+      if (t === "EMTEC") {
+        btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs";
+      } else {
+        btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#FF8C00] bg-[#FF8C00] text-[#0F172A] shadow-xs";
+      }
+    } else {
+      btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
+    }
+  });
+
+  const extra = document.getElementById("lancRapidoTitularExtra");
+  if (extra) {
+    if (titular !== "EMTEC" && titular !== "PILAR" && titular !== "MELO") {
+      extra.value = titular;
+    } else {
+      extra.value = "";
+    }
+  }
+}
+
 function selecionarCategoriaRapida(tipo) {
   categoriaRapidaAtiva = tipo;
   ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (!btn) return;
     if (cat === tipo) {
-      btn.className = "py-2.5 px-3 rounded-2xl text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-sm flex items-center justify-center gap-1.5";
+      btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs";
     } else {
-      btn.className = "py-2.5 px-3 rounded-2xl text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] flex items-center justify-center gap-1.5";
+      btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
     }
   });
   const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
@@ -1090,7 +1126,7 @@ function salvarLancamentoRapido(e) {
   const valor = parseFloat(rawVal);
   const descricao = (descInput?.value || "").trim();
   const data = dataInput?.value || new Date().toISOString().split("T")[0];
-  const titular = titSelect?.value || "EMTEC";
+  const titular = titSelect?.value || titularRapidoAtivo || "EMTEC";
   const pagamento = pagSelect?.value || "PIX";
   const empreitaId = empSelect?.value || "";
 
@@ -1327,7 +1363,7 @@ function renderizarAbaMedicoes(obra, m) {
             </button>
           </div>
 
-          <div class="grid grid-cols-2 xs:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 text-xs">
             <div>
               <span class="text-[#64748B] block text-[10px] font-bold uppercase">Bruto Faturado</span>
               <span class="font-bold text-[#23396B]">${formatBRL(bruto)}</span>
@@ -1336,7 +1372,7 @@ function renderizarAbaMedicoes(obra, m) {
               <span class="text-[#64748B] block text-[10px] font-bold uppercase">Retenção NF</span>
               <span class="font-semibold text-[#64748B]">-${desc}%</span>
             </div>
-            <div class="col-span-2 xs:col-span-1">
+            <div class="col-span-2 sm:col-span-1">
               <span class="text-[10px] font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
                 ${isRec ? "Líquido Recebido" : "Líquido a Receber"}
               </span>
@@ -1410,9 +1446,30 @@ function salvarMedicao(e) {
 
   document.getElementById("medTitulo").value = "";
   document.getElementById("medValorBruto").value = "";
+  const containerForm = document.getElementById("containerFormMedicao");
+  const btnTxt = document.getElementById("btnToggleMedicaoTexto");
+  if (containerForm) {
+    containerForm.classList.add("hidden");
+    if (btnTxt) btnTxt.textContent = "+ Nova Medição";
+  }
   salvarEstado();
   atualizarTudo();
   mostrarNotificacaoToast("Medição cadastrada com sucesso.");
+}
+
+function toggleFormNovaMedicao() {
+  const container = document.getElementById("containerFormMedicao");
+  const btnTxt = document.getElementById("btnToggleMedicaoTexto");
+  if (!container) return;
+  const isHidden = container.classList.contains("hidden");
+  if (isHidden) {
+    container.classList.remove("hidden");
+    if (btnTxt) btnTxt.textContent = "✕ Fechar";
+    document.getElementById("medTitulo")?.focus();
+  } else {
+    container.classList.add("hidden");
+    if (btnTxt) btnTxt.textContent = "+ Nova Medição";
+  }
 }
 
 function alternarStatusMedicao(id) {
