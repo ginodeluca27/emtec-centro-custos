@@ -111,19 +111,24 @@ export default async function handler(req, res) {
                     if (!p) return c;
                     if (!c) return p;
 
-                    // Se algum foi marcado como deletado, vence o mais recente
+                    // Compara timestamps para garantir que edições ou baixas de reembolso mais recentes vençam
+                    const dataP = p.atualizadoEm ? new Date(p.atualizadoEm).getTime() : 0;
+                    const dataC = c.atualizadoEm ? new Date(c.atualizadoEm).getTime() : 0;
+
                     if (p.deletado || c.deletado) {
-                      const dataP = p.atualizadoEm ? new Date(p.atualizadoEm).getTime() : 0;
-                      const dataC = c.atualizadoEm ? new Date(c.atualizadoEm).getTime() : 0;
                       return dataP >= dataC ? p : c;
                     }
 
-                    // Se ambos ativos, mescla mantendo campos mais recentes do payload
-                    return { ...c, ...p };
+                    return dataP >= dataC ? { ...c, ...p } : { ...p, ...c };
                   });
                 }
 
-                const lancamentosMesclados = mesclarColecaoPorId(obraPayload.lancamentos, obraCloud.lancamentos);
+                const lancamentosMesclados = mesclarColecaoPorId(obraPayload.lancamentos, obraCloud.lancamentos).map(l => {
+                  if (l && l.id === 'pisc-94' && l.tipo === 'EQUIP' && l.subtipo === 'ALIM' && !l.subtipoManual) {
+                    return { ...l, subtipo: 'EQUIP' };
+                  }
+                  return l;
+                });
                 const medicoesMescladas = mesclarColecaoPorId(obraPayload.medicoes, obraCloud.medicoes);
                 const empreitasMescladas = mesclarColecaoPorId(obraPayload.empreitas, obraCloud.empreitas);
 
@@ -140,8 +145,18 @@ export default async function handler(req, res) {
               const idsPayload = new Set(payload.obras.map(o => o.id));
               const obrasApenasNaNuvem = obrasCloud.filter(o => !idsPayload.has(o.id));
 
+              // Mesclar lista de responsáveis financeiros customizados
+              const respCloud = Array.isArray(cloudData.responsaveis) ? cloudData.responsaveis : [];
+              const respPayload = Array.isArray(payload.responsaveis) ? payload.responsaveis : [];
+              const mapResp = new Map();
+              [...respCloud, ...respPayload].forEach(r => {
+                if (r && r.id) mapResp.set(r.id, r);
+              });
+
               estadoMesclado = {
+                ...cloudData,
                 ...payload,
+                responsaveis: Array.from(mapResp.values()),
                 obras: [...obrasMescladas, ...obrasApenasNaNuvem]
               };
             }

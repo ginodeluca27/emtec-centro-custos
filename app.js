@@ -118,21 +118,170 @@ function logout() {
 }
 
 // --------------------------------------------------------------------------
-// 2. CARREGAMENTO E SINCRONIZAÇÃO EM NUVEM (VERCEL BLOB + LOCALSTORAGE)
+// 2. CARREGAMENTO, RESPONSÁVEIS FINANCEIROS E SINCRONIZAÇÃO EM NUVEM
 // --------------------------------------------------------------------------
+const RESPONSAVEIS_PADRAO = [
+  { id: "EMTEC", nome: "EMTEC (conta da obra)", curto: "EMTEC (Obra)", tipo: "EMPRESA" },
+  { id: "MELO", nome: "Melo", curto: "Melo", tipo: "RECURSO_PROPRIO" },
+  { id: "PILAR", nome: "Pilar", curto: "Pilar", tipo: "RECURSO_PROPRIO" },
+  { id: "ELON", nome: "Elon", curto: "Elon", tipo: "CAIXA_CAMPO" },
+  { id: "IAGO", nome: "Iago", curto: "Iago", tipo: "CAIXA_CAMPO" },
+  { id: "OUTRO", nome: "Outro", curto: "Outro", tipo: "OUTRO" }
+];
+
+function sanearDadosCarregados(dados) {
+  if (!dados || !Array.isArray(dados.obras)) return dados;
+  if (!Array.isArray(dados.responsaveis)) {
+    dados.responsaveis = [];
+  }
+  for (const obra of dados.obras) {
+    if (!obra.status) obra.status = "Em Andamento";
+    for (const l of (obra.lancamentos || [])) {
+      // Corrige falso positivo histórico: MISTURADOR (ferramenta EQUIP) não é MISTURA (ALIM)
+      if (l.id === "pisc-94" && l.tipo === "EQUIP" && l.subtipo === "ALIM" && !l.subtipoManual) {
+        l.subtipo = "EQUIP";
+      }
+      if (!l.reembolsoStatus) {
+        l.reembolsoStatus = "NAO_REEMBOLSAVEL";
+      }
+    }
+  }
+  return dados;
+}
+
 function carregarEstadoLocal() {
   try {
     const salvo = localStorage.getItem(STORAGE_KEY);
     if (salvo) {
       const parsed = JSON.parse(salvo);
       if (parsed && Array.isArray(parsed.obras) && parsed.obras.length > 0) {
-        return parsed;
+        return sanearDadosCarregados(parsed);
       }
     }
   } catch (e) {
     console.error("Erro ao carregar localStorage:", e);
   }
-  return JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA || { obras: [] }));
+  const inicial = JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA || { obras: [] }));
+  return sanearDadosCarregados(inicial);
+}
+
+function getResponsaveis() {
+  const custom = Array.isArray(estado?.responsaveis) ? estado.responsaveis : [];
+  const mapa = new Map();
+  RESPONSAVEIS_PADRAO.forEach(r => mapa.set(r.id, r));
+  custom.forEach(r => {
+    if (r && r.id && !mapa.has(r.id)) {
+      mapa.set(r.id, {
+        id: r.id,
+        nome: r.nome || r.id,
+        curto: r.curto || r.nome || r.id,
+        tipo: r.tipo || "RECURSO_PROPRIO"
+      });
+    }
+  });
+  return Array.from(mapa.values());
+}
+
+function getNomeResponsavel(id) {
+  if (!id) return "EMTEC (conta da obra)";
+  const r = getResponsaveis().find(x => x.id === id);
+  return r ? r.nome : id;
+}
+
+function getTipoResponsavel(id) {
+  const r = getResponsaveis().find(x => x.id === id);
+  if (r) return r.tipo;
+  if (id === "EMTEC") return "EMPRESA";
+  if (id === "MELO" || id === "PILAR") return "RECURSO_PROPRIO";
+  if (id === "ELON" || id === "IAGO") return "CAIXA_CAMPO";
+  return "OUTRO";
+}
+
+function adicionarNovoResponsavel(nomeBruto, tipoEscolhido = "RECURSO_PROPRIO") {
+  const limpo = String(nomeBruto || "").trim();
+  if (!limpo) return null;
+  const id = limpo
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+  if (!id) return null;
+
+  if (!Array.isArray(estado.responsaveis)) estado.responsaveis = [];
+  const jaExiste = getResponsaveis().find(r => r.id === id);
+  if (!jaExiste) {
+    estado.responsaveis.push({
+      id,
+      nome: limpo,
+      curto: limpo.length > 14 ? limpo.slice(0, 14) : limpo,
+      tipo: tipoEscolhido
+    });
+    salvarEstado();
+  }
+  renderizarControlesResponsaveis();
+  atualizarTudo();
+  return id;
+}
+
+function adicionarNovoResponsavelPrompt() {
+  const nome = prompt("Digite o nome do novo responsável financeiro (ex: Engenheiro Auxiliar, Mestre de Obras, Sócio):");
+  if (!nome || !nome.trim()) return;
+  const isCaixa = confirm(
+    `Como "${nome.trim()}" atua na obra?\n\n` +
+    `• Clique em OK se for Recursos Próprios (gastos sujeitos a reembolso).\n` +
+    `• Clique em Cancelar se for Caixa de Campo / Equipe operacional.`
+  );
+  const tipo = isCaixa ? "RECURSO_PROPRIO" : "CAIXA_CAMPO";
+  const novoId = adicionarNovoResponsavel(nome, tipo);
+  if (novoId) {
+    selecionarTitularRapido(novoId);
+    const selDesk = document.getElementById("lancTitular");
+    if (selDesk) {
+      selDesk.value = novoId;
+      aoMudarQuemPagouDesktop(novoId);
+    }
+    mostrarNotificacaoToast(`Responsável "${nome.trim()}" adicionado com sucesso!`);
+  }
+}
+
+function renderizarControlesResponsaveis() {
+  const lista = getResponsaveis();
+
+  // 1. Grid de botões de 1 toque no Modal Rápido
+  const gridRapido = document.getElementById("gridQuemPagouRapido");
+  if (gridRapido) {
+    gridRapido.innerHTML = lista.map(r => {
+      const ativo = r.id === titularRapidoAtivo;
+      const cls = ativo
+        ? (r.id === "EMTEC"
+            ? "py-2 px-1.5 rounded-xl text-center text-xs font-extrabold transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs truncate"
+            : "py-2 px-1.5 rounded-xl text-center text-xs font-extrabold transition border-2 border-[#FF8C00] bg-[#FF8C00] text-[#0F172A] shadow-xs truncate")
+        : "py-2 px-1.5 rounded-xl text-center text-xs font-bold transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] truncate";
+      return `<button type="button" id="btnTitRapido_${r.id}" onclick="selecionarTitularRapido('${r.id}')" class="${cls}" title="${r.nome}">${r.curto}</button>`;
+    }).join("");
+  }
+
+  // 2. Select Desktop (#lancTitular)
+  const selDesk = document.getElementById("lancTitular");
+  if (selDesk) {
+    const valAtual = selDesk.value || "EMTEC";
+    selDesk.innerHTML = lista.map(r =>
+      `<option value="${r.id}" ${r.id === valAtual ? "selected" : ""}>${r.nome}</option>`
+    ).join("");
+  }
+
+  // 3. Select Filtro (#filtroTitular)
+  const selFiltro = document.getElementById("filtroTitular");
+  if (selFiltro) {
+    const valFiltro = selFiltro.value || "TODOS";
+    selFiltro.innerHTML =
+      `<option value="TODOS" ${valFiltro === "TODOS" ? "selected" : ""}>Quem pagou: Todos</option>` +
+      `<option value="REEMBOLSO_PENDENTE" ${valFiltro === "REEMBOLSO_PENDENTE" ? "selected" : ""}>⚠️ Reembolso Pendente</option>` +
+      lista.map(r =>
+        `<option value="${r.id}" ${r.id === valFiltro ? "selected" : ""}>${r.nome}</option>`
+      ).join("");
+  }
 }
 
 function getPinAtual() {
@@ -140,10 +289,8 @@ function getPinAtual() {
 }
 
 function atualizarBadgeNuvem(status, dataHora) {
-  // Desktop: dois elementos separados (status + hora)
   const badgeStatus = document.getElementById("cloudBadgeStatus");
   const badgeHora = document.getElementById("cloudBadgeHora");
-  // Mobile: dois sub-elementos dentro de cloudBadgeMobile
   const mobStatus = document.getElementById("cloudBadgeMobStatus");
   const mobHora = document.getElementById("cloudBadgeMobHora");
 
@@ -160,7 +307,7 @@ function atualizarBadgeNuvem(status, dataHora) {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span><span class="font-bold text-[#16A34A]">Conectado</span>`;
     horaHtml = `Última sincronização: ${hora}`;
   } else if (status === "offline") {
-    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Sem conexão — Salvo localmente</span>`;
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Salvo neste aparelho</span>`;
     horaHtml = "";
   }
 
@@ -201,18 +348,18 @@ async function sincronizarComNuvem(forcarDownload = false, tentativa = 1) {
       if (res.ok) {
         const json = await res.json();
         if (json.exists && json.data && Array.isArray(json.data.obras) && json.data.obras.length > 0) {
-          estado = json.data;
+          estado = sanearDadosCarregados(json.data);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
           if (!estado.obras.some(o => o.id === obraAtualId)) {
             obraAtualId = estado.obras[0]?.id || "";
           }
           renderizarSeletorObras();
+          renderizarControlesResponsaveis();
           atualizarTudo();
           atualizarBadgeNuvem("success", json.updatedAt);
           isSincronizando = false;
           return;
         } else if (!json.exists) {
-          // Primeira execução: nuvem vazia, inicializar enviando o estado local
           await enviarParaNuvem(pin);
           isSincronizando = false;
           return;
@@ -258,12 +405,11 @@ async function enviarParaNuvem(pin) {
 
 function salvarEstado() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
-  // Disparar sincronização assíncrona automática em segundo plano
   sincronizarComNuvem(false);
 }
 
 // --------------------------------------------------------------------------
-// 3. ENGENHARIA FINANCEIRA DE CUSTOS (EVM / EAC / VIABILIDADE PROJETADA)
+// 3. ENGENHARIA FINANCEIRA DE CUSTOS (RESULTADO ACUMULADO & VIABILIDADE)
 // --------------------------------------------------------------------------
 function getObraAtual() {
   return estado.obras.find(o => o.id === obraAtualId) || estado.obras[0];
@@ -280,22 +426,114 @@ function formatDataBR(iso) {
   return iso;
 }
 
-function detectarSubtipo(desc, tipoEscolhido) {
+function detectarSubtipo(desc, tipoEscolhido, subtipoManual = "AUTO") {
   if (tipoEscolhido === "ENTRADA_CAIXA") return "CAIXA";
+  if (subtipoManual && subtipoManual !== "AUTO") return subtipoManual;
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return tipoEscolhido;
+
   const d = (desc || "").toUpperCase();
-  if (["ALMOÇO", "ALMOCO", "JANTA", "REFEIÇ", "REFEIC", "CAFÉ", "CAFE", "PÃO", "MISTURA", "GELO", "VALE ALIMENTA"].some(k => d.includes(k))) {
+  // Evita que "MISTURADOR" (equipamento) seja confundido com "MISTURA" (alimentação)
+  const temMisturaAlim = !d.includes("MISTURADOR") && (/\bMISTURA\b/.test(d) || d.includes("COMPRA MISTURA"));
+  if (
+    temMisturaAlim ||
+    ["ALMOÇO", "ALMOCO", "JANTA", "REFEIÇ", "REFEIC", "CAFÉ", "CAFE", "PÃO", "PAO", "LANCHE", "MARMITA", "QUENTINHA", "GELO", "VALE ALIMENTA"].some(k => d.includes(k))
+  ) {
     return "ALIM";
   }
-  if (["GASOLINA", "COMBUSTIVEL", "ABASTECIMENTO", "UBER", "PASSAGEM", "PASSAGENS", "OLEO MOTO", "ÓLEO MOTO", "FRETE"].some(k => d.includes(k))) {
+  if (["GASOLINA", "COMBUSTIVEL", "COMBUSTÍVEL", "ABASTECIMENTO", "UBER", "PASSAGEM", "PASSAGENS", "OLEO MOTO", "ÓLEO MOTO", "FRETE", "DIESEL", "ETANOL"].some(k => d.includes(k))) {
     return "TRANSP";
   }
-  return tipoEscolhido;
+  return tipoEscolhido || "OUTROS";
 }
 
 function normalizarTipoOficial(tipoEscolhido) {
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return "OUTROS";
   return tipoEscolhido;
+}
+
+function avaliarSituacaoFinanceira(obra, m) {
+  const isConcluida = obra.status === "Concluída";
+  if (isConcluida) {
+    if (m.saldoAtual >= 0) {
+      return {
+        codigo: "CONCLUIDA_LUCRO",
+        rotulo: `Concluída com Resultado Positivo (${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}%)`,
+        corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
+        corDot: "bg-[#16A34A]",
+        corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
+      };
+    }
+    return {
+      codigo: "CONCLUIDA_PREJUIZO",
+      rotulo: `Concluída no Vermelho (${formatBRL(m.saldoAtual)})`,
+      corBadgeDesktop: "bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]",
+      corDot: "bg-rose-600",
+      corCardDesktop: "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs"
+    };
+  }
+
+  // Obra em andamento ou pausada: avaliação multicritério rigorosa
+  if (m.receitaContratoTotal <= 0 && m.custoTotal > 0) {
+    return {
+      codigo: "SEM_RECEITA_CADASTRADA",
+      rotulo: "Atenção • Sem Receita Contratada",
+      corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
+      corDot: "bg-[#FF8C00]",
+      corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
+    };
+  }
+
+  if (m.saldoProjetadoFinal < 0) {
+    return {
+      codigo: "RISCO_PREJUIZO",
+      rotulo: `Risco de Prejuízo (${formatBRL(m.saldoProjetadoFinal)} prev.)`,
+      corBadgeDesktop: "bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]",
+      corDot: "bg-rose-600",
+      corCardDesktop: "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs"
+    };
+  }
+
+  if (m.saldoAtual < 0) {
+    return {
+      codigo: "RESULTADO_ACUMULADO_NEGATIVO",
+      rotulo: "Desembolso Maior que Recebido",
+      corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
+      corDot: "bg-[#FF8C00]",
+      corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
+    };
+  }
+
+  if (m.tetoTotal > 0 && m.custoTotalProjetado > m.tetoTotal) {
+    return {
+      codigo: "VIAVEL_ACIMA_TETO",
+      rotulo: `Viável • Acima do Teto (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+      corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
+      corDot: "bg-[#FF8C00]",
+      corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
+    };
+  }
+
+  if (m.margemProjetadaFinalPerc < 10) {
+    return {
+      codigo: "MARGEM_APERTADA",
+      rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+      corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
+      corDot: "bg-[#FF8C00]",
+      corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
+    };
+  }
+
+  return {
+    codigo: "OBRA_SAUDAVEL",
+    rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+    corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
+    corDot: "bg-[#16A34A]",
+    corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
+  };
+}
+
+function arredondarMoeda(v) {
+  return Math.round((Number(v) || 0) * 100) / 100;
 }
 
 function calcularMetricasObra(obra) {
@@ -306,27 +544,66 @@ function calcularMetricasObra(obra) {
   const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0 };
   const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0 };
   const porTitular = {};
+  const reembolsosPorTitular = {};
 
   let custoTotal = 0;
+  let reembolsosPendentesTotal = 0;
+  let reembolsosQuitadosTotal = 0;
+
   for (const item of saidas) {
     const v = Number(item.valor || 0);
-    custoTotal += v;
+    custoTotal = arredondarMoeda(custoTotal + v);
     const tOf = porTipoOficial[item.tipo] !== undefined ? item.tipo : "OUTROS";
-    porTipoOficial[tOf] += v;
+    porTipoOficial[tOf] = arredondarMoeda(porTipoOficial[tOf] + v);
 
-    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
     if (porSubtipoReal[sub] !== undefined) {
-      porSubtipoReal[sub] += v;
+      porSubtipoReal[sub] = arredondarMoeda(porSubtipoReal[sub] + v);
     } else {
-      porSubtipoReal.OUTROS += v;
+      porSubtipoReal.OUTROS = arredondarMoeda(porSubtipoReal.OUTROS + v);
     }
 
-    const tit = item.titular || "OUTRO";
-    porTitular[tit] = (porTitular[tit] || 0) + v;
+    const tit = item.titular || "EMTEC";
+    porTitular[tit] = arredondarMoeda((porTitular[tit] || 0) + v);
+
+    if (!reembolsosPorTitular[tit]) {
+      reembolsosPorTitular[tit] = {
+        totalPago: 0,
+        pagoTotal: 0,
+        pendente: 0,
+        reembolsado: 0,
+        naoReembolsavel: 0,
+        qtdTotal: 0,
+        qtdPendente: 0,
+        qtdReembolsado: 0
+      };
+    }
+    reembolsosPorTitular[tit].totalPago = arredondarMoeda(reembolsosPorTitular[tit].totalPago + v);
+    reembolsosPorTitular[tit].pagoTotal = reembolsosPorTitular[tit].totalPago;
+    reembolsosPorTitular[tit].qtdTotal += 1;
+
+    const rStatus = item.reembolsoStatus || "NAO_REEMBOLSAVEL";
+    if (rStatus === "PENDENTE") {
+      reembolsosPendentesTotal = arredondarMoeda(reembolsosPendentesTotal + v);
+      reembolsosPorTitular[tit].pendente = arredondarMoeda(reembolsosPorTitular[tit].pendente + v);
+      reembolsosPorTitular[tit].qtdPendente += 1;
+    } else if (rStatus === "REEMBOLSADO") {
+      reembolsosQuitadosTotal = arredondarMoeda(reembolsosQuitadosTotal + v);
+      reembolsosPorTitular[tit].reembolsado = arredondarMoeda(reembolsosPorTitular[tit].reembolsado + v);
+      reembolsosPorTitular[tit].qtdReembolsado += 1;
+    } else {
+      reembolsosPorTitular[tit].naoReembolsavel = arredondarMoeda(reembolsosPorTitular[tit].naoReembolsavel + v);
+    }
   }
 
-  const totalEntradasCaixa = entradasCaixa.reduce((acc, i) => acc + Number(i.valor || 0), 0);
+  const totalEntradasCaixa = arredondarMoeda(entradasCaixa.reduce((acc, i) => acc + Number(i.valor || 0), 0));
+  const entradasCaixaPorTitular = {};
+  for (const ec of entradasCaixa) {
+    const tit = ec.titular || "IAGO";
+    entradasCaixaPorTitular[tit] = arredondarMoeda((entradasCaixaPorTitular[tit] || 0) + Number(ec.valor || 0));
+  }
 
+  let medBrutaTotalContrato = 0;
   let medBrutaRecebida = 0;
   let medLiquidaRecebida = 0;
   let medLiquidaTotalContrato = 0;
@@ -334,66 +611,108 @@ function calcularMetricasObra(obra) {
   for (const m of (obra.medicoes || []).filter(m => !m.deletado)) {
     const bruto = Number(m.valorBruto || 0);
     const desc = Number(m.descontoNotaPerc ?? obra.aliquotaImposto ?? 7.5);
-    const liq = m.valorLiquido ? Number(m.valorLiquido) : bruto * (1 - desc / 100);
-    medLiquidaTotalContrato += liq;
+    const liq = m.valorLiquido ? Number(m.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
+    medBrutaTotalContrato = arredondarMoeda(medBrutaTotalContrato + bruto);
+    medLiquidaTotalContrato = arredondarMoeda(medLiquidaTotalContrato + liq);
     if (m.status === "Recebida") {
-      medBrutaRecebida += bruto;
-      medLiquidaRecebida += liq;
+      medBrutaRecebida = arredondarMoeda(medBrutaRecebida + bruto);
+      medLiquidaRecebida = arredondarMoeda(medLiquidaRecebida + liq);
     }
   }
 
+  const medLiquidaAReceber = arredondarMoeda(Math.max(0, medLiquidaTotalContrato - medLiquidaRecebida));
+  const medBrutaAReceber = arredondarMoeda(Math.max(0, medBrutaTotalContrato - medBrutaRecebida));
+
   const orc = obra.orcamentoPrevisto || {};
-  const tetoTotal = Object.values(orc).reduce((a, b) => a + Number(b || 0), 0);
+  const tetoTotal = arredondarMoeda(Object.values(orc).reduce((a, b) => a + Number(b || 0), 0));
 
-  // 1. Saldo de Caixa Atual (Hoje): Receita Líquida Recebida - Custos Realizados
-  const saldoAtual = medLiquidaRecebida - custoTotal;
+  // 1. Resultado Acumulado (Realizado até hoje): Receita Líquida Recebida - Despesas Realizadas
+  const saldoAtual = arredondarMoeda(medLiquidaRecebida - custoTotal);
+  const margemRealizadaPerc = medLiquidaRecebida > 0
+    ? (saldoAtual / medLiquidaRecebida) * 100
+    : 0;
 
-  // 2. Compromissos Pendentes (Empreitas Contratadas em Aberto)
+  // 2. Compromissos Pendentes com Empreiteiros (Contratos em Aberto)
   let saldoEmpreitasPendente = 0;
+  let totalEmpreitasContratado = 0;
+  let totalEmpreitasPago = 0;
   for (const emp of (obra.empreitas || []).filter(e => !e.deletado)) {
-    const falta = Math.max(0, Number(emp.valorContratado || 0) - Number(emp.valorPago || 0));
-    saldoEmpreitasPendente += falta;
+    const contr = Number(emp.valorContratado || 0);
+    const pg = Number(emp.valorPago || 0);
+    totalEmpreitasContratado = arredondarMoeda(totalEmpreitasContratado + contr);
+    totalEmpreitasPago = arredondarMoeda(totalEmpreitasPago + pg);
+    saldoEmpreitasPendente = arredondarMoeda(saldoEmpreitasPendente + Math.max(0, contr - pg));
   }
 
-  // 3. Custos Restantes Estimados para Concluir a Obra (ETC)
-  // Custo orçado restante para materiais e suprimentos além do que já foi contratado
-  const tetoRestante = Math.max(0, tetoTotal - custoTotal);
-  const custoRestanteEstimado = Math.max(0, tetoRestante - saldoEmpreitasPendente);
+  // Total de pagamentos pendentes de desembolso (Empreitas a pagar + Reembolsos pendentes a devolver)
+  const pagamentosPendentesTotal = arredondarMoeda(saldoEmpreitasPendente + reembolsosPendentesTotal);
 
-  // 4. Custo Total Projetado Final na Conclusão (EAC - Estimate at Completion)
+  // 3. Custos Restantes Estimados para Concluir a Obra (ETC)
+  const tetoRestante = arredondarMoeda(Math.max(0, tetoTotal - custoTotal));
+  const custoRestanteEstimado = arredondarMoeda(Math.max(0, tetoRestante - saldoEmpreitasPendente));
+
+  // 4. Custo Total Projetado Final na Conclusão (EAC)
   const isEmAndamento = obra.status !== "Concluída";
   const custoTotalProjetado = isEmAndamento
-    ? custoTotal + saldoEmpreitasPendente + custoRestanteEstimado
+    ? arredondarMoeda(custoTotal + saldoEmpreitasPendente + custoRestanteEstimado)
     : custoTotal;
 
-  // 5. Receita Total Contratada
-  const receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida;
+  const excessoTetoProjetado = tetoTotal > 0 ? arredondarMoeda(Math.max(0, custoTotalProjetado - tetoTotal)) : 0;
 
-  // 6. Resultado Final Projetado
-  const saldoProjetadoFinal = receitaContratoTotal - custoTotalProjetado;
+  // 5. Receita Total Contratada Líquida
+  const receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida;
+  const receitaContratoBruta = medBrutaTotalContrato > 0 ? medBrutaTotalContrato : medBrutaRecebida;
+
+  // 6. Lucro Previsto Final e Margem Projetada
+  const saldoProjetadoFinal = arredondarMoeda(receitaContratoTotal - custoTotalProjetado);
   const margemProjetadaFinalPerc = receitaContratoTotal > 0
     ? (saldoProjetadoFinal / receitaContratoTotal) * 100
     : 0;
 
-  return {
+  const metricas = {
     qtdSaidas: saidas.length,
     custoTotal,
     porTipoOficial,
     porSubtipoReal,
     porTitular,
+    reembolsosPorTitular,
+    reembolsosPendentesTotal,
+    totalReembolsosPendentes: reembolsosPendentesTotal,
+    reembolsosQuitadosTotal,
+    totalReembolsado: reembolsosQuitadosTotal,
     totalEntradasCaixa,
+    entradasCaixa: totalEntradasCaixa,
+    entradasCaixaPorTitular,
+    medBrutaTotalContrato,
+    medBrutaTotal: medBrutaTotalContrato,
     medBrutaRecebida,
+    medBrutaAReceber,
     medLiquidaRecebida,
     medLiquidaTotalContrato,
+    medLiquidaTotal: medLiquidaTotalContrato,
+    medLiquidaAReceber,
+    medLiquidaPendente: medLiquidaAReceber,
     tetoTotal,
     saldoAtual,
+    margemRealizadaPerc,
+    margemAtualPerc: margemRealizadaPerc,
+    totalEmpreitasContratado,
+    totalEmpreitasPago,
     saldoEmpreitasPendente,
+    pagamentosPendentesTotal,
     custoRestanteEstimado,
     custoTotalProjetado,
+    excessoTetoProjetado,
     receitaContratoTotal,
+    receitaContratoBruta,
     saldoProjetadoFinal,
-    margemProjetadaFinalPerc
+    margemProjetadaFinalPerc,
+    margemProjetadaPerc: margemProjetadaFinalPerc
   };
+
+  metricas.situacaoFinanceira = avaliarSituacaoFinanceira(obra, metricas);
+  metricas.situacao = metricas.situacaoFinanceira;
+  return metricas;
 }
 
 // --------------------------------------------------------------------------
@@ -402,143 +721,209 @@ function calcularMetricasObra(obra) {
 function atualizarTudo() {
   const obra = getObraAtual();
   if (!obra) return;
+  renderizarControlesResponsaveis();
   const m = calcularMetricasObra(obra);
 
-  const isEmAndamento = obra.status !== "Concluída";
+  const statusOp = obra.status || "Em Andamento";
+  const isEmAndamento = statusOp !== "Concluída";
+  const sit = m.situacaoFinanceira;
 
-  // Identificação e Header
+  // Identificação e Header Desktop
   const elObraTitulo = document.getElementById("obraTitulo");
   if (elObraTitulo) elObraTitulo.textContent = obra.nome;
 
   const elObraClienteTag = document.getElementById("obraClienteTag");
   if (elObraClienteTag) elObraClienteTag.textContent = `${obra.cliente || "CONTRATO"} • INÍCIO ${formatDataBR(obra.dataInicio)}`;
 
+  // Sincronizar seletores de Status Operacional (Desktop e Mobile)
+  const selStatusDesk = document.getElementById("selectStatusObraDesktop");
+  if (selStatusDesk) selStatusDesk.value = statusOp;
+  const selStatusMob = document.getElementById("selectStatusObraMobile");
+  if (selStatusMob) selStatusMob.value = statusOp;
+
+  const mobStatusBadge = document.getElementById("mobStatusOperacionalBadge");
+  if (mobStatusBadge) {
+    mobStatusBadge.textContent = statusOp;
+    mobStatusBadge.className = statusOp === "Concluída"
+      ? "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#23396B] text-white"
+      : (statusOp === "Pausada"
+          ? "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300"
+          : "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-[#23396B] border border-slate-300");
+  }
+
+  // Selo de Situação Financeira (Informativo, separado do status operacional)
+  const badgeViab = document.getElementById("viabilidadeBadge");
+  if (badgeViab) {
+    badgeViab.className = `inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full border shadow-sm select-none ${sit.corBadgeDesktop}`;
+    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full ${sit.corDot}"></span> ${sit.rotulo}`;
+  }
+
+  const mobBadgeViab = document.getElementById("mobViabilidadeBadge");
+  if (mobBadgeViab) {
+    mobBadgeViab.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold border select-none ${sit.corBadgeDesktop}`;
+    mobBadgeViab.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${sit.corDot}"></span> ${sit.rotulo}`;
+  }
+
   // Mobile Hero Card
   const mobObraNome = document.getElementById("mobObraNome");
   if (mobObraNome) mobObraNome.textContent = obra.nome;
+
+  const mobSaldoLabel = document.getElementById("mobSaldoLabel");
+  if (mobSaldoLabel) mobSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Acumulado Final";
+
+  const mobMargemRealizadaBadge = document.getElementById("mobMargemRealizadaBadge");
+  if (mobMargemRealizadaBadge) {
+    if (m.medLiquidaRecebida > 0) {
+      mobMargemRealizadaBadge.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% margem realizada`;
+      mobMargemRealizadaBadge.className = m.saldoAtual >= 0
+        ? "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
+        : "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#991B1B]";
+    } else {
+      mobMargemRealizadaBadge.textContent = "Sem medição recebida";
+      mobMargemRealizadaBadge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-[#64748B]";
+    }
+  }
 
   const mobSaldoAtual = document.getElementById("mobSaldoAtual");
   if (mobSaldoAtual) {
     mobSaldoAtual.textContent = formatBRL(m.saldoAtual);
     mobSaldoAtual.className = m.saldoAtual >= 0
-      ? "font-display text-2xl sm:text-3xl font-extrabold text-[#16A34A] tracking-tight"
-      : "font-display text-2xl sm:text-3xl font-extrabold text-rose-600 tracking-tight";
+      ? "font-display text-2xl sm:text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5"
+      : "font-display text-2xl sm:text-3xl font-extrabold text-rose-600 tracking-tight mt-0.5";
+  }
+
+  const mobReceitaContratada = document.getElementById("mobReceitaContratada");
+  if (mobReceitaContratada) mobReceitaContratada.textContent = formatBRL(m.receitaContratoTotal);
+
+  const mobContratoBrutoSub = document.getElementById("mobContratoBrutoSub");
+  if (mobContratoBrutoSub) mobContratoBrutoSub.textContent = `Bruto: ${formatBRL(m.receitaContratoBruta)}`;
+
+  const mobReceitaLiq = document.getElementById("mobReceitaLiq");
+  if (mobReceitaLiq) mobReceitaLiq.textContent = formatBRL(m.medLiquidaRecebida);
+
+  const mobAReceberSub = document.getElementById("mobAReceberSub");
+  if (mobAReceberSub) {
+    mobAReceberSub.textContent = m.medLiquidaAReceber > 0
+      ? `A receber: ${formatBRL(m.medLiquidaAReceber)}`
+      : "100% recebido em conta";
   }
 
   const mobCustoReal = document.getElementById("mobCustoReal");
   if (mobCustoReal) mobCustoReal.textContent = formatBRL(m.custoTotal);
 
-  const mobReceitaLiq = document.getElementById("mobReceitaLiq");
-  if (mobReceitaLiq) mobReceitaLiq.textContent = formatBRL(m.medLiquidaRecebida);
+  const mobTetoSub = document.getElementById("mobTetoSub");
+  if (mobTetoSub) {
+    mobTetoSub.textContent = m.tetoTotal > 0
+      ? `Teto: ${formatBRL(m.tetoTotal)}`
+      : `${m.qtdSaidas} despesas pagas`;
+  }
+
+  const mobPagamentosPendentes = document.getElementById("mobPagamentosPendentes");
+  if (mobPagamentosPendentes) {
+    mobPagamentosPendentes.textContent = formatBRL(m.pagamentosPendentesTotal);
+    mobPagamentosPendentes.className = m.pagamentosPendentesTotal > 0
+      ? "font-display text-sm font-extrabold text-[#FF8C00] block mt-0.5"
+      : "font-display text-sm font-extrabold text-[#16A34A] block mt-0.5";
+  }
+
+  const mobPendenciasSub = document.getElementById("mobPendenciasSub");
+  if (mobPendenciasSub) {
+    mobPendenciasSub.textContent = `Emp: ${formatBRL(m.saldoEmpreitasPendente)} | Reemb: ${formatBRL(m.reembolsosPendentesTotal)}`;
+  }
+
+  const mobLucroPrevistoValor = document.getElementById("mobLucroPrevistoValor");
+  if (mobLucroPrevistoValor) {
+    mobLucroPrevistoValor.textContent = formatBRL(m.saldoProjetadoFinal);
+    mobLucroPrevistoValor.className = m.saldoProjetadoFinal >= 0
+      ? "font-display text-sm font-extrabold text-[#16A34A]"
+      : "font-display text-sm font-extrabold text-rose-600";
+  }
 
   const mobMargemProj = document.getElementById("mobMargemProj");
   if (mobMargemProj) {
     if (isEmAndamento) {
-      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% (${formatBRL(m.saldoProjetadoFinal)} previsto)`;
+      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : "";
+      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada${notaTeto}`;
       mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
     } else {
-      const margemFinal = m.receitaContratoTotal > 0 ? (m.saldoAtual / m.receitaContratoTotal) * 100 : 0;
-      mobMargemProj.textContent = `${margemFinal.toFixed(1)}% realizada (Concluída)`;
+      mobMargemProj.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% final realizada`;
       mobMargemProj.className = m.saldoAtual >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
     }
   }
 
-  // KPIs Desktop
+  // KPIs Desktop (4 Cartões Executivos Claros e Diferenciados)
+  const kpiDescNotaTag = document.getElementById("kpiDescNotaTag");
+  if (kpiDescNotaTag) kpiDescNotaTag.textContent = `-${obra.aliquotaImposto ?? 7.5}% NF`;
+
   const kpiMedLiq = document.getElementById("kpiMedicaoLiquida");
   if (kpiMedLiq) kpiMedLiq.textContent = formatBRL(m.medLiquidaRecebida);
 
   const kpiMedSub = document.getElementById("kpiMedicaoSub");
   if (kpiMedSub) {
-    kpiMedSub.textContent = m.medLiquidaTotalContrato > m.medLiquidaRecebida
-      ? `Bruto: ${formatBRL(m.medBrutaRecebida)} | Contrato Líq: ${formatBRL(m.medLiquidaTotalContrato)}`
-      : `Faturamento Bruto Atestado: ${formatBRL(m.medBrutaRecebida)}`;
+    kpiMedSub.textContent = m.medLiquidaAReceber > 0
+      ? `Contratado Líq.: ${formatBRL(m.receitaContratoTotal)} • A receber: ${formatBRL(m.medLiquidaAReceber)}`
+      : `Contratado Líq.: ${formatBRL(m.receitaContratoTotal)} (Bruto: ${formatBRL(m.receitaContratoBruta)})`;
   }
 
   const kpiCustoTotal = document.getElementById("kpiCustoTotal");
   if (kpiCustoTotal) kpiCustoTotal.textContent = formatBRL(m.custoTotal);
 
   const kpiQtdLanc = document.getElementById("kpiQtdLancamentos");
-  if (kpiQtdLanc) kpiQtdLanc.textContent = `${m.qtdSaidas} registros`;
+  if (kpiQtdLanc) kpiQtdLanc.textContent = `${m.qtdSaidas} despesas`;
 
   const kpiCustoSub = document.getElementById("kpiCustoSub");
-  if (kpiCustoSub) kpiCustoSub.textContent = `MAT: ${formatBRL(m.porTipoOficial.MAT)} | MO: ${formatBRL(m.porTipoOficial.MO)}`;
+  if (kpiCustoSub) {
+    kpiCustoSub.textContent = `Pendentes: ${formatBRL(m.pagamentosPendentesTotal)} (Emp: ${formatBRL(m.saldoEmpreitasPendente)} | Reemb: ${formatBRL(m.reembolsosPendentesTotal)})`;
+  }
 
-  // Card Saldo e Viabilidade
-  const badgeViab = document.getElementById("viabilidadeBadge");
+  // KPI 3: Resultado Acumulado (Margem Realizada — corrigido para não misturar com margem projetada!)
   const cardSaldoBox = document.getElementById("cardSaldoBox");
   const cardSaldoLabel = document.getElementById("cardSaldoLabel");
   const kpiSaldoFinal = document.getElementById("kpiSaldoFinal");
   const kpiMargemPerc = document.getElementById("kpiMargemPerc");
   const kpiSaldoSub = document.getElementById("kpiSaldoSub");
 
+  if (cardSaldoBox) cardSaldoBox.className = sit.corCardDesktop;
+  if (cardSaldoLabel) cardSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Acumulado Final";
   if (kpiSaldoFinal) kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
 
-  if (isEmAndamento) {
-    if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido";
-    if (kpiMargemPerc) {
-      kpiMargemPerc.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada`;
-    }
-    if (kpiSaldoSub) {
-      kpiSaldoSub.textContent = `Receita Líquida − Custos da Obra`;
-    }
-
-    if (m.saldoProjetadoFinal < 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] cursor-pointer shadow-sm";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Em Andamento • Risco de Prejuízo (${formatBRL(Math.abs(m.saldoProjetadoFinal))})`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs";
-    } else if (m.saldoAtual < 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] cursor-pointer shadow-sm";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span> Em Andamento • Caixa Descoberto Momentâneo`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs";
+  if (kpiMargemPerc) {
+    if (m.medLiquidaRecebida > 0) {
+      kpiMargemPerc.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% realizada`;
     } else {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] cursor-pointer shadow-sm";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Em Andamento • Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(0)}% proj.)`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs";
-    }
-  } else {
-    if (cardSaldoLabel) cardSaldoLabel.textContent = "Resultado Líquido Final";
-    const margemRealizada = m.receitaContratoTotal > 0 ? (m.saldoAtual / m.receitaContratoTotal) * 100 : 0;
-    if (kpiMargemPerc) kpiMargemPerc.textContent = `${margemRealizada.toFixed(1)}% final`;
-    if (kpiSaldoSub) kpiSaldoSub.textContent = `Obra Concluída: Faturamento Líquido menos Custo Total Desembolsado.`;
-
-    if (m.saldoAtual >= 0) {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] cursor-pointer shadow-sm";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span> Obra Concluída • Lucro Realizado`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs";
-    } else {
-      badgeViab.className = "inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] cursor-pointer shadow-sm";
-      badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Obra Concluída • Prejuízo Realizado`;
-      cardSaldoBox.className = "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs";
+      kpiMargemPerc.textContent = "Sem receita recebida";
     }
   }
+  if (kpiSaldoSub) {
+    kpiSaldoSub.textContent = `Recebido (${formatBRL(m.medLiquidaRecebida)}) − Despesas pagas (${formatBRL(m.custoTotal)})`;
+  }
 
-  // KPI 4: Lucro Previsto Final
+  // KPI 4: Lucro Previsto Final (Margem Projetada)
   const kpiTetoValor = document.getElementById("kpiTetoValor");
   if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.saldoProjetadoFinal);
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
-  const barTeto = document.getElementById("kpiTetoBar");
   if (badgeTeto) {
-    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}%`;
+    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada`;
     badgeTeto.className = m.saldoProjetadoFinal >= 0
-      ? "text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
-      : "text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
-  }
-  if (barTeto) {
-    const percTeto = m.tetoTotal > 0 ? (m.custoTotal / m.tetoTotal) * 100 : 0;
-    barTeto.style.width = `${Math.min(percTeto, 100)}%`;
+      ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
+      : "text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
   }
 
   const kpiTetoSub = document.getElementById("kpiTetoSub");
   if (kpiTetoSub) {
-    kpiTetoSub.textContent = `Empreitas a pagar: ${formatBRL(m.saldoEmpreitasPendente)} | Contrato: ${formatBRL(m.receitaContratoTotal)}`;
+    if (m.excessoTetoProjetado > 0) {
+      kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} (Acima do teto de ${formatBRL(m.tetoTotal)})`;
+    } else {
+      kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} | Teto: ${formatBRL(m.tetoTotal)}`;
+    }
   }
 
   // Preencher Select de Empreitas
   const selEmp = document.getElementById("lancEmpreitaId");
   const selEmpRapido = document.getElementById("lancRapidoEmpreitaId");
-  const optEmpreitas = `<option value="">Não vinculado a contrato de empreita</option>` +
-    (obra.empreitas || []).map(e => {
+  const optEmpreitas = `<option value="">Não vinculado a contrato com empreiteiro</option>` +
+    (obra.empreitas || []).filter(e => !e.deletado).map(e => {
       const falta = Math.max(0, Number(e.valorContratado) - Number(e.valorPago));
       return `<option value="${e.id}">${e.fornecedor} (Saldo a pagar: ${formatBRL(falta)})</option>`;
     }).join("");
@@ -598,6 +983,112 @@ function renderizarMiniCards(m) {
   `).join("");
 }
 
+function formatarBadgeReembolso(item, compacto = false) {
+  if (item.movimento === "ENTRADA_CAIXA") {
+    return `<span class="px-1.5 py-0.5 rounded text-xs font-bold bg-[#16A34A]/15 text-[#14532D]">Adiantamento Caixa</span>`;
+  }
+  const status = item.reembolsoStatus || "NAO_REEMBOLSAVEL";
+  if (status === "PENDENTE") {
+    return `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-extrabold bg-[#FEF3C7] text-[#B45309] border border-amber-300">
+        ⏳ Reembolso Pendente
+      </span>
+      <button onclick="marcarReembolsoLancamento('${item.id}', 'REEMBOLSADO')"
+        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold bg-[#16A34A] text-white hover:bg-[#15803D] transition shadow-2xs"
+        title="Registrar que a empresa já reembolsou este gasto (não duplica a despesa)">
+        ✓ Dar baixa
+      </button>
+    `;
+  }
+  if (status === "REEMBOLSADO") {
+    const dt = item.reembolsadoEm ? ` (${formatDataBR(item.reembolsadoEm)})` : "";
+    return `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#DCFCE7] text-[#14532D] border border-emerald-200">
+        ✅ Reembolsado${compacto ? "" : dt}
+      </span>
+      ${compacto ? "" : `
+        <button onclick="marcarReembolsoLancamento('${item.id}', 'PENDENTE')"
+          class="text-xs font-semibold text-[#64748B] hover:text-[#23396B] underline">
+          Desfazer baixa
+        </button>
+      `}
+    `;
+  }
+  const tipoResp = getTipoResponsavel(item.titular);
+  if (!compacto && tipoResp === "RECURSO_PROPRIO") {
+    return `
+      <button onclick="marcarReembolsoLancamento('${item.id}', 'PENDENTE')"
+        class="text-xs font-semibold text-[#B45309] hover:underline"
+        title="Marcar esta despesa como pendente de reembolso">
+        + Pedir reembolso
+      </button>
+    `;
+  }
+  return "";
+}
+
+function marcarReembolsoLancamento(id, novoStatus) {
+  const obra = getObraAtual();
+  if (!obra) return;
+  const item = (obra.lancamentos || []).find(l => l.id === id);
+  if (!item) return;
+
+  item.reembolsoStatus = novoStatus;
+  if (novoStatus === "REEMBOLSADO") {
+    item.reembolsadoEm = new Date().toISOString().split("T")[0];
+  } else {
+    delete item.reembolsadoEm;
+  }
+  item.atualizadoEm = new Date().toISOString();
+
+  salvarEstado();
+  atualizarTudo();
+
+  if (novoStatus === "REEMBOLSADO") {
+    mostrarNotificacaoToast(`Reembolso baixado! (${formatBRL(item.valor)} — ${getNomeResponsavel(item.titular)})`);
+  } else if (novoStatus === "PENDENTE") {
+    mostrarNotificacaoToast(`Marcado como reembolso pendente (${formatBRL(item.valor)}).`);
+  } else {
+    mostrarNotificacaoToast(`Status de reembolso atualizado.`);
+  }
+}
+
+function quitarReembolsosTitular(titularId) {
+  const obra = getObraAtual();
+  if (!obra) return;
+  const pendentes = (obra.lancamentos || []).filter(
+    l => !l.deletado && l.movimento !== "ENTRADA_CAIXA" && (l.titular || "EMTEC").toUpperCase() === titularId.toUpperCase() && l.reembolsoStatus === "PENDENTE"
+  );
+  if (pendentes.length === 0) {
+    mostrarNotificacaoToast("Não há reembolsos pendentes para este responsável.");
+    return;
+  }
+  const soma = pendentes.reduce((acc, i) => acc + Number(i.valor || 0), 0);
+  const nome = getNomeResponsavel(titularId);
+  if (!confirm(`Confirmar baixa de ${pendentes.length} reembolso(s) pendente(s) de ${nome} no valor total de ${formatBRL(soma)}?\n\nIsso marca os gastos como "Já Reembolsados" sem duplicar nenhuma despesa na obra.`)) {
+    return;
+  }
+  const hoje = new Date().toISOString().split("T")[0];
+  const agora = new Date().toISOString();
+  pendentes.forEach(item => {
+    item.reembolsoStatus = "REEMBOLSADO";
+    item.reembolsadoEm = hoje;
+    item.atualizadoEm = agora;
+  });
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast(`Reembolsos de ${nome} (${formatBRL(soma)}) marcados como pagos!`);
+}
+
+function filtrarPorResponsavel(filtroValor) {
+  mudarAba("lancamentos");
+  const sel = document.getElementById("filtroTitular");
+  if (sel) {
+    sel.value = filtroValor;
+    renderizarTabelaLancamentos();
+  }
+}
+
 function renderizarUltimasDespesasHome(obra) {
   const container = document.getElementById("listaUltimasDespesasHome");
   if (!container) return;
@@ -617,7 +1108,7 @@ function renderizarUltimasDespesasHome(obra) {
   }
 
   container.innerHTML = lancs.map(item => {
-    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
     let tagBg = "bg-[#23396B]/10 text-[#23396B]";
     if (item.tipo === "MO") tagBg = "bg-[#4395D8]/15 text-[#23396B]";
     if (item.tipo === "MAT") tagBg = "bg-[#23396B]/15 text-[#23396B]";
@@ -625,17 +1116,16 @@ function renderizarUltimasDespesasHome(obra) {
     if (sub === "ALIM") tagBg = "bg-[#16A34A]/15 text-[#16A34A]";
     if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
 
-    const titularTag = item.titular === "PILAR" || item.titular === "MELO"
-      ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FF8C00]/15 text-[#B45309]">Bolso ${item.titular}</span>`
-      : `<span class="text-[10px] text-[#64748B]">${item.titular || "EMTEC"}</span>`;
+    const nomePagador = getNomeResponsavel(item.titular);
+    const badgeReemb = formatarBadgeReembolso(item, true);
 
     return `
       <div class="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#4395D8] transition shadow-xs space-y-2">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${tagBg}">${item.tipo}</span>
-            <span class="text-[11px] text-[#64748B] font-semibold">${formatDataBR(item.data)}</span>
-            ${titularTag}
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${tagBg}">${item.tipo}${sub !== item.tipo ? ` • ${sub}` : ""}</span>
+            <span class="text-xs text-[#64748B] font-semibold">${formatDataBR(item.data)}</span>
+            <span class="text-xs font-bold text-[#23396B]">• Pago por: ${nomePagador}</span>
           </div>
           <span class="font-display text-base font-extrabold text-[#23396B] shrink-0">${formatBRL(item.valor)}</span>
         </div>
@@ -644,9 +1134,14 @@ function renderizarUltimasDespesasHome(obra) {
           ${item.descricao}
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-          <button onclick="abrirEdicaoRapida('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">Editar</button>
-          <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition">Excluir</button>
+        <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 flex-wrap">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${badgeReemb}
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <button onclick="abrirEdicaoRapida('${item.id}')" class="text-xs font-bold text-[#4395D8] px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">Editar</button>
+            <button onclick="excluirLancamento('${item.id}')" class="text-xs font-semibold text-rose-600 px-2 py-0.5 rounded-lg hover:bg-rose-50 transition">Excluir</button>
+          </div>
         </div>
       </div>
     `;
@@ -657,81 +1152,90 @@ function renderizarReembolsosHome(obra, m) {
   const container = document.getElementById("listaReembolsosHome");
   if (!container) return;
 
-  const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
+  const stats = m.reembolsosPorTitular || {};
+  const mPilar = stats.PILAR || { pagoTotal: 0, pendente: 0, reembolsado: 0, qtdPendente: 0, qtdTotal: 0 };
+  const mMelo = stats.MELO || { pagoTotal: 0, pendente: 0, reembolsado: 0, qtdPendente: 0, qtdTotal: 0 };
+  const mEmtec = stats.EMTEC || { pagoTotal: 0 };
 
-  let totalPilar = 0;
-  let totalMelo = 0;
-  let countPilar = 0;
-  let countMelo = 0;
-
-  for (const item of saidas) {
-    const t = (item.titular || "").toUpperCase();
-    const v = Number(item.valor || 0);
-    if (t === "PILAR") {
-      totalPilar += v;
-      countPilar++;
-    } else if (t === "MELO") {
-      totalMelo += v;
-      countMelo++;
-    }
-  }
-
-  const adiantamentosIago = (obra.lancamentos || [])
-    .filter(l => !l.deletado && (l.movimento === "ENTRADA_CAIXA" || l.titular === "IAGO"))
+  const gastosCampo = (obra.lancamentos || [])
+    .filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA" && (l.titular === "ELON" || l.titular === "IAGO"))
     .reduce((acc, l) => acc + Number(l.valor || 0), 0);
 
   container.innerHTML = `
-    <!-- Card Reembolso Pilar -->
-    <div class="p-3.5 rounded-2xl bg-white border ${totalPilar > 0 ? "border-[#FF8C00]/40 bg-[#FF8C00]/5" : "border-slate-200"} space-y-1.5 transition">
-      <div class="flex items-center justify-between">
+    <!-- 1. Recursos Próprios: Pilar -->
+    <div class="p-3.5 rounded-2xl bg-white border ${mPilar.pendente > 0 ? "border-[#FF8C00] bg-[#FF8C00]/5" : "border-slate-200"} space-y-2 transition">
+      <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center">P</span>
+          <span class="w-7 h-7 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center shrink-0">P</span>
           <div>
-            <span class="font-display font-extrabold text-xs text-[#23396B]">Pilar (Reembolso)</span>
-            <span class="text-[10px] text-[#64748B] block">${countPilar} despesa(s) do próprio bolso</span>
+            <span class="font-display font-extrabold text-xs sm:text-sm text-[#23396B]">Pilar (Recursos Próprios)</span>
+            <span class="text-xs text-[#64748B] block">Total pago na obra: <strong>${formatBRL(mPilar.pagoTotal)}</strong> (${mPilar.qtdTotal} lanç.)</span>
           </div>
         </div>
         <div class="text-right">
-          <div class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(totalPilar)}</div>
-          <span class="text-[10px] font-bold ${totalPilar > 0 ? "text-[#FF8C00]" : "text-[#16A34A]"}">
-            ${totalPilar > 0 ? "A Reembolsar pela EMTEC" : "Nenhum valor pendente"}
+          <div class="font-display text-base font-extrabold ${mPilar.pendente > 0 ? "text-[#B45309]" : "text-[#16A34A]"}">${formatBRL(mPilar.pendente)}</div>
+          <span class="text-xs font-bold ${mPilar.pendente > 0 ? "text-[#B45309]" : "text-[#16A34A]"}">
+            ${mPilar.pendente > 0 ? `${mPilar.qtdPendente} reembolso(s) pendente(s)` : "Sem reembolso pendente"}
           </span>
+        </div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200/70 flex-wrap gap-2">
+        <span class="text-[#64748B]">Já reembolsado: <strong class="text-[#16A34A]">${formatBRL(mPilar.reembolsado)}</strong></span>
+        <div class="flex items-center gap-2">
+          <button onclick="filtrarPorResponsavel('PILAR')" class="text-xs font-bold text-[#4395D8] hover:underline">Ver gastos</button>
+          ${mPilar.pendente > 0 ? `
+            <button onclick="quitarReembolsosTitular('PILAR')" class="px-2.5 py-1 rounded-lg bg-[#16A34A] text-white text-xs font-extrabold hover:bg-[#15803D] transition">
+              ✓ Dar baixa (${formatBRL(mPilar.pendente)})
+            </button>
+          ` : ""}
         </div>
       </div>
     </div>
 
-    <!-- Card Reembolso Melo -->
-    <div class="p-3.5 rounded-2xl bg-white border ${totalMelo > 0 ? "border-[#23396B]/30 bg-[#23396B]/5" : "border-slate-200"} space-y-1.5 transition">
-      <div class="flex items-center justify-between">
+    <!-- 2. Recursos Próprios: Melo -->
+    <div class="p-3.5 rounded-2xl bg-white border ${mMelo.pendente > 0 ? "border-[#FF8C00] bg-[#FF8C00]/5" : "border-slate-200"} space-y-2 transition">
+      <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-[#23396B] text-white font-extrabold text-xs flex items-center justify-center">M</span>
+          <span class="w-7 h-7 rounded-full bg-[#23396B] text-white font-extrabold text-xs flex items-center justify-center shrink-0">M</span>
           <div>
-            <span class="font-display font-extrabold text-xs text-[#23396B]">Melo (Reembolso)</span>
-            <span class="text-[10px] text-[#64748B] block">${countMelo} despesa(s) do próprio bolso</span>
+            <span class="font-display font-extrabold text-xs sm:text-sm text-[#23396B]">Melo (Recursos Próprios)</span>
+            <span class="text-xs text-[#64748B] block">Total pago na obra: <strong>${formatBRL(mMelo.pagoTotal)}</strong> (${mMelo.qtdTotal} lanç.)</span>
           </div>
         </div>
         <div class="text-right">
-          <div class="font-display text-base font-extrabold text-[#23396B]">${formatBRL(totalMelo)}</div>
-          <span class="text-[10px] font-bold ${totalMelo > 0 ? "text-[#23396B]" : "text-[#16A34A]"}">
-            ${totalMelo > 0 ? "A Reembolsar pela EMTEC" : "Nenhum valor pendente"}
+          <div class="font-display text-base font-extrabold ${mMelo.pendente > 0 ? "text-[#B45309]" : "text-[#16A34A]"}">${formatBRL(mMelo.pendente)}</div>
+          <span class="text-xs font-bold ${mMelo.pendente > 0 ? "text-[#B45309]" : "text-[#16A34A]"}">
+            ${mMelo.pendente > 0 ? `${mMelo.qtdPendente} reembolso(s) pendente(s)` : "Sem reembolso pendente"}
           </span>
+        </div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200/70 flex-wrap gap-2">
+        <span class="text-[#64748B]">Já reembolsado: <strong class="text-[#16A34A]">${formatBRL(mMelo.reembolsado)}</strong></span>
+        <div class="flex items-center gap-2">
+          <button onclick="filtrarPorResponsavel('MELO')" class="text-xs font-bold text-[#4395D8] hover:underline">Ver gastos</button>
+          ${mMelo.pendente > 0 ? `
+            <button onclick="quitarReembolsosTitular('MELO')" class="px-2.5 py-1 rounded-lg bg-[#16A34A] text-white text-xs font-extrabold hover:bg-[#15803D] transition">
+              ✓ Dar baixa (${formatBRL(mMelo.pendente)})
+            </button>
+          ` : ""}
         </div>
       </div>
     </div>
 
-    <!-- Caixa de Campo Iago -->
-    <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-1.5 transition">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-slate-200 text-[#0F172A] font-extrabold text-xs flex items-center justify-center">I</span>
-          <div>
-            <span class="font-display font-extrabold text-xs text-[#23396B]">Caixa de Campo (Iago)</span>
-            <span class="text-[10px] text-[#64748B] block">Adiantamentos operacionais</span>
-          </div>
+    <!-- 3. Conta da Empresa vs Caixa de Campo -->
+    <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-[#23396B]">🏢 EMTEC (Conta da Obra):</span>
+        <strong class="font-display text-sm text-[#23396B]">${formatBRL(mEmtec.pagoTotal)}</strong>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200">
+        <div>
+          <span class="font-bold text-[#0F172A] block">👷 Caixa de Campo (Elon / Iago):</span>
+          <span class="text-xs text-[#64748B]">Adiantado ao campo: ${formatBRL(m.entradasCaixa)}</span>
         </div>
         <div class="text-right">
-          <div class="font-display text-base font-extrabold text-[#0F172A]">${formatBRL(adiantamentosIago)}</div>
-          <span class="text-[10px] text-[#64748B]">Total adiantado em campo</span>
+          <strong class="font-display text-sm text-[#0F172A] block">${formatBRL(gastosCampo)}</strong>
+          <span class="text-xs text-[#64748B]">Comprovado em despesas</span>
         </div>
       </div>
     </div>
@@ -746,12 +1250,14 @@ function renderizarTabelaLancamentos() {
   const busca = (document.getElementById("filtroBusca")?.value || "").toLowerCase().trim();
   const cat = document.getElementById("filtroCategoria")?.value || "TODOS";
   const tit = document.getElementById("filtroTitular")?.value || "TODOS";
-  const mes = document.getElementById("filtroMes")?.value || "TODOS";
 
   let filtrados = (obra.lancamentos || []).filter(item => {
     if (item.deletado) return false;
-    if (busca && !item.descricao.toLowerCase().includes(busca) && !(item.pagamento || "").toLowerCase().includes(busca)) {
-      return false;
+    if (busca) {
+      const descMatch = (item.descricao || "").toLowerCase().includes(busca);
+      const pagMatch = (item.pagamento || "").toLowerCase().includes(busca);
+      const titMatch = getNomeResponsavel(item.titular).toLowerCase().includes(busca) || (item.titular || "").toLowerCase().includes(busca);
+      if (!descMatch && !pagMatch && !titMatch) return false;
     }
     if (cat !== "TODOS") {
       if (cat === "ENTRADA_CAIXA") {
@@ -764,8 +1270,13 @@ function renderizarTabelaLancamentos() {
         if (item.movimento === "ENTRADA_CAIXA" || item.tipo !== cat) return false;
       }
     }
-    if (tit !== "TODOS" && item.titular !== tit) return false;
-    if (mes !== "TODOS" && !(item.data || "").startsWith(mes)) return false;
+    if (tit !== "TODOS") {
+      if (tit === "REEMBOLSO_PENDENTE") {
+        if (item.reembolsoStatus !== "PENDENTE") return false;
+      } else if ((item.titular || "EMTEC").toUpperCase() !== tit.toUpperCase()) {
+        return false;
+      }
+    }
     return true;
   });
 
@@ -797,7 +1308,7 @@ function renderizarTabelaLancamentos() {
   if (containerMob) {
     containerMob.innerHTML = filtrados.map(item => {
       const isEntrada = item.movimento === "ENTRADA_CAIXA";
-      const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+      const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
 
       let tagBg = "bg-[#23396B]/10 text-[#23396B]";
       if (item.tipo === "MO") tagBg = "bg-[#4395D8]/15 text-[#23396B]";
@@ -807,17 +1318,15 @@ function renderizarTabelaLancamentos() {
       if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
       if (isEntrada) tagBg = "bg-[#16A34A]/20 text-[#14532D] font-bold";
 
-      const labelTipo = isEntrada ? "ENTRADA" : `${item.tipo}${sub !== item.tipo ? ` (${sub})` : ""}`;
-
-      const titularTag = item.titular === "PILAR" || item.titular === "MELO"
-        ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FF8C00]/15 text-[#B45309]">Bolso ${item.titular}</span>`
-        : `<span class="text-[#64748B] font-semibold">${item.titular || "EMTEC"}</span>`;
+      const labelTipo = isEntrada ? "ADIANTAMENTO DE CAIXA" : `${item.tipo}${sub !== item.tipo ? ` (${sub})` : ""}`;
+      const nomePagador = getNomeResponsavel(item.titular);
+      const badgeReemb = formatarBadgeReembolso(item, false);
 
       return `
         <div class="bg-white border border-[#E2E8F0] rounded-2xl p-4 shadow-xs space-y-2.5">
           <!-- Linha 1: Categoria na Esquerda | VALOR COMPLETO em Destaque na Direita -->
           <div class="flex items-center justify-between gap-2">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${tagBg} uppercase tracking-wide shrink-0">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold ${tagBg} uppercase tracking-wide shrink-0">
               ${labelTipo}
             </span>
             <span class="font-display text-base sm:text-lg font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"} tracking-tight shrink-0">
@@ -830,28 +1339,33 @@ function renderizarTabelaLancamentos() {
             ${item.descricao}
           </div>
 
-          <!-- Linha 3: Metadados (Data, Pagamento, Titular) -->
-          <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-[#64748B]">
+          <!-- Linha 3: Metadados (Data, Pagamento, Quem Pagou) -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs text-[#64748B]">
             <span>${formatDataBR(item.data)}</span>
             <span>•</span>
             <span>${item.pagamento || "PIX"}</span>
             <span>•</span>
-            ${titularTag}
+            <span class="font-bold text-[#23396B]">Quem pagou: ${nomePagador}</span>
             ${item.empreitaId ? `<span class="text-[#FF8C00] font-bold">• Empreita</span>` : ""}
           </div>
 
-          <!-- Linha 4: Botões de Ação com Área de Toque Touch -->
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button onclick="editarLancamento('${item.id}')"
-              class="inline-flex items-center gap-1 text-xs font-bold text-[#4395D8] px-3 py-1.5 rounded-xl bg-blue-50 active:bg-blue-100 transition">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-              <span>Editar</span>
-            </button>
-            <button onclick="excluirLancamento('${item.id}')"
-              class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 px-3 py-1.5 rounded-xl bg-rose-50 active:bg-rose-100 transition">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              <span>Excluir</span>
-            </button>
+          <!-- Linha 4: Controle de Reembolso + Botões de Ação Touch -->
+          <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${badgeReemb}
+            </div>
+            <div class="flex items-center gap-2 ml-auto">
+              <button onclick="editarLancamento('${item.id}')"
+                class="inline-flex items-center gap-1 text-xs font-bold text-[#4395D8] px-3 py-1.5 rounded-xl bg-blue-50 active:bg-blue-100 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                <span>Editar</span>
+              </button>
+              <button onclick="excluirLancamento('${item.id}')"
+                class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 px-3 py-1.5 rounded-xl bg-rose-50 active:bg-rose-100 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                <span>Excluir</span>
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -861,7 +1375,7 @@ function renderizarTabelaLancamentos() {
   // ---- Renderização em TABELA para desktop ----
   tbody.innerHTML = filtrados.map(item => {
     const isEntrada = item.movimento === "ENTRADA_CAIXA";
-    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo);
+    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
 
     let tagCor = "bg-[#23396B]/10 text-[#23396B]";
     if (item.tipo === "MO") tagCor = "bg-[#4395D8]/15 text-[#23396B]";
@@ -870,21 +1384,25 @@ function renderizarTabelaLancamentos() {
     if (sub === "ALIM") tagCor = "bg-[#16A34A]/15 text-[#16A34A]";
     if (sub === "TRANSP") tagCor = "bg-[#002E6E]/15 text-[#002E6E]";
 
+    const nomePagador = getNomeResponsavel(item.titular);
+    const badgeReemb = formatarBadgeReembolso(item, false);
+
     return `
       <tr class="hover:bg-[#F8F9FA] transition border-b border-[#DEE2E6]">
         <td class="py-3 px-3 text-xs font-semibold text-[#6C757D] whitespace-nowrap">${formatDataBR(item.data)}</td>
         <td class="py-3 px-3">
           <div class="font-bold text-xs sm:text-sm text-[#23396B]">${item.descricao}</div>
-          <div class="text-[11px] text-[#6C757D] flex items-center gap-2 mt-0.5">
+          <div class="text-xs text-[#6C757D] flex flex-wrap items-center gap-2 mt-1">
             <span>${item.pagamento || "PIX"}</span>
             <span>•</span>
-            <span class="font-semibold text-[#23396B]">${item.titular || "EMTEC"}</span>
+            <span class="font-bold text-[#23396B]">Quem pagou: ${nomePagador}</span>
             ${item.empreitaId ? `<span class="text-[#FF8C00] font-bold">• Empreita</span>` : ""}
+            ${badgeReemb}
           </div>
         </td>
         <td class="py-3 px-3 whitespace-nowrap">
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${tagCor}">
-            ${item.tipo} ${sub !== item.tipo ? `(${sub})` : ""}
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${tagCor}">
+            ${isEntrada ? "ADIANTAMENTO" : `${item.tipo} ${sub !== item.tipo ? `(${sub})` : ""}`}
           </span>
         </td>
         <td class="py-3 px-3 text-right font-display text-xs sm:text-sm font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"} whitespace-nowrap">
@@ -907,6 +1425,9 @@ function aplicarSugestaoRapida(descricao, tipo, subtipo) {
   if (descInput) descInput.value = descricao;
 
   selecionarCategoriaRapida(tipo);
+  const selSub = document.getElementById("lancRapidoSubtipo");
+  if (selSub) selSub.value = "AUTO";
+  atualizarPreviewSubtipoRapido();
   checarDuplicidadeAoDigitar();
 
   const valInput = document.getElementById("lancRapidoValor");
@@ -914,6 +1435,8 @@ function aplicarSugestaoRapida(descricao, tipo, subtipo) {
 }
 
 function checarDuplicidadeAoDigitar() {
+  atualizarPreviewSubtipoRapido();
+
   const aviso = document.getElementById("avisoDuplicidadeRapido");
   const texto = document.getElementById("textoDuplicidadeRapido");
   if (!aviso || !texto) return;
@@ -940,10 +1463,43 @@ function checarDuplicidadeAoDigitar() {
   });
 
   if (match) {
-    texto.textContent = `Já existe despesa de ${formatBRL(match.valor)} ("${match.descricao}") em ${formatDataBR(match.data)} paga por ${match.titular || "EMTEC"}. Verifique se não é repetição.`;
+    texto.textContent = `Já existe despesa de ${formatBRL(match.valor)} ("${match.descricao}") em ${formatDataBR(match.data)} paga por ${getNomeResponsavel(match.titular)}. Verifique se não é repetição.`;
     aviso.classList.remove("hidden");
   } else {
     aviso.classList.add("hidden");
+  }
+}
+
+function obterRotuloSubtipo(sub) {
+  if (sub === "ALIM") return "Alimentação de Equipe (ALIM)";
+  if (sub === "TRANSP") return "Combustível / Transporte (TRANSP)";
+  if (sub === "MAT") return "Material (MAT)";
+  if (sub === "MO") return "Mão de Obra Direta (MO)";
+  if (sub === "EQUIP") return "Equipamento (EQUIP)";
+  if (sub === "OUTROS") return "Outros / Taxas (OUTROS)";
+  return sub || "Padrão";
+}
+
+function atualizarPreviewSubtipoRapido() {
+  const hint = document.getElementById("badgeSubtipoDetectadoRapido");
+  if (!hint) return;
+  const desc = document.getElementById("lancRapidoDescricao")?.value || "";
+  const subManual = document.getElementById("lancRapidoSubtipo")?.value || "AUTO";
+  const tipo = categoriaRapidaAtiva || "OUTROS";
+  const detectado = detectarSubtipo(desc, tipo, subManual);
+
+  if (subManual && subManual !== "AUTO") {
+    hint.textContent = `Subcategoria manual: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "text-xs font-bold text-[#FF8C00]";
+  } else if (detectado === "ALIM" || detectado === "TRANSP") {
+    hint.textContent = `Auto: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "text-xs font-bold text-[#16A34A]";
+  } else if (categoriaRapidaAtiva) {
+    hint.textContent = `Subcategoria: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "text-xs font-semibold text-[#4395D8]";
+  } else {
+    hint.textContent = "Classificação automática";
+    hint.className = "text-xs font-bold text-[#4395D8]";
   }
 }
 
@@ -970,19 +1526,23 @@ function abrirModalLancamentoRapido() {
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = hoje;
 
-  // Seleciona EMTEC por padrão em 1 toque
-  selecionarTitularRapido("EMTEC");
+  const selSub = document.getElementById("lancRapidoSubtipo");
+  if (selSub) selSub.value = "AUTO";
+
+  // Seleciona EMTEC por padrão em 1 toque (sem reembolso)
+  selecionarTitularRapido("EMTEC", false);
+  selecionarStatusReembolsoRapido("NAO_REEMBOLSAVEL");
 
   // Não seleciona categoria por padrão para evitar classificação errada inadvertida
   categoriaRapidaAtiva = "";
   ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
-    if (btn) btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
+    if (btn) btn.className = "py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
   });
   const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
   if (avisoCat) avisoCat.classList.add("hidden");
 
-  // Recolhe as opções opcionais (Data, Empreiteiro)
+  // Recolhe as opções opcionais (Subcategoria manual, Data, Empreiteiro)
   const opcoesAv = document.getElementById("opcoesAvancadasRapidas");
   const iconeAv = document.getElementById("iconeOpcoesAvancadasRapidas");
   if (opcoesAv) opcoesAv.classList.add("hidden");
@@ -995,6 +1555,7 @@ function abrirModalLancamentoRapido() {
   }
   const inputDesc = document.getElementById("lancRapidoDescricao");
   if (inputDesc) inputDesc.value = "";
+  atualizarPreviewSubtipoRapido();
 }
 
 function abrirEdicaoRapida(id) {
@@ -1026,7 +1587,9 @@ function abrirEdicaoRapida(id) {
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = item.data;
 
-  selecionarTitularRapido(item.titular || "EMTEC");
+  // Preserva quem pagou e status de reembolso reais do lançamento
+  selecionarTitularRapido(item.titular || "EMTEC", true);
+  selecionarStatusReembolsoRapido(item.reembolsoStatus || "NAO_REEMBOLSAVEL");
 
   const selPag = document.getElementById("lancRapidoPagamento");
   if (selPag) selPag.value = item.pagamento || "PIX";
@@ -1034,7 +1597,18 @@ function abrirEdicaoRapida(id) {
   const selEmp = document.getElementById("lancRapidoEmpreitaId");
   if (selEmp) selEmp.value = item.empreitaId || "";
 
+  const selSub = document.getElementById("lancRapidoSubtipo");
+  if (selSub) {
+    if (item.subtipoManual && item.subtipoManual !== "AUTO") {
+      selSub.value = item.subtipoManual;
+    } else {
+      const autoSub = detectarSubtipo(item.descricao, item.tipo, "AUTO");
+      selSub.value = (item.subtipo && item.subtipo !== autoSub) ? item.subtipo : "AUTO";
+    }
+  }
+
   selecionarCategoriaRapida(item.tipo);
+  atualizarPreviewSubtipoRapido();
 
   const aviso = document.getElementById("avisoDuplicidadeRapido");
   if (aviso) aviso.classList.add("hidden");
@@ -1050,35 +1624,60 @@ function fecharModalLancamentoRapido() {
 }
 
 let titularRapidoAtivo = "EMTEC";
+let statusReembolsoRapidoAtivo = "NAO_REEMBOLSAVEL";
 
-function selecionarTitularRapido(titular) {
+function selecionarTitularRapido(titular, preservarReembolso = false) {
   if (!titular) titular = "EMTEC";
-  titularRapidoAtivo = titular;
+  titularRapidoAtivo = titular.toUpperCase();
   const inputTit = document.getElementById("lancRapidoTitular");
-  if (inputTit) inputTit.value = titular;
+  if (inputTit) inputTit.value = titularRapidoAtivo;
 
-  ["EMTEC", "PILAR", "MELO"].forEach(t => {
-    const btn = document.getElementById(`btnTitRapido_${t}`);
+  const todosResp = getResponsaveis();
+  todosResp.forEach(r => {
+    const btn = document.getElementById(`btnTitRapido_${r.id}`);
     if (!btn) return;
-    if (t === titular) {
-      if (t === "EMTEC") {
-        btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs";
+    if (r.id === titularRapidoAtivo) {
+      if (r.id === "EMTEC") {
+        btn.className = "py-2 px-1.5 rounded-xl text-center text-xs font-extrabold transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs truncate";
       } else {
-        btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#FF8C00] bg-[#FF8C00] text-[#0F172A] shadow-xs";
+        btn.className = "py-2 px-1.5 rounded-xl text-center text-xs font-extrabold transition border-2 border-[#FF8C00] bg-[#FF8C00] text-[#0F172A] shadow-xs truncate";
       }
     } else {
-      btn.className = "py-2 px-1.5 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
+      btn.className = "py-2 px-1.5 rounded-xl text-center text-xs font-bold transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] truncate";
     }
   });
 
-  const extra = document.getElementById("lancRapidoTitularExtra");
-  if (extra) {
-    if (titular !== "EMTEC" && titular !== "PILAR" && titular !== "MELO") {
-      extra.value = titular;
+  if (!preservarReembolso) {
+    const tipoResp = getTipoResponsavel(titularRapidoAtivo);
+    if (tipoResp === "RECURSO_PROPRIO") {
+      selecionarStatusReembolsoRapido("PENDENTE");
     } else {
-      extra.value = "";
+      selecionarStatusReembolsoRapido("NAO_REEMBOLSAVEL");
     }
   }
+}
+
+function selecionarStatusReembolsoRapido(status) {
+  if (!status) status = "NAO_REEMBOLSAVEL";
+  statusReembolsoRapidoAtivo = status;
+  const inputReemb = document.getElementById("lancRapidoReembolsoStatus");
+  if (inputReemb) inputReemb.value = status;
+
+  const opcoes = [
+    { id: "NAO_REEMBOLSAVEL", activeCls: "py-1.5 px-1.5 rounded-xl text-xs font-extrabold border-2 border-[#23396B] bg-[#23396B] text-white transition" },
+    { id: "PENDENTE", activeCls: "py-1.5 px-1.5 rounded-xl text-xs font-extrabold border-2 border-[#FF8C00] bg-[#FF8C00] text-[#0F172A] transition" },
+    { id: "REEMBOLSADO", activeCls: "py-1.5 px-1.5 rounded-xl text-xs font-extrabold border-2 border-[#16A34A] bg-[#16A34A] text-white transition" }
+  ];
+
+  opcoes.forEach(op => {
+    const btn = document.getElementById(`btnReembRapido_${op.id}`);
+    if (!btn) return;
+    if (op.id === status) {
+      btn.className = op.activeCls;
+    } else {
+      btn.className = "py-1.5 px-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-[#64748B] transition";
+    }
+  });
 }
 
 function selecionarCategoriaRapida(tipo) {
@@ -1087,13 +1686,14 @@ function selecionarCategoriaRapida(tipo) {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (!btn) return;
     if (cat === tipo) {
-      btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs";
+      btn.className = "py-2 px-1 rounded-xl text-center text-xs font-extrabold uppercase transition border-2 border-[#23396B] bg-[#23396B] text-white shadow-xs";
     } else {
-      btn.className = "py-2 px-1 rounded-xl text-center text-[11px] sm:text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
+      btn.className = "py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
     }
   });
   const avisoCat = document.getElementById("avisoCategoriaObrigatoria");
   if (avisoCat) avisoCat.classList.add("hidden");
+  atualizarPreviewSubtipoRapido();
 }
 
 function toggleOpcoesAvancadasRapidas() {
@@ -1119,6 +1719,8 @@ function salvarLancamentoRapido(e) {
   const descInput = document.getElementById("lancRapidoDescricao");
   const dataInput = document.getElementById("lancRapidoData");
   const titSelect = document.getElementById("lancRapidoTitular");
+  const reembSelect = document.getElementById("lancRapidoReembolsoStatus");
+  const subManualSelect = document.getElementById("lancRapidoSubtipo");
   const pagSelect = document.getElementById("lancRapidoPagamento");
   const empSelect = document.getElementById("lancRapidoEmpreitaId");
 
@@ -1126,7 +1728,9 @@ function salvarLancamentoRapido(e) {
   const valor = parseFloat(rawVal);
   const descricao = (descInput?.value || "").trim();
   const data = dataInput?.value || new Date().toISOString().split("T")[0];
-  const titular = titSelect?.value || titularRapidoAtivo || "EMTEC";
+  const titular = (titSelect?.value || titularRapidoAtivo || "EMTEC").toUpperCase();
+  const reembolsoStatus = reembSelect?.value || statusReembolsoRapidoAtivo || "NAO_REEMBOLSAVEL";
+  const subtipoManual = subManualSelect?.value || "AUTO";
   const pagamento = pagSelect?.value || "PIX";
   const empreitaId = empSelect?.value || "";
 
@@ -1149,20 +1753,25 @@ function salvarLancamentoRapido(e) {
     return;
   }
 
-  const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva);
+  const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva, subtipoManual);
+  const hoje = new Date().toISOString().split("T")[0];
 
   if (idEdicao) {
     const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
     if (idx !== -1) {
+      const anterior = obra.lancamentos[idx];
       obra.lancamentos[idx] = {
-        ...obra.lancamentos[idx],
+        ...anterior,
         descricao,
         tipo: categoriaRapidaAtiva,
         subtipo,
+        subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
         valor,
         data,
         pagamento,
         titular,
+        reembolsoStatus,
+        reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? (anterior.reembolsadoEm || hoje) : undefined,
         empreitaId: empreitaId || undefined,
         atualizadoEm: new Date().toISOString()
       };
@@ -1174,11 +1783,14 @@ function salvarLancamentoRapido(e) {
       descricao,
       tipo: categoriaRapidaAtiva,
       subtipo,
+      subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
       valor,
       data,
       dataOriginal: data,
       pagamento,
       titular,
+      reembolsoStatus,
+      reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? hoje : undefined,
       movimento: "SAIDA",
       empreitaId: empreitaId || undefined,
       atualizadoEm: new Date().toISOString()
@@ -1193,7 +1805,7 @@ function salvarLancamentoRapido(e) {
         emp.valorPago = Number(emp.valorPago || 0) + valor;
       }
     }
-    mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} salva no aparelho!`);
+    mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} salva (${getNomeResponsavel(titular)})!`);
   }
 
   salvarEstado();
@@ -1223,6 +1835,42 @@ function mostrarNotificacaoToast(msg) {
 // --------------------------------------------------------------------------
 // 7. FORMULÁRIO DE LANÇAMENTO COMPLETO (DESKTOP)
 // --------------------------------------------------------------------------
+function aoMudarQuemPagouDesktop() {
+  const tit = document.getElementById("lancTitular")?.value || "EMTEC";
+  const selReemb = document.getElementById("lancReembolsoStatus");
+  if (!selReemb) return;
+  if (getTipoResponsavel(tit) === "RECURSO_PROPRIO") {
+    selReemb.value = "PENDENTE";
+  } else {
+    selReemb.value = "NAO_REEMBOLSAVEL";
+  }
+}
+
+function atualizarPreviewSubtipoDesktop() {
+  const hint = document.getElementById("hintSubtipoDesktop");
+  if (!hint) return;
+  const desc = document.getElementById("lancDescricao")?.value || "";
+  const tipo = document.getElementById("lancTipo")?.value || "MO";
+  const subManual = document.getElementById("lancSubtipoManual")?.value || "AUTO";
+
+  if (tipo === "ENTRADA_CAIXA") {
+    hint.textContent = "Adiantamento operacional de caixa (não soma como custo até ser gasto).";
+    return;
+  }
+
+  const detectado = detectarSubtipo(desc, tipo, subManual);
+  if (subManual && subManual !== "AUTO") {
+    hint.textContent = `Subcategoria manual: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "mt-1 text-xs font-bold text-[#FF8C00]";
+  } else if (detectado === "ALIM" || detectado === "TRANSP") {
+    hint.textContent = `Detectado automaticamente: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "mt-1 text-xs font-bold text-[#16A34A]";
+  } else {
+    hint.textContent = `Subcategoria analítica: ${obterRotuloSubtipo(detectado)}`;
+    hint.className = "mt-1 text-xs font-semibold text-[#4395D8]";
+  }
+}
+
 function salvarLancamentoDesktop(e) {
   if (e) e.preventDefault();
   const obra = getObraAtual();
@@ -1233,7 +1881,9 @@ function salvarLancamentoDesktop(e) {
   const valor = parseFloat(document.getElementById("lancValor")?.value || 0);
   const data = document.getElementById("lancData")?.value || new Date().toISOString().split("T")[0];
   const tipoEscolhido = document.getElementById("lancTipo")?.value || "MO";
-  const titular = document.getElementById("lancTitular")?.value || "EMTEC";
+  const subtipoManual = document.getElementById("lancSubtipoManual")?.value || "AUTO";
+  const titular = (document.getElementById("lancTitular")?.value || "EMTEC").toUpperCase();
+  const reembolsoStatus = document.getElementById("lancReembolsoStatus")?.value || "NAO_REEMBOLSAVEL";
   const pagamento = document.getElementById("lancPagamento")?.value || "PIX";
   const empreitaId = document.getElementById("lancEmpreitaId")?.value || "";
 
@@ -1244,20 +1894,26 @@ function salvarLancamentoDesktop(e) {
 
   const isEntrada = tipoEscolhido === "ENTRADA_CAIXA";
   const tipoOficial = isEntrada ? "MAT" : normalizarTipoOficial(tipoEscolhido);
-  const subtipo = detectarSubtipo(desc, tipoEscolhido);
+  const subtipo = detectarSubtipo(desc, tipoEscolhido, subtipoManual);
+  const hoje = new Date().toISOString().split("T")[0];
+  const reembFinal = isEntrada ? "NAO_REEMBOLSAVEL" : reembolsoStatus;
 
   if (idEdicao) {
     const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
     if (idx !== -1) {
+      const anterior = obra.lancamentos[idx];
       obra.lancamentos[idx] = {
-        ...obra.lancamentos[idx],
+        ...anterior,
         descricao: desc,
         tipo: tipoOficial,
         subtipo,
+        subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
         valor,
         data,
         pagamento,
         titular,
+        reembolsoStatus: reembFinal,
+        reembolsadoEm: reembFinal === "REEMBOLSADO" ? (anterior.reembolsadoEm || hoje) : undefined,
         movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
         empreitaId: empreitaId || undefined,
         atualizadoEm: new Date().toISOString()
@@ -1269,11 +1925,14 @@ function salvarLancamentoDesktop(e) {
       descricao: desc,
       tipo: tipoOficial,
       subtipo,
+      subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
       valor,
       data,
       dataOriginal: data,
       pagamento,
       titular,
+      reembolsoStatus: reembFinal,
+      reembolsadoEm: reembFinal === "REEMBOLSADO" ? hoje : undefined,
       movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
       empreitaId: empreitaId || undefined,
       atualizadoEm: new Date().toISOString()
@@ -1316,6 +1975,13 @@ function limparFormLancamento() {
   const hoje = new Date().toISOString().split("T")[0];
   const d = document.getElementById("lancData");
   if (d) d.value = hoje;
+  const selTit = document.getElementById("lancTitular");
+  if (selTit) selTit.value = "EMTEC";
+  const selReemb = document.getElementById("lancReembolsoStatus");
+  if (selReemb) selReemb.value = "NAO_REEMBOLSAVEL";
+  const selSub = document.getElementById("lancSubtipoManual");
+  if (selSub) selSub.value = "AUTO";
+  atualizarPreviewSubtipoDesktop();
 }
 
 function excluirLancamento(id) {
@@ -1635,7 +2301,7 @@ function salvarTetosOrcamento() {
 }
 
 // --------------------------------------------------------------------------
-// 10. EMPREITAS E TITULARES
+// 10. EMPREITAS E RESPONSÁVEIS FINANCEIROS (REEMBOLSOS / CAIXA DE CAMPO)
 // --------------------------------------------------------------------------
 function renderizarAbaEmpreitasETitulares(obra, m) {
   const listaEmp = document.getElementById("listaEmpreitas");
@@ -1675,23 +2341,85 @@ function renderizarAbaEmpreitasETitulares(obra, m) {
 
   const listaTit = document.getElementById("listaTitulares");
   if (listaTit) {
-    const tits = Object.entries(m.porTitular || {});
-    if (tits.length === 0) {
-      listaTit.innerHTML = `<p class="text-xs text-[#6C757D]">Nenhum desembolso registrado.</p>`;
-    } else {
-      listaTit.innerHTML = tits.map(([titular, val]) => {
-        const perc = m.custoTotal > 0 ? (val / m.custoTotal) * 100 : 0;
+    const stats = m.reembolsosPorTitular || {};
+    const todosResp = getResponsaveis();
+    const chavesExtras = Object.keys(stats).filter(k => !todosResp.some(r => r.id === k));
+    const listaCompleta = [
+      ...todosResp,
+      ...chavesExtras.map(k => ({ id: k, nome: k, tipo: "OUTRO" }))
+    ];
+
+    const cardsHtml = listaCompleta
+      .map(r => {
+        const st = stats[r.id] || { pagoTotal: 0, pendente: 0, reembolsado: 0, naoReembolsavel: 0, qtdPendente: 0, qtdTotal: 0 };
+        const isCampo = r.tipo === "CAIXA_CAMPO";
+        const isProprio = r.tipo === "RECURSO_PROPRIO";
+        const isEmpresa = r.tipo === "EMPRESA";
+        if (st.pagoTotal === 0 && !["EMTEC", "MELO", "PILAR", "ELON", "IAGO"].includes(r.id)) return "";
+
+        const perc = m.custoTotal > 0 ? (st.pagoTotal / m.custoTotal) * 100 : 0;
+        let subtituloTipo = "Outros Responsáveis";
+        if (isEmpresa) subtituloTipo = "Conta da Empresa • Sem reembolso";
+        if (isProprio) subtituloTipo = "Recursos Próprios • Reembolsável";
+        if (isCampo) subtituloTipo = "Caixa de Campo • Equipe Operacional";
+
         return `
-          <div class="p-3.5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6] flex items-center justify-between">
-            <div>
-              <span class="text-xs font-bold uppercase tracking-wider text-[#23396B]">${titular}</span>
-              <span class="block text-[11px] text-[#6C757D]">${perc.toFixed(1)}% do custo total da obra</span>
+          <div class="p-4 rounded-2xl bg-[#F8F9FA] border ${st.pendente > 0 ? "border-[#FF8C00] bg-[#FF8C00]/5" : "border-[#DEE2E6]"} space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <span class="text-xs sm:text-sm font-extrabold text-[#23396B] block">${r.nome}</span>
+                <span class="text-xs text-[#64748B]">${subtituloTipo} • ${st.qtdTotal} despesa(s) (${perc.toFixed(1)}% da obra)</span>
+              </div>
+              <div class="text-right">
+                <div class="font-display font-extrabold text-sm sm:text-base text-[#23396B]">${formatBRL(st.pagoTotal)}</div>
+                <span class="text-xs text-[#6C757D]">Total pago na obra</span>
+              </div>
             </div>
-            <div class="font-display font-extrabold text-sm sm:text-base text-[#23396B]">${formatBRL(val)}</div>
+
+            ${(isProprio || st.pendente > 0 || st.reembolsado > 0) ? `
+              <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/80 text-xs">
+                <div>
+                  <span class="text-[#64748B] block">A Reembolsar</span>
+                  <strong class="${st.pendente > 0 ? "text-[#B45309] font-extrabold" : "text-[#16A34A]"}">${formatBRL(st.pendente)}</strong>
+                </div>
+                <div>
+                  <span class="text-[#64748B] block">Já Reembolsado</span>
+                  <strong class="text-[#16A34A]">${formatBRL(st.reembolsado)}</strong>
+                </div>
+                <div>
+                  <span class="text-[#64748B] block">Sem Reembolso</span>
+                  <strong class="text-[#23396B]">${formatBRL(st.naoReembolsavel)}</strong>
+                </div>
+              </div>
+            ` : ""}
+
+            <div class="flex items-center justify-between pt-1.5 border-t border-slate-200/60 text-xs flex-wrap gap-2">
+              <button onclick="filtrarPorResponsavel('${r.id}')" class="font-bold text-[#4395D8] hover:underline">
+                Filtrar despesas de ${r.nome} →
+              </button>
+              ${st.pendente > 0 ? `
+                <button onclick="quitarReembolsosTitular('${r.id}')"
+                  class="px-3 py-1 rounded-xl bg-[#16A34A] text-white font-extrabold hover:bg-[#15803D] transition shadow-2xs">
+                  ✓ Dar baixa em ${st.qtdPendente} reembolso(s) (${formatBRL(st.pendente)})
+                </button>
+              ` : ""}
+            </div>
           </div>
         `;
-      }).join("");
-    }
+      })
+      .filter(Boolean)
+      .join("");
+
+    const resumoCaixaCampo = `
+      <div class="p-4 rounded-2xl bg-[#23396B]/5 border border-[#23396B]/20 space-y-1.5 text-xs">
+        <div class="font-display font-extrabold text-xs sm:text-sm text-[#23396B]">Resumo do Caixa de Campo (Adiantamentos vs. Gastos)</div>
+        <div class="flex justify-between"><span>Total Adiantado ao Campo (Entradas de Caixa):</span><strong>${formatBRL(m.entradasCaixa)}</strong></div>
+        <div class="flex justify-between"><span>Total de Reembolsos Pendentes na Obra:</span><strong class="${m.totalReembolsosPendentes > 0 ? "text-[#B45309]" : "text-[#16A34A]"}">${formatBRL(m.totalReembolsosPendentes)}</strong></div>
+        <div class="flex justify-between"><span>Total já Reembolsado na Obra:</span><strong class="text-[#16A34A]">${formatBRL(m.totalReembolsado)}</strong></div>
+      </div>
+    `;
+
+    listaTit.innerHTML = resumoCaixaCampo + cardsHtml;
   }
 }
 
@@ -1737,7 +2465,7 @@ function excluirEmpreita(id) {
 }
 
 // --------------------------------------------------------------------------
-// 11. GESTÃO DE OBRAS E NAVEGAÇÃO
+// 11. GESTÃO DE OBRAS, STATUS OPERACIONAL E NAVEGAÇÃO
 // --------------------------------------------------------------------------
 function renderizarSeletorObras() {
   const sel = document.getElementById("obraSelect");
@@ -1760,13 +2488,32 @@ function trocarObra(id) {
   atualizarTudo();
 }
 
+function alterarStatusOperacionalObra(novoStatus) {
+  const obra = getObraAtual();
+  if (!obra || !novoStatus) return;
+  const statusAnterior = obra.status || "Em Andamento";
+  if (novoStatus === statusAnterior) return;
+
+  if (!confirm(`Deseja alterar o status operacional da obra "${obra.nome}" de "${statusAnterior}" para "${novoStatus}"?`)) {
+    const selDesk = document.getElementById("selectStatusObraDesktop");
+    if (selDesk) selDesk.value = statusAnterior;
+    const selMob = document.getElementById("selectStatusObraMobile");
+    if (selMob) selMob.value = statusAnterior;
+    return;
+  }
+
+  obra.status = novoStatus;
+  obra.atualizadoEm = new Date().toISOString();
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast(`Status operacional da obra alterado para: ${obra.status}`);
+}
+
 function alternarStatusObra() {
   const obra = getObraAtual();
   if (!obra) return;
-  obra.status = obra.status === "Concluída" ? "Em Andamento" : "Concluída";
-  salvarEstado();
-  atualizarTudo();
-  mostrarNotificacaoToast(`Status alterado para: ${obra.status}`);
+  const proximo = obra.status === "Concluída" ? "Em Andamento" : "Concluída";
+  alterarStatusOperacionalObra(proximo);
 }
 
 function mudarAba(abaId) {
@@ -1829,11 +2576,11 @@ function toggleCamposAvancados() {
   if (isHidden) {
     el.classList.remove("hidden");
     if (icone) icone.textContent = "−";
-    if (texto) texto.textContent = "Ocultar detalhes adicionais";
+    if (texto) texto.textContent = "Ocultar detalhes opcionais";
   } else {
     el.classList.add("hidden");
     if (icone) icone.textContent = "+";
-    if (texto) texto.textContent = "Mais detalhes (Titular, Meio de Pagamento, Empreita)";
+    if (texto) texto.textContent = "Opções avançadas (Data, Pagamento, Empreiteiro)";
   }
 }
 
@@ -1933,7 +2680,7 @@ function importarBackupJSON(e) {
     try {
       const parsed = JSON.parse(evt.target.result);
       if (parsed && Array.isArray(parsed.obras)) {
-        estado = parsed;
+        estado = sanearDadosCarregados(parsed);
         obraAtualId = estado.obras[0]?.id || "";
         salvarEstado();
         renderizarSeletorObras();
@@ -1949,53 +2696,152 @@ function importarBackupJSON(e) {
 }
 
 function resetarDadosOriginais() {
-  if (!confirm("Restaurar os dados originais corrigidos da planilha?")) return;
+  const confirmacao = prompt(
+    "ATENÇÃO: Esta ação substitui os lançamentos locais pela base inicial de testes.\n\nUm backup automático dos seus dados atuais será baixado antes.\n\nPara confirmar, digite RESTAURAR:"
+  );
+  if (!confirmacao || confirmacao.trim().toUpperCase() !== "RESTAURAR") {
+    mostrarNotificacaoToast("Restauração cancelada. Seus dados foram preservados.");
+    return;
+  }
+
+  try {
+    exportarBackupJSON();
+  } catch (e) {
+    console.warn("Aviso ao gerar backup preventivo:", e);
+  }
+
   localStorage.removeItem(STORAGE_KEY);
-  estado = JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA));
+  estado = sanearDadosCarregados(JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA)));
   obraAtualId = estado.obras[0].id;
   salvarEstado();
   renderizarSeletorObras();
   atualizarTudo();
   fecharModalNuvem();
-  mostrarNotificacaoToast("Dados restaurados.");
+  mostrarNotificacaoToast("Base inicial restaurada (backup anterior salvo).");
 }
 
 function exportarExcelObra() {
   const obra = getObraAtual();
+  if (!obra) return;
   const m = calcularMetricasObra(obra);
-
-  const rowsLanc = (obra.lancamentos || []).filter(l => !l.deletado).map(l => ({
-    "DATA": formatDataBR(l.data),
-    "DESCRIÇÃO": l.descricao,
-    "TIPO OFICIAL": l.tipo,
-    "CLASSIFICAÇÃO REAL": l.subtipo,
-    "MOVIMENTO": l.movimento,
-    "VALOR (R$)": Number(l.valor),
-    "PAGAMENTO": l.pagamento,
-    "TITULAR": l.titular
-  }));
+  const sit = m.situacao || avaliarSituacaoFinanceira(obra, m);
 
   const rowsResumo = [
-    { "INDICADOR": "Obra", "VALOR": obra.nome },
-    { "INDICADOR": "Total Gastos Mão de Obra (MO)", "VALOR": m.porTipoOficial.MO },
-    { "INDICADOR": "Total Gastos Material (MAT)", "VALOR": m.porTipoOficial.MAT },
-    { "INDICADOR": "Total Equipamento (EQUIP - Corrigido)", "VALOR": m.porTipoOficial.EQUIP },
-    { "INDICADOR": "Total Outros", "VALOR": m.porTipoOficial.OUTROS },
-    { "INDICADOR": "CUSTO TOTAL DA OBRA", "VALOR": m.custoTotal },
-    { "INDICADOR": "Total Medições Líquidas Recebidas", "VALOR": m.medLiquidaRecebida },
-    { "INDICADOR": "SALDO DE CAIXA ATUAL (HOJE)", "VALOR": m.saldoAtual },
-    { "INDICADOR": "Saldo Devedor Empreitas", "VALOR": m.saldoEmpreitasPendente },
-    { "INDICADOR": "Custo Final Projetado (EAC)", "VALOR": m.custoTotalProjetado },
-    { "INDICADOR": "RESULTADO FINAL PROJETADO", "VALOR": m.saldoProjetadoFinal }
+    { "INDICADOR DA OBRA": "Nome da Obra", "VALOR / INFORMAÇÃO": obra.nome },
+    { "INDICADOR DA OBRA": "Cliente / Contrato", "VALOR / INFORMAÇÃO": obra.cliente || "Contrato" },
+    { "INDICADOR DA OBRA": "Status Operacional", "VALOR / INFORMAÇÃO": obra.status || "Em Andamento" },
+    { "INDICADOR DA OBRA": "Situação Financeira", "VALOR / INFORMAÇÃO": sit.rotulo },
+    { "INDICADOR DA OBRA": "Data de Emissão do Relatório", "VALOR / INFORMAÇÃO": formatDataBR(new Date().toISOString().split("T")[0]) },
+    { "INDICADOR DA OBRA": "--- RECEITAS E MEDIÇÕES ---", "VALOR / INFORMAÇÃO": "" },
+    { "INDICADOR DA OBRA": "Receita Bruta Contratada (R$)", "VALOR / INFORMAÇÃO": m.medBrutaTotal },
+    { "INDICADOR DA OBRA": "Receita Líquida Contratada após NF (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaTotal },
+    { "INDICADOR DA OBRA": "Valor Efetivamente Recebido (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaRecebida },
+    { "INDICADOR DA OBRA": "Saldo a Receber de Clientes (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaPendente },
+    { "INDICADOR DA OBRA": "--- DESPESAS REALIZADAS POR CATEGORIA ---", "VALOR / INFORMAÇÃO": "" },
+    { "INDICADOR DA OBRA": "Material (MAT) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MAT },
+    { "INDICADOR DA OBRA": "Mão de Obra Geral (MO) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MO },
+    { "INDICADOR DA OBRA": "Equipamentos (EQUIP) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.EQUIP },
+    { "INDICADOR DA OBRA": "Outros e Taxas (OUTROS) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.OUTROS },
+    { "INDICADOR DA OBRA": "Detalhamento Analítico: Alimentação (ALIM) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.ALIM },
+    { "INDICADOR DA OBRA": "Detalhamento Analítico: Combustível / Transporte (TRANSP) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.TRANSP },
+    { "INDICADOR DA OBRA": "TOTAL DE DESPESAS REALIZADAS (R$)", "VALOR / INFORMAÇÃO": m.custoTotal },
+    { "INDICADOR DA OBRA": "--- RESULTADO, PENDÊNCIAS E VIABILIDADE ---", "VALOR / INFORMAÇÃO": "" },
+    { "INDICADOR DA OBRA": "Resultado Acumulado (Recebido - Despesas Pagas) (R$)", "VALOR / INFORMAÇÃO": m.saldoAtual },
+    { "INDICADOR DA OBRA": "Margem Realizada (%)", "VALOR / INFORMAÇÃO": Number(m.margemAtualPerc.toFixed(2)) },
+    { "INDICADOR DA OBRA": "Empreiteiros Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.saldoEmpreitasPendente },
+    { "INDICADOR DA OBRA": "Reembolsos Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.totalReembolsosPendentes },
+    { "INDICADOR DA OBRA": "Custo Final Projetado da Obra (R$)", "VALOR / INFORMAÇÃO": m.custoTotalProjetado },
+    { "INDICADOR DA OBRA": "Limite Orçamentário Planejado (Teto) (R$)", "VALOR / INFORMAÇÃO": m.tetoTotal },
+    { "INDICADOR DA OBRA": "Lucro Previsto Final da Obra (R$)", "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
+    { "INDICADOR DA OBRA": "Margem Final Projetada (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
   ];
+
+  const rowsLanc = (obra.lancamentos || [])
+    .filter(l => !l.deletado)
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
+    .map(l => {
+      const statusReemb = l.reembolsoStatus === "PENDENTE"
+        ? "Reembolso Pendente"
+        : l.reembolsoStatus === "REEMBOLSADO"
+          ? `Reembolsado${l.reembolsadoEm ? ` (${formatDataBR(l.reembolsadoEm)})` : ""}`
+          : "Sem Reembolso";
+      return {
+        "DATA": formatDataBR(l.data),
+        "DESCRIÇÃO": l.descricao,
+        "CATEGORIA": l.movimento === "ENTRADA_CAIXA" ? "ADIANTAMENTO DE CAIXA" : l.tipo,
+        "SUBCATEGORIA": l.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : (l.subtipo || l.tipo),
+        "VALOR (R$)": Number(l.valor || 0),
+        "QUEM PAGOU": getNomeResponsavel(l.titular),
+        "STATUS REEMBOLSO": statusReemb,
+        "MEIO DE PAGAMENTO": l.pagamento || "PIX"
+      };
+    });
+
+  const rowsMedicoes = (obra.medicoes || [])
+    .filter(med => !med.deletado)
+    .map(med => {
+      const bruto = Number(med.valorBruto || 0);
+      const desc = Number(med.descontoNotaPerc ?? 7.5);
+      const liq = med.valorLiquido ? Number(med.valorLiquido) : Math.round(bruto * (1 - desc / 100) * 100) / 100;
+      return {
+        "PARCELA / MEDIÇÃO": med.titulo,
+        "DATA": formatDataBR(med.data),
+        "STATUS": med.status === "Recebida" ? "Recebida na Conta" : "A Receber (Pendente)",
+        "VALOR BRUTO (R$)": bruto,
+        "IMPOSTO NF (%)": desc,
+        "VALOR LÍQUIDO (R$)": liq,
+        "OBSERVAÇÃO": med.observacao || ""
+      };
+    });
+
+  const rowsEmpreitasEReemb = [];
+  (obra.empreitas || []).filter(e => !e.deletado).forEach(e => {
+    const contratado = Number(e.valorContratado || 0);
+    const pago = Number(e.valorPago || 0);
+    rowsEmpreitasEReemb.push({
+      "TIPO": "Empreiteiro Contratado",
+      "NOME / FORNECEDOR": e.fornecedor,
+      "SERVIÇO / DETALHE": e.servico || "",
+      "TOTAL CONTRATADO / PAGO NA OBRA (R$)": contratado,
+      "JÁ PAGO / REEMBOLSADO (R$)": pago,
+      "PENDENTE A PAGAR (R$)": Math.max(0, contratado - pago)
+    });
+  });
+
+  Object.entries(m.reembolsosPorTitular || {}).forEach(([id, st]) => {
+    rowsEmpreitasEReemb.push({
+      "TIPO": "Responsável Financeiro",
+      "NOME / FORNECEDOR": getNomeResponsavel(id),
+      "SERVIÇO / DETALHE": `${st.qtdTotal} lançamento(s) na obra`,
+      "TOTAL CONTRATADO / PAGO NA OBRA (R$)": st.pagoTotal,
+      "JÁ PAGO / REEMBOLSADO (R$)": st.reembolsado,
+      "PENDENTE A PAGAR (R$)": st.pendente
+    });
+  });
 
   if (typeof XLSX !== "undefined") {
     const wb = XLSX.utils.book_new();
-    const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
+
     const wsRes = XLSX.utils.json_to_sheet(rowsResumo);
-    XLSX.utils.book_append_sheet(wb, wsLanc, "Lançamentos Auditados");
-    XLSX.utils.book_append_sheet(wb, wsRes, "Resumo & Viabilidade");
-    XLSX.writeFile(wb, `Centro_Custo_${obra.nome.replace(/\s+/g, "_")}_Corrigido.xlsx`);
+    wsRes["!cols"] = [{ wch: 52 }, { wch: 28 }];
+
+    const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
+    wsLanc["!cols"] = [{ wch: 12 }, { wch: 36 }, { wch: 16 }, { wch: 16 }, { wch: 15 }, { wch: 24 }, { wch: 24 }, { wch: 18 }];
+
+    const wsMed = XLSX.utils.json_to_sheet(rowsMedicoes);
+    wsMed["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 30 }];
+
+    const wsEmp = XLSX.utils.json_to_sheet(rowsEmpreitasEReemb);
+    wsEmp["!cols"] = [{ wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 22 }];
+
+    XLSX.utils.book_append_sheet(wb, wsRes, "Resumo da Obra");
+    XLSX.utils.book_append_sheet(wb, wsLanc, "Despesas da Obra");
+    XLSX.utils.book_append_sheet(wb, wsMed, "Recebimentos do Cliente");
+    XLSX.utils.book_append_sheet(wb, wsEmp, "Empreiteiros e Reembolsos");
+
+    const nomeArquivo = `Relatorio_EMTEC_${obra.nome.replace(/[^a-zA-Z0-9_-]+/g, "_")}.xlsx`;
+    XLSX.writeFile(wb, nomeArquivo);
+    mostrarNotificacaoToast("Planilha Excel gerada com sucesso!");
   } else {
     alert("Biblioteca Excel não disponível no momento.");
   }
