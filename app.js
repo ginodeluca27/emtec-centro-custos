@@ -6,7 +6,8 @@
 const STORAGE_KEY = "EMTEC_SISTEMA_CUSTOS_V1";
 const PIN_STORAGE_KEY = "emtec_auth_pin";
 const USUARIO_STORAGE_KEY = "emtec_usuario_ativo";
-const DEFAULT_PIN = "1234";
+const PENDENTE_STORAGE_KEY = "EMTEC_PENDENTE_V1";
+const INTERVALO_SYNC_MS = 40000;
 
 let estado = carregarEstadoLocal();
 let obraAtualId = estado.obras[0]?.id || "";
@@ -30,10 +31,10 @@ function carregarPerfilUsuario() {
   if (avatarPill) {
     if (perfilAtivo === "Melo") {
       avatarPill.textContent = "M";
-      avatarPill.className = "w-5 h-5 rounded-full bg-[#23396B] text-white font-extrabold text-[10px] flex items-center justify-center";
+      avatarPill.className = "w-5 h-5 rounded-full bg-[#23396B] text-white font-extrabold text-xs flex items-center justify-center";
     } else {
       avatarPill.textContent = "P";
-      avatarPill.className = "w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-[10px] flex items-center justify-center";
+      avatarPill.className = "w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center";
     }
   }
 }
@@ -46,6 +47,8 @@ function abrirModalPerfil() {
   selecionarPerfilCard(perfilAtivo);
   const err = document.getElementById("erroPinPerfil");
   if (err) err.classList.add("hidden");
+  const btnFechar = document.getElementById("btnFecharPerfil");
+  if (btnFechar) btnFechar.classList.toggle("hidden", !verificarAuth());
 }
 
 function fecharModalPerfil() {
@@ -77,44 +80,100 @@ function selecionarPerfilCard(nome) {
   }
 }
 
-function confirmarPerfilUsuario() {
+async function confirmarPerfilUsuario() {
   const pinInput = document.getElementById("inputPinPerfil");
   const pinVal = (pinInput?.value || "").trim();
   const erroMsg = document.getElementById("erroPinPerfil");
   const checkLembrar = document.getElementById("checkLembrarPerfil");
+  const btn = document.getElementById("btnEntrarPerfil");
 
-  if (pinVal && pinVal !== DEFAULT_PIN) {
-    if (erroMsg) erroMsg.classList.remove("hidden");
+  const mostrarErro = (txt) => {
+    if (erroMsg) {
+      erroMsg.textContent = txt;
+      erroMsg.classList.remove("hidden");
+    }
+  };
+
+  if (!pinVal) {
+    mostrarErro("Digite o PIN de acesso.");
+    pinInput?.focus();
     return;
   }
 
-  perfilAtivo = perfilSelecionadoNoModal;
-  if (checkLembrar && checkLembrar.checked) {
-    localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
-    localStorage.setItem(PIN_STORAGE_KEY, DEFAULT_PIN);
-  } else {
-    localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
+  if (btn) btn.disabled = true;
+  try {
+    // Quem confere o PIN é o servidor (a resposta correta não existe no navegador)
+    const res = await fetch("/api/sync", { headers: { "x-emtec-pin": pinVal }, cache: "no-store" });
+    if (res.status === 503) {
+      mostrarErro("O sistema ainda não tem PIN configurado no servidor. Avise o responsável.");
+      return;
+    }
+    if (!res.ok) {
+      mostrarErro("PIN incorreto. Tente novamente.");
+      if (pinInput) pinInput.value = "";
+      return;
+    }
+  } catch (e) {
+    mostrarErro("Sem conexão para conferir o PIN. Conecte-se à internet na primeira entrada.");
+    return;
+  } finally {
+    if (btn) btn.disabled = false;
   }
+
+  perfilAtivo = perfilSelecionadoNoModal;
+  localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
+  salvarPinNoAparelho(pinVal, !!(checkLembrar && checkLembrar.checked));
+  if (pinInput) pinInput.value = "";
+  if (erroMsg) erroMsg.classList.add("hidden");
 
   carregarPerfilUsuario();
   fecharModalPerfil();
   mostrarNotificacaoToast(`Conectado como ${perfilAtivo}`);
-  sincronizarComNuvem(true);
+  iniciarSincronizacaoPeriodica();
+  sincronizarComNuvem();
+}
+
+function salvarPinNoAparelho(pin, lembrar) {
+  localStorage.removeItem(PIN_STORAGE_KEY);
+  sessionStorage.removeItem(PIN_STORAGE_KEY);
+  (lembrar ? localStorage : sessionStorage).setItem(PIN_STORAGE_KEY, pin);
 }
 
 function verificarAuth() {
-  return true;
+  return !!getPinAtual();
+}
+
+function exigirLogin(mensagem) {
+  const m = document.getElementById("modalPerfilUsuario");
+  if (!m) return;
+  abrirModalPerfil();
+  const btnFechar = document.getElementById("btnFecharPerfil");
+  if (btnFechar) btnFechar.classList.add("hidden");
+  if (mensagem) {
+    const erro = document.getElementById("erroPinPerfil");
+    if (erro) {
+      erro.textContent = mensagem;
+      erro.classList.remove("hidden");
+    }
+  }
 }
 
 function autenticarPIN(e) {
   if (e) e.preventDefault();
-  fecharModalPerfil();
+  confirmarPerfilUsuario();
 }
 
 function logout() {
   if (confirm("Deseja alternar ou sair do perfil neste aparelho?")) {
     abrirModalPerfil();
   }
+}
+
+function sairDoAparelho() {
+  if (!confirm("Sair deste aparelho? O PIN será esquecido e será pedido de novo. As despesas continuam salvas.")) return;
+  localStorage.removeItem(PIN_STORAGE_KEY);
+  sessionStorage.removeItem(PIN_STORAGE_KEY);
+  exigirLogin();
 }
 
 // --------------------------------------------------------------------------
@@ -285,7 +344,11 @@ function renderizarControlesResponsaveis() {
 }
 
 function getPinAtual() {
-  return localStorage.getItem(PIN_STORAGE_KEY) || sessionStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
+  return localStorage.getItem(PIN_STORAGE_KEY) || sessionStorage.getItem(PIN_STORAGE_KEY) || "";
+}
+
+function temPendencia() {
+  return localStorage.getItem(PENDENTE_STORAGE_KEY) === "1";
 }
 
 function atualizarBadgeNuvem(status, dataHora) {
@@ -298,17 +361,23 @@ function atualizarBadgeNuvem(status, dataHora) {
   let horaHtml = "";
 
   if (status === "syncing") {
-    statusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#FF8C00]">Sincronizando...</span>`;
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#FF8C00]">Enviando...</span>`;
     horaHtml = "";
   } else if (status === "success") {
     const hora = dataHora
       ? new Date(dataHora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
       : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    statusHtml = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span><span class="font-bold text-[#16A34A]">Conectado</span>`;
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span><span class="font-bold text-[#16A34A]">Tudo salvo na nuvem</span>`;
     horaHtml = `Última sincronização: ${hora}`;
+  } else if (status === "pending") {
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#B45309]">Sem sinal: salvo no aparelho</span>`;
+    horaHtml = "Será enviado sozinho quando a internet voltar";
+  } else if (status === "auth") {
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">PIN inválido</span>`;
+    horaHtml = "Entre novamente para sincronizar";
   } else if (status === "offline") {
-    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Salvo neste aparelho</span>`;
-    horaHtml = "";
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Sem conexão com a nuvem</span>`;
+    horaHtml = temPendencia() ? "Alterações guardadas no aparelho, aguardando envio" : "";
   }
 
   if (badgeStatus) badgeStatus.innerHTML = statusHtml;
@@ -331,81 +400,96 @@ function atualizarBadgeNuvem(status, dataHora) {
   }
 }
 
-async function sincronizarComNuvem(forcarDownload = false, tentativa = 1) {
-  if (isSincronizando) return;
+// --------------------------------------------------------------------------
+// SINCRONIZAÇÃO SEGURA
+// - Todo salvamento marca "pendência" no aparelho.
+// - Nunca se baixa a nuvem por cima dos dados locais: o aparelho ENVIA o que tem
+//   e o servidor devolve tudo MESCLADO por registro (id + atualizadoEm).
+// - O que foi lançado sem sinal continua guardado e é enviado quando voltar.
+// --------------------------------------------------------------------------
+let versaoLocal = 0;
+let novaSincronizacaoSolicitada = false;
+let intervaloSyncAtivo = null;
+
+async function sincronizarComNuvem() {
+  if (!verificarAuth()) return;
+  if (isSincronizando) {
+    novaSincronizacaoSolicitada = true;
+    return;
+  }
   isSincronizando = true;
+  novaSincronizacaoSolicitada = false;
   atualizarBadgeNuvem("syncing");
 
-  const pin = getPinAtual();
-
-  try {
-    if (forcarDownload) {
-      const res = await fetch("/api/sync", {
-        headers: { "x-emtec-pin": pin },
-        cache: "no-store"
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json.exists && json.data && Array.isArray(json.data.obras) && json.data.obras.length > 0) {
-          estado = sanearDadosCarregados(json.data);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
-          if (!estado.obras.some(o => o.id === obraAtualId)) {
-            obraAtualId = estado.obras[0]?.id || "";
-          }
-          renderizarSeletorObras();
-          renderizarControlesResponsaveis();
-          atualizarTudo();
-          atualizarBadgeNuvem("success", json.updatedAt);
-          isSincronizando = false;
-          return;
-        } else if (!json.exists) {
-          await enviarParaNuvem(pin);
-          isSincronizando = false;
-          return;
-        }
-      }
-    }
-
-    await enviarParaNuvem(pin);
-  } catch (err) {
-    console.warn("Tentativa de sincronização falhou:", err);
-    if (tentativa === 1) {
-      isSincronizando = false;
-      setTimeout(() => sincronizarComNuvem(forcarDownload, 2), 1200);
-      return;
-    }
-    atualizarBadgeNuvem("offline");
-  } finally {
-    isSincronizando = false;
-  }
-}
-
-async function enviarParaNuvem(pin) {
+  const versaoEnviada = versaoLocal;
   try {
     const res = await fetch("/api/sync", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-emtec-pin": pin
-      },
-      body: JSON.stringify(estado)
+      headers: { "Content-Type": "application/json", "x-emtec-pin": getPinAtual() },
+      body: JSON.stringify(estado),
+      cache: "no-store"
     });
 
-    if (res.ok) {
-      const json = await res.json();
-      atualizarBadgeNuvem("success", json.timestamp);
-    } else {
-      atualizarBadgeNuvem("offline");
+    if (res.status === 401) {
+      atualizarBadgeNuvem("auth");
+      exigirLogin("PIN não confere mais. Digite o PIN novamente.");
+      return;
     }
-  } catch (e) {
-    atualizarBadgeNuvem("offline");
+    if (!res.ok) {
+      atualizarBadgeNuvem(temPendencia() ? "pending" : "offline");
+      return;
+    }
+
+    const json = await res.json();
+    if (json && json.data && Array.isArray(json.data.obras) && json.data.obras.length > 0) {
+      if (versaoEnviada === versaoLocal) {
+        // Nada mudou durante o envio: adotar o resultado mesclado (já contém tudo que era local)
+        estado = sanearDadosCarregados(json.data);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+        localStorage.removeItem(PENDENTE_STORAGE_KEY);
+        if (!estado.obras.some(o => o.id === obraAtualId)) {
+          obraAtualId = estado.obras[0]?.id || "";
+        }
+        renderizarSeletorObras();
+        atualizarTudo();
+      } else {
+        // O usuário lançou algo enquanto enviava: não sobrescrever; enviar de novo
+        novaSincronizacaoSolicitada = true;
+      }
+    }
+    atualizarBadgeNuvem(temPendencia() || novaSincronizacaoSolicitada ? "syncing" : "success", json.timestamp);
+  } catch (err) {
+    console.warn("Sincronização falhou (dados seguem salvos no aparelho):", err);
+    atualizarBadgeNuvem(temPendencia() ? "pending" : "offline");
+  } finally {
+    isSincronizando = false;
+    if (novaSincronizacaoSolicitada && navigator.onLine !== false) {
+      novaSincronizacaoSolicitada = false;
+      setTimeout(sincronizarComNuvem, 300);
+    }
   }
 }
 
+function iniciarSincronizacaoPeriodica() {
+  if (intervaloSyncAtivo) return;
+  intervaloSyncAtivo = setInterval(sincronizarComNuvem, INTERVALO_SYNC_MS);
+}
+
 function salvarEstado() {
+  versaoLocal++;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
-  sincronizarComNuvem(false);
+  localStorage.setItem(PENDENTE_STORAGE_KEY, "1");
+  if (navigator.onLine === false) {
+    atualizarBadgeNuvem("pending");
+    return;
+  }
+  sincronizarComNuvem();
+}
+
+// Marca um registro como alterado agora (base da mescla por registro)
+function tocar(registro) {
+  if (registro) registro.atualizadoEm = new Date().toISOString();
+  return registro;
 }
 
 // --------------------------------------------------------------------------
@@ -426,26 +510,37 @@ function formatDataBR(iso) {
   return iso;
 }
 
+function semAcento(txt) {
+  return String(txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+}
+
+const REGEX_ALIMENTACAO = /\b(ALMOC|JANTA|REFEI|LANCHE|MARMITA|QUENTINHA|VALE ALIMENTA)|\b(CAFE|PAO|PAES|GELO|MISTURA|AGUA MINERAL)\b/;
+const REGEX_TRANSPORTE = /\b(GASOLINA|COMBUSTIVEL|ABASTEC|PASSAGE|FRETE|DIESEL|ETANOL|PEDAGIO|ESTACIONAMENTO|OLEO (DA )?MOTO)|\bUBER\b/;
 function detectarSubtipo(desc, tipoEscolhido, subtipoManual = "AUTO") {
   if (tipoEscolhido === "ENTRADA_CAIXA") return "CAIXA";
   if (subtipoManual && subtipoManual !== "AUTO") return subtipoManual;
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return tipoEscolhido;
 
-  const d = (desc || "").toUpperCase();
-  // Evita que "MISTURADOR" (equipamento) seja confundido com "MISTURA" (alimentação)
-  const temMisturaAlim = !d.includes("MISTURADOR") && (/\bMISTURA\b/.test(d) || d.includes("COMPRA MISTURA"));
-  if (
-    temMisturaAlim ||
-    ["ALMOÇO", "ALMOCO", "JANTA", "REFEIÇ", "REFEIC", "CAFÉ", "CAFE", "PÃO", "PAO", "LANCHE", "MARMITA", "QUENTINHA", "GELO", "VALE ALIMENTA"].some(k => d.includes(k))
-  ) {
-    return "ALIM";
-  }
-  if (["GASOLINA", "COMBUSTIVEL", "COMBUSTÍVEL", "ABASTECIMENTO", "UBER", "PASSAGEM", "PASSAGENS", "OLEO MOTO", "ÓLEO MOTO", "FRETE", "DIESEL", "ETANOL"].some(k => d.includes(k))) {
-    return "TRANSP";
-  }
+  const d = semAcento(desc);
+  // "MISTURADOR" (equipamento) não é "MISTURA" (alimentação). Palavras inteiras evitam
+  // falsos positivos como ANGELO (GELO) ou CAPAO (PAO).
+  if (REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR")) return "ALIM";
+  if (REGEX_TRANSPORTE.test(d)) return "TRANSP";
   return tipoEscolhido || "OUTROS";
 }
 
+// Sugere a categoria pelo que foi digitado (a pessoa só confirma ou troca)
+function sugerirCategoriaPorDescricao(desc) {
+  const d = semAcento(desc);
+  if (d.trim().length < 3) return "";
+  if (REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR")) return "OUTROS";
+  if (REGEX_TRANSPORTE.test(d)) return "OUTROS";
+  if (/\b(DIARIA|DIARIAS|DIARISTA|PEDREIRO|SERVENTE|AJUDANTE|EMPREITA|FOLHA|MAO DE OBRA|ELETRICISTA|ENCANADOR|PINTOR|DEMOLICAO|SALARIO|ADIANTAMENTO)\b/.test(d)) return "MO";
+  if (/\b(LOCACAO|ALUGUEL|ANDAIME|CONTEINER|BETONEIRA|MARTELETE|MISTURADOR|REFLETOR)\b/.test(d)) return "EQUIP";
+  if (/\b(ART|TAXA|TAXAS|IMPOSTO|COMISSAO|CARTORIO|ALVARA)\b/.test(d)) return "OUTROS";
+  if (/\b(CIMENTO|AREIA|BRITA|TIJOLO|BLOCO|CERAMICA|ARGAMASSA|REJUNTE|TINTA|PREGO|TUBO|TUBULACAO|CABO|FIO|MATERIAL|MATERIAIS|PEDRA|TELHA|MADEIRA|FERRO|PARAFUSO|DISCO|AC3|FERRAMENTA|FERRAMENTAS)\b/.test(d)) return "MAT";
+  return "";
+}
 function normalizarTipoOficial(tipoEscolhido) {
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return "OUTROS";
   return tipoEscolhido;
@@ -483,10 +578,20 @@ function avaliarSituacaoFinanceira(obra, m) {
     };
   }
 
+  if (!(m.tetoTotal > 0)) {
+    return {
+      codigo: "SEM_TETO",
+      rotulo: "Atenção • Defina o Teto de Custos",
+      corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
+      corDot: "bg-[#FF8C00]",
+      corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
+    };
+  }
+
   if (m.saldoProjetadoFinal < 0) {
     return {
       codigo: "RISCO_PREJUIZO",
-      rotulo: `Risco de Prejuízo (${formatBRL(m.saldoProjetadoFinal)} prev.)`,
+      rotulo: `Risco de Prejuízo (${formatBRL(m.saldoProjetadoFinal)} no cenário)`,
       corBadgeDesktop: "bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]",
       corDot: "bg-rose-600",
       corCardDesktop: "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs"
@@ -506,7 +611,7 @@ function avaliarSituacaoFinanceira(obra, m) {
   if (m.tetoTotal > 0 && m.custoTotalProjetado > m.tetoTotal) {
     return {
       codigo: "VIAVEL_ACIMA_TETO",
-      rotulo: `Viável • Acima do Teto (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+      rotulo: `Viável • Acima do Teto (+${m.margemProjetadaFinalPerc.toFixed(1)}% no custo projetado)`,
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -516,7 +621,7 @@ function avaliarSituacaoFinanceira(obra, m) {
   if (m.margemProjetadaFinalPerc < 10) {
     return {
       codigo: "MARGEM_APERTADA",
-      rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+      rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -525,7 +630,7 @@ function avaliarSituacaoFinanceira(obra, m) {
 
   return {
     codigo: "OBRA_SAUDAVEL",
-    rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}% prev.)`,
+    rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
     corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
     corDot: "bg-[#16A34A]",
     corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -663,7 +768,7 @@ function calcularMetricasObra(obra) {
   const receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida;
   const receitaContratoBruta = medBrutaTotalContrato > 0 ? medBrutaTotalContrato : medBrutaRecebida;
 
-  // 6. Lucro Previsto Final e Margem Projetada
+  // 6. Lucro se gastar todo o orçamento (cenário de teto, NÃO é previsão de ritmo de gastos)
   const saldoProjetadoFinal = arredondarMoeda(receitaContratoTotal - custoTotalProjetado);
   const margemProjetadaFinalPerc = receitaContratoTotal > 0
     ? (saldoProjetadoFinal / receitaContratoTotal) * 100
@@ -843,7 +948,7 @@ function atualizarTudo() {
   if (mobMargemProj) {
     if (isEmAndamento) {
       const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : "";
-      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada${notaTeto}`;
+      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto${notaTeto}`;
       mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
     } else {
       mobMargemProj.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% final realizada`;
@@ -904,7 +1009,7 @@ function atualizarTudo() {
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   if (badgeTeto) {
-    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% projetada`;
+    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% no teto`;
     badgeTeto.className = m.saldoProjetadoFinal >= 0
       ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
       : "text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
@@ -912,7 +1017,9 @@ function atualizarTudo() {
 
   const kpiTetoSub = document.getElementById("kpiTetoSub");
   if (kpiTetoSub) {
-    if (m.excessoTetoProjetado > 0) {
+    if (!(m.tetoTotal > 0)) {
+      kpiTetoSub.textContent = "Defina o teto de custos para calcular o lucro";
+    } else if (m.excessoTetoProjetado > 0) {
       kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} (Acima do teto de ${formatBRL(m.tetoTotal)})`;
     } else {
       kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} | Teto: ${formatBRL(m.tetoTotal)}`;
@@ -975,10 +1082,10 @@ function renderizarMiniCards(m) {
     <div class="ed-card p-4 hover:border-[#4395D8] transition">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${c.dot}"></span>
-        <span class="text-[11px] font-bold uppercase tracking-wider text-[#6C757D]">${c.label}</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-[#6C757D]">${c.label}</span>
       </div>
       <div class="font-display text-base sm:text-lg font-extrabold text-[#23396B] mt-1.5">${formatBRL(c.val)}</div>
-      <div class="text-[11px] text-[#6C757D] mt-0.5 truncate" title="${c.sub}">${c.sub}</div>
+      <div class="text-xs text-[#6C757D] mt-0.5 truncate" title="${c.sub}">${c.sub}</div>
     </div>
   `).join("");
 }
@@ -1435,6 +1542,7 @@ function aplicarSugestaoRapida(descricao, tipo, subtipo) {
 }
 
 function checarDuplicidadeAoDigitar() {
+  sugerirCategoriaRapida();
   atualizarPreviewSubtipoRapido();
 
   const aviso = document.getElementById("avisoDuplicidadeRapido");
@@ -1533,8 +1641,9 @@ function abrirModalLancamentoRapido() {
   selecionarTitularRapido("EMTEC", false);
   selecionarStatusReembolsoRapido("NAO_REEMBOLSAVEL");
 
-  // Não seleciona categoria por padrão para evitar classificação errada inadvertida
+  // Categoria é sugerida pela descrição (ou escolhida em 1 toque); começa sem escolha
   categoriaRapidaAtiva = "";
+  categoriaRapidaManual = false;
   ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (btn) btn.className = "py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
@@ -1680,8 +1789,18 @@ function selecionarStatusReembolsoRapido(status) {
   });
 }
 
-function selecionarCategoriaRapida(tipo) {
+let categoriaRapidaManual = false;
+
+function sugerirCategoriaRapida() {
+  if (categoriaRapidaManual) return;
+  const desc = document.getElementById("lancRapidoDescricao")?.value || "";
+  const sug = sugerirCategoriaPorDescricao(desc);
+  if (sug && sug !== categoriaRapidaAtiva) selecionarCategoriaRapida(sug, false);
+}
+
+function selecionarCategoriaRapida(tipo, manual = true) {
   categoriaRapidaAtiva = tipo;
+  if (manual) categoriaRapidaManual = true;
   ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (!btn) return;
@@ -1803,6 +1922,7 @@ function salvarLancamentoRapido(e) {
       const emp = obra.empreitas.find(e => e.id === empreitaId);
       if (emp) {
         emp.valorPago = Number(emp.valorPago || 0) + valor;
+        tocar(emp);
       }
     }
     mostrarNotificacaoToast(`Despesa de ${formatBRL(valor)} salva (${getNomeResponsavel(titular)})!`);
@@ -1945,6 +2065,7 @@ function salvarLancamentoDesktop(e) {
       const emp = obra.empreitas.find(e => e.id === empreitaId);
       if (emp) {
         emp.valorPago = Number(emp.valorPago || 0) + valor;
+        tocar(emp);
       }
     }
   }
@@ -2024,29 +2145,29 @@ function renderizarAbaMedicoes(obra, m) {
           <div class="flex items-center justify-between gap-2">
             <span class="font-bold text-sm text-[#23396B] leading-snug">${med.titulo}</span>
             <button onclick="alternarStatusMedicao('${med.id}')"
-              class="px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E] border border-amber-300"}">
+              class="px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${isRec ? "bg-[#DCFCE7] text-[#14532D]" : "bg-[#FEF3C7] text-[#92400E] border border-amber-300"}">
               ${isRec ? "Recebida na Conta" : "A Receber (Prevista)"}
             </button>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 text-xs">
             <div>
-              <span class="text-[#64748B] block text-[10px] font-bold uppercase">Bruto Faturado</span>
+              <span class="text-[#64748B] block text-xs font-bold uppercase">Bruto Faturado</span>
               <span class="font-bold text-[#23396B]">${formatBRL(bruto)}</span>
             </div>
             <div>
-              <span class="text-[#64748B] block text-[10px] font-bold uppercase">Retenção NF</span>
+              <span class="text-[#64748B] block text-xs font-bold uppercase">Retenção NF</span>
               <span class="font-semibold text-[#64748B]">-${desc}%</span>
             </div>
             <div class="col-span-2 sm:col-span-1">
-              <span class="text-[10px] font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
+              <span class="text-xs font-bold uppercase block ${isRec ? "text-[#16A34A]" : "text-amber-700"}">
                 ${isRec ? "Líquido Recebido" : "Líquido a Receber"}
               </span>
               <span class="font-display text-base font-extrabold ${isRec ? "text-[#16A34A]" : "text-amber-600"}">${formatBRL(liq)}</span>
             </div>
           </div>
 
-          ${med.observacao ? `<div class="text-[11px] text-[#64748B] italic">${med.observacao}</div>` : ""}
+          ${med.observacao ? `<div class="text-xs text-[#64748B] italic">${med.observacao}</div>` : ""}
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
             <button onclick="alternarStatusMedicao('${med.id}')" class="text-xs font-bold text-[#4395D8] px-2.5 py-1 rounded-xl bg-blue-50 active:bg-blue-100 transition">
@@ -2220,10 +2341,10 @@ function renderizarAbaResumo(obra, m) {
         <div class="flex items-center justify-between">
           <div>
             <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
-            <span class="block text-[11px] text-[#64748B]">${c.nota}</span>
+            <span class="block text-xs text-[#64748B]">${c.nota}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-[11px] font-semibold uppercase text-[#6C757D]">Teto R$:</span>
+            <span class="text-xs font-semibold uppercase text-[#6C757D]">Teto R$:</span>
             <input type="number" step="100" data-orc-key="${c.key}" value="${teto}"
               class="w-28 rounded-xl border border-[#CBD5E1] px-2.5 py-1 text-xs font-bold text-right bg-white text-[#23396B]" />
           </div>
@@ -2289,12 +2410,20 @@ function renderizarAbaResumo(obra, m) {
 function salvarTetosOrcamento() {
   const obra = getObraAtual();
   if (!obra.orcamentoPrevisto) obra.orcamentoPrevisto = {};
-  delete obra.orcamentoPrevisto.ALIM;
-  delete obra.orcamentoPrevisto.TRANSP;
+  const novos = {};
   document.querySelectorAll("[data-orc-key]").forEach(inp => {
     const k = inp.getAttribute("data-orc-key");
-    obra.orcamentoPrevisto[k] = parseFloat(inp.value || 0);
+    novos[k] = Math.max(0, parseFloat(inp.value || 0) || 0);
   });
+  const totalTetos = Object.values(novos).reduce((a, b) => a + b, 0);
+  if (totalTetos <= 0) {
+    alert("Informe o limite de gasto (teto) de pelo menos uma categoria. Sem ele o sistema não consegue calcular o lucro se gastar todo o orçamento.");
+    return;
+  }
+  delete obra.orcamentoPrevisto.ALIM;
+  delete obra.orcamentoPrevisto.TRANSP;
+  Object.assign(obra.orcamentoPrevisto, novos);
+  tocar(obra);
   salvarEstado();
   atualizarTudo();
   mostrarNotificacaoToast("Limites orçamentários atualizados.");
@@ -2609,8 +2738,19 @@ function criarNovaObra(e) {
   const valorContrato = parseFloat(document.getElementById("novaObraValorContrato")?.value || 0);
   const tetoCusto = parseFloat(document.getElementById("novaObraTetoCusto")?.value || 0);
 
+  if (!nome) {
+    alert("Informe o nome da obra.");
+    return;
+  }
+  if (!(tetoCusto > 0)) {
+    alert("Informe o teto de custo da obra (quanto você pretende gastar no máximo). Ele é obrigatório para o cálculo de lucro.");
+    document.getElementById("novaObraTetoCusto")?.focus();
+    return;
+  }
+
   const nova = {
     id: "obra-" + Date.now(),
+    atualizadoEm: new Date().toISOString(),
     nome,
     cliente,
     status: "Em Andamento",
@@ -2680,6 +2820,7 @@ function importarBackupJSON(e) {
     try {
       const parsed = JSON.parse(evt.target.result);
       if (parsed && Array.isArray(parsed.obras)) {
+        if (!confirm("Importar este backup? Nada será apagado: os dados do backup são mesclados com os que já estão na nuvem (vale o registro mais recente).")) return;
         estado = sanearDadosCarregados(parsed);
         obraAtualId = estado.obras[0]?.id || "";
         salvarEstado();
@@ -2693,31 +2834,6 @@ function importarBackupJSON(e) {
     }
   };
   reader.readAsText(file);
-}
-
-function resetarDadosOriginais() {
-  const confirmacao = prompt(
-    "ATENÇÃO: Esta ação substitui os lançamentos locais pela base inicial de testes.\n\nUm backup automático dos seus dados atuais será baixado antes.\n\nPara confirmar, digite RESTAURAR:"
-  );
-  if (!confirmacao || confirmacao.trim().toUpperCase() !== "RESTAURAR") {
-    mostrarNotificacaoToast("Restauração cancelada. Seus dados foram preservados.");
-    return;
-  }
-
-  try {
-    exportarBackupJSON();
-  } catch (e) {
-    console.warn("Aviso ao gerar backup preventivo:", e);
-  }
-
-  localStorage.removeItem(STORAGE_KEY);
-  estado = sanearDadosCarregados(JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA)));
-  obraAtualId = estado.obras[0].id;
-  salvarEstado();
-  renderizarSeletorObras();
-  atualizarTudo();
-  fecharModalNuvem();
-  mostrarNotificacaoToast("Base inicial restaurada (backup anterior salvo).");
 }
 
 function exportarExcelObra() {
@@ -2752,8 +2868,8 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Reembolsos Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.totalReembolsosPendentes },
     { "INDICADOR DA OBRA": "Custo Final Projetado da Obra (R$)", "VALOR / INFORMAÇÃO": m.custoTotalProjetado },
     { "INDICADOR DA OBRA": "Limite Orçamentário Planejado (Teto) (R$)", "VALOR / INFORMAÇÃO": m.tetoTotal },
-    { "INDICADOR DA OBRA": "Lucro Previsto Final da Obra (R$)", "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
-    { "INDICADOR DA OBRA": "Margem Final Projetada (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
+    { "INDICADOR DA OBRA": "Lucro se gastar todo o orçamento (Receita líquida - Teto) (R$)", "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
+    { "INDICADOR DA OBRA": "Margem se gastar todo o orçamento (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
   ];
 
   const rowsLanc = (obra.lancamentos || [])
@@ -2869,23 +2985,39 @@ function inicializarApp() {
     }
   });
 
-  // Sincronização inicial com a nuvem
-  sincronizarComNuvem(true);
+  // Sem PIN válido neste aparelho: pede entrada antes de qualquer sincronização
+  if (!verificarAuth()) {
+    exigirLogin();
+  } else {
+    if (temPendencia()) atualizarBadgeNuvem("pending");
+    sincronizarComNuvem();
+    iniciarSincronizacaoPeriodica();
+  }
 
-  // Sincronização periódica a cada 40 segundos
-  setInterval(() => {
-    sincronizarComNuvem(true);
-  }, 40000);
-
-  // Sincronizar ao focar na janela (ex: voltando ao app no smartphone)
-  window.addEventListener("focus", () => {
-    sincronizarComNuvem(true);
+  // Sincronizar ao voltar para o app (ex: reabrir no celular)
+  window.addEventListener("focus", () => sincronizarComNuvem());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") sincronizarComNuvem();
   });
 
-  // Escutar eventos de reconexão de internet
-  window.addEventListener("online", () => {
-    sincronizarComNuvem(false);
+  // Quando a internet volta, enviar o que ficou guardado no aparelho
+  window.addEventListener("online", () => sincronizarComNuvem());
+  window.addEventListener("offline", () => {
+    if (temPendencia()) atualizarBadgeNuvem("pending");
   });
+
+  // Aviso se tentar fechar com alterações ainda não enviadas
+  window.addEventListener("beforeunload", (ev) => {
+    if (temPendencia() && navigator.onLine === false) {
+      ev.preventDefault();
+      ev.returnValue = "";
+    }
+  });
+
+  // Uso sem internet: guarda a página e os scripts no aparelho
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
 }
 
 window.addEventListener("DOMContentLoaded", inicializarApp);

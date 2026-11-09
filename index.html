@@ -10,35 +10,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Chart.js & SheetJS para Excel -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            display: ['"Sora"', 'sans-serif'],
-          },
-          colors: {
-            cr: {
-              navy: '#23396B',
-              blue: '#4395D8',
-              orange: '#FF8C00',
-              green: '#16A34A',
-              dark: '#0F172A',
-              light: '#F8FAFC'
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <!-- Estilos e bibliotecas locais (funcionam sem internet) -->
+  <link rel="icon" type="image/png" href="/logo-emtec.png" />
+  <link rel="apple-touch-icon" href="/logo-emtec.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/vendor/chart.umd.js"></script>
+  <script src="/vendor/xlsx.full.min.js"></script>
+  <meta name="theme-color" content="#23396B" />
 
   <style>
     :root {
@@ -99,7 +77,7 @@
 
     /* Eyebrow (.ed-eyebrow) */
     .ed-eyebrow {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.14em;
@@ -120,7 +98,7 @@
     }
 
     .ed-eyebrow-light {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.14em;
@@ -271,8 +249,8 @@
   <!-- ===================================================================== -->
   <div id="modalPerfilUsuario" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 border border-[#CBD5E1] shadow-2xl">
-      <div class="w-12 h-12 rounded-2xl bg-[#23396B] text-white flex items-center justify-center mx-auto text-lg font-extrabold shadow-md">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      <div class="flex items-center justify-center pt-1">
+        <img src="/logo-emtec.png" alt="EMTEC Obras" class="h-10 sm:h-11 w-auto object-contain select-none" />
       </div>
       <div>
         <h3 class="font-display text-lg font-extrabold text-[#23396B]">Quem está acessando?</h3>
@@ -284,22 +262,23 @@
           class="p-3.5 rounded-2xl border-2 border-[#FF8C00] bg-[#FF8C00]/10 flex flex-col items-center gap-1 transition">
           <span class="w-9 h-9 rounded-full bg-[#FF8C00] text-[#0F172A] flex items-center justify-center font-extrabold text-sm">P</span>
           <span class="font-display font-extrabold text-sm text-[#23396B]">Pilar</span>
-          <span class="text-[10px] text-[#64748B] font-semibold">Financeiro</span>
+          <span class="text-xs text-[#64748B] font-semibold">Financeiro</span>
         </button>
 
         <button type="button" onclick="selecionarPerfilCard('Melo')" id="cardPerfilMelo"
           class="p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:border-[#23396B] flex flex-col items-center gap-1 transition">
           <span class="w-9 h-9 rounded-full bg-[#23396B] text-white flex items-center justify-center font-extrabold text-sm">M</span>
           <span class="font-display font-extrabold text-sm text-[#23396B]">Melo</span>
-          <span class="text-[10px] text-[#64748B] font-semibold">Engenheiro / Obra</span>
+          <span class="text-xs text-[#64748B] font-semibold">Engenheiro / Obra</span>
         </button>
       </div>
 
       <div class="pt-1 text-left space-y-1.5">
-        <label class="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider">PIN de Acesso (Segurança)</label>
-        <input type="password" id="inputPinPerfil" maxlength="6" inputmode="numeric" placeholder="1234" value="1234"
-          class="w-full text-center tracking-[0.4em] text-lg font-extrabold rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
-        <p id="erroPinPerfil" class="hidden text-xs text-rose-600 font-bold text-center">PIN incorreto. (Padrão: 1234)</p>
+        <label for="inputPinPerfil" class="block text-xs font-bold text-[#64748B] uppercase tracking-wider">PIN de acesso</label>
+        <input type="password" id="inputPinPerfil" maxlength="12" inputmode="numeric" autocomplete="current-password" placeholder="Digite o PIN" value=""
+          onkeydown="if(event.key==='Enter'){confirmarPerfilUsuario();}"
+          class="w-full text-center tracking-[0.3em] text-lg font-extrabold rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
+        <p id="erroPinPerfil" class="hidden text-xs text-rose-600 font-bold text-center" role="alert">PIN incorreto.</p>
       </div>
 
       <label class="flex items-center justify-center gap-2 text-xs text-[#475569] cursor-pointer">
@@ -307,9 +286,10 @@
         <span>Lembrar neste aparelho</span>
       </label>
 
-      <button onclick="confirmarPerfilUsuario()" class="ed-btn w-full py-2.5 text-sm font-extrabold shadow-md">
+      <button id="btnEntrarPerfil" onclick="confirmarPerfilUsuario()" class="ed-btn w-full py-2.5 text-sm font-extrabold shadow-md">
         Entrar no Sistema
       </button>
+      <button type="button" id="btnFecharPerfil" onclick="fecharModalPerfil()" class="hidden w-full text-xs font-bold text-[#64748B] py-1.5">Cancelar</button>
     </div>
   </div>
 
@@ -319,45 +299,34 @@
   <!-- TOP HEADER -->
   <!-- ===================================================================== -->
   <header class="ed-header no-print">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
       
       <!-- Logo & Cloud Sync Status -->
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2.5">
-          <svg width="36" height="36" viewBox="0 0 40 40" fill="none" class="shrink-0">
-            <rect width="40" height="40" rx="10" fill="#23396B"/>
-            <path d="M10 13H28M10 20H22M10 27H28" stroke="#4395D8" stroke-width="2.5" stroke-linecap="round"/>
-            <rect x="25.5" y="17.5" width="5.5" height="5.5" rx="1" fill="#FF8C00"/>
-          </svg>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-display font-extrabold text-base tracking-tight text-[#23396B]">EMTEC</span>
-              <span class="text-[10px] font-bold uppercase tracking-widest text-[#FF8C00] border-l border-[#CBD5E1] pl-2">Obras</span>
-            </div>
-            <p class="hidden sm:block text-[11px] text-[#64748B] font-medium leading-none mt-0.5">Centro de Custos e Viabilidade</p>
-          </div>
-        </div>
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+        <a href="#topo" onclick="mudarAba('resumo'); return false;" class="flex items-center shrink-0 focus:outline-none" title="EMTEC Obras — Início">
+          <img src="/logo-emtec.png" alt="EMTEC | OBRAS" class="h-6 sm:h-8 md:h-9 w-auto max-w-[130px] sm:max-w-[180px] md:max-w-[205px] object-contain select-none" />
+        </a>
 
         <!-- Indicador Real de Nuvem (Desktop) — separado em status + hora -->
         <div id="cloudBadge" class="hidden md:flex flex-col items-start gap-0.5 px-3 py-1 rounded-2xl bg-[#F8FAFC] border border-[#CBD5E1]">
-          <span id="cloudBadgeStatus" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#16A34A]">
+          <span id="cloudBadgeStatus" class="inline-flex items-center gap-1.5 text-xs font-bold text-[#16A34A]">
             <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
           </span>
-          <span id="cloudBadgeHora" class="text-[10px] text-[#64748B] font-medium leading-none hidden"></span>
+          <span id="cloudBadgeHora" class="text-xs text-[#64748B] font-medium leading-none hidden"></span>
         </div>
       </div>
 
       <!-- Obra Selector & Botões de Ação -->
-      <div class="flex items-center gap-1.5 sm:gap-2">
-        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 min-w-[130px] max-w-[190px] sm:max-w-xs">
-          <span class="hidden sm:inline text-[10px] uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2 sm:px-3 py-1.5 min-w-[105px] max-w-[155px] sm:max-w-xs">
+          <span class="hidden sm:inline text-xs uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
           <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1 w-full">
           </select>
         </div>
 
         <!-- Perfil do Usuário Ativo (Melo / Pilar) -->
         <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B]" title="Clique para alternar entre Melo e Pilar">
-          <span id="avatarUsuarioPill" class="w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-[10px] flex items-center justify-center">P</span>
+          <span id="avatarUsuarioPill" class="w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center">P</span>
           <span id="nomeUsuarioPill" class="hidden sm:inline">Pilar</span>
         </button>
 
@@ -463,11 +432,11 @@
           <div class="text-xs text-emerald-100/90 mt-1" id="kpiSaldoSub">Receita líquida recebida − despesas pagas</div>
         </div>
 
-        <!-- KPI 4: Lucro Previsto Final (Margem Projetada) -->
+        <!-- KPI 4: Lucro se gastar todo o orçamento (cenário de teto) -->
         <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between text-white/80">
-            <span class="text-xs font-bold uppercase tracking-wider">Lucro Previsto Final</span>
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiTetoPercBadge">+0.0% projetada</span>
+            <span class="text-xs font-bold uppercase tracking-wider leading-tight">Lucro se gastar todo o orçamento</span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiTetoPercBadge">+0.0% no teto</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiTetoValor">R$ 0,00</div>
           <div class="text-xs text-white/80 mt-1" id="kpiTetoSub">Descontando empreitas e custos previstos</div>
@@ -528,7 +497,7 @@
             <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-xs font-bold text-[#16A34A]">
               <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
             </span>
-            <span id="cloudBadgeMobHora" class="text-[11px] text-[#64748B] font-medium leading-none hidden"></span>
+            <span id="cloudBadgeMobHora" class="text-xs text-[#64748B] font-medium leading-none hidden"></span>
           </span>
         </div>
 
@@ -549,34 +518,34 @@
           <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span class="text-xs font-bold uppercase text-[#64748B] block">Contratado (Líq.)</span>
             <span id="mobReceitaContratada" class="font-display text-sm font-extrabold text-[#23396B] block mt-0.5">R$ 89.540,00</span>
-            <span id="mobContratoBrutoSub" class="text-[11px] text-[#64748B] block mt-0.5">Bruto: R$ 96.800,00</span>
+            <span id="mobContratoBrutoSub" class="text-xs text-[#64748B] block mt-0.5">Bruto: R$ 96.800,00</span>
           </div>
           <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span class="text-xs font-bold uppercase text-[#64748B] block">Efetiv. Recebido</span>
             <span id="mobReceitaLiq" class="font-display text-sm font-extrabold text-[#16A34A] block mt-0.5">R$ 89.540,00</span>
-            <span id="mobAReceberSub" class="text-[11px] text-[#64748B] block mt-0.5">A receber: R$ 0,00</span>
+            <span id="mobAReceberSub" class="text-xs text-[#64748B] block mt-0.5">A receber: R$ 0,00</span>
           </div>
           <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span class="text-xs font-bold uppercase text-[#64748B] block">Despesas Pagas</span>
             <span id="mobCustoReal" class="font-display text-sm font-extrabold text-[#0F172A] block mt-0.5">R$ 68.704,19</span>
-            <span id="mobTetoSub" class="text-[11px] text-[#64748B] block mt-0.5">Teto: R$ 77.000,00</span>
+            <span id="mobTetoSub" class="text-xs text-[#64748B] block mt-0.5">Teto: R$ 77.000,00</span>
           </div>
           <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span class="text-xs font-bold uppercase text-[#64748B] block">Pagam. Pendentes</span>
             <span id="mobPagamentosPendentes" class="font-display text-sm font-extrabold text-[#FF8C00] block mt-0.5">R$ 9.500,00</span>
-            <span id="mobPendenciasSub" class="text-[11px] text-[#64748B] block mt-0.5">Empreiteiros + Reemb.</span>
+            <span id="mobPendenciasSub" class="text-xs text-[#64748B] block mt-0.5">Empreiteiros + Reemb.</span>
           </div>
         </div>
 
         <!-- Lucro Previsto até o Fim da Obra -->
         <div class="p-3.5 rounded-xl bg-[#23396B]/5 border border-[#23396B]/15 text-xs space-y-1">
           <div class="flex items-center justify-between">
-            <span class="font-bold uppercase tracking-wider text-[#23396B]">Lucro Previsto Final:</span>
+            <span class="font-bold uppercase tracking-wider text-[#23396B]">Lucro se gastar todo o orçamento:</span>
             <span id="mobLucroPrevistoValor" class="font-display text-sm font-extrabold text-[#23396B]">R$ 11.335,81</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-[#475569]">Margem projetada (c/ empreitas):</span>
-            <span id="mobMargemProj" class="font-bold text-[#16A34A]">+12.7% projetada</span>
+            <span class="text-[#475569]">Margem se gastar o teto:</span>
+            <span id="mobMargemProj" class="font-bold text-[#16A34A]">+12.7% se gastar o teto</span>
           </div>
         </div>
 
@@ -1303,7 +1272,7 @@
           <div id="boxReembolsoRapido" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-[#23396B]">Precisa de reembolso?</span>
-              <span id="legendaReembolsoRapido" class="text-[11px] text-[#64748B]">Pago direto pela conta da obra</span>
+              <span id="legendaReembolsoRapido" class="text-xs text-[#64748B]">Pago direto pela conta da obra</span>
             </div>
             <div class="grid grid-cols-3 gap-1.5">
               <button type="button" id="btnReembRapido_NAO_REEMBOLSAVEL" onclick="selecionarStatusReembolsoRapido('NAO_REEMBOLSAVEL')"
@@ -1379,12 +1348,12 @@
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#23396B] border-t border-[#4395D8]/30 px-2 pt-2 pb-safe flex items-center justify-around shadow-2xl backdrop-blur-md no-print">
     <button onclick="mudarAba('resumo')" id="navMobResumo" class="flex flex-col items-center gap-1 text-[#FF8C00] font-bold transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-      <span class="text-[11px] font-bold uppercase tracking-wider">Obra</span>
+      <span class="text-xs font-bold">Obra</span>
     </button>
 
     <button onclick="mudarAba('lancamentos')" id="navMobLanc" class="flex flex-col items-center gap-1 text-white/70 hover:text-white transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-      <span class="text-[11px] font-bold uppercase tracking-wider">Despesas</span>
+      <span class="text-xs font-bold">Despesas</span>
     </button>
 
     <!-- Botão Central Flutuante (+) -->
@@ -1394,12 +1363,12 @@
 
     <button onclick="mudarAba('medicoes')" id="navMobMed" class="flex flex-col items-center gap-1 text-white/70 hover:text-white transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      <span class="text-[11px] font-bold uppercase tracking-wider">Recebimentos</span>
+      <span class="text-xs font-bold">Medições</span>
     </button>
 
     <button onclick="mudarAba('mais')" id="navMobMais" class="flex flex-col items-center gap-1 text-white/70 hover:text-white transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-      <span class="text-[11px] font-bold uppercase tracking-wider">Mais</span>
+      <span class="text-xs font-bold">Mais</span>
     </button>
   </nav>
 
@@ -1444,8 +1413,8 @@
             <input type="number" step="100" id="novaObraValorContrato" placeholder="Ex: 50000" inputmode="decimal" class="ed-input" />
           </div>
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Teto Máximo Custo R$</label>
-            <input type="number" step="100" id="novaObraTetoCusto" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Teto de custo R$ * (obrigatório)</label>
+            <input type="number" step="100" id="novaObraTetoCusto" required min="1" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
           </div>
         </div>
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -1470,7 +1439,7 @@
       </div>
 
       <p class="text-xs text-[#475569] leading-relaxed">
-        Este sistema utiliza persistência em nuvem Vercel Blob com cache offline no aparelho. O Melo no canteiro de obras e a Pilar no computador ou celular acessam os mesmos dados sincronizados.
+        As despesas ficam salvas no aparelho na hora e são enviadas para a nuvem em seguida. Sem sinal na obra, nada se perde: o envio acontece sozinho quando a internet voltar. Melo e Pilar enxergam os mesmos dados.
       </p>
 
       <div class="space-y-2.5 pt-2">
@@ -1488,21 +1457,7 @@
           <input type="file" accept=".json" onchange="importarBackupJSON(event)" class="hidden" />
         </label>
 
-        <!-- Área de Manutenção e Testes Isolada (Evita perda acidental de dados no uso cotidiano) -->
-        <details class="pt-3 mt-3 border-t border-slate-200 group">
-          <summary class="text-xs font-bold text-[#64748B] hover:text-[#23396B] cursor-pointer select-none flex items-center justify-between">
-            <span>⚙️ Área de Manutenção e Testes (Avançado)</span>
-            <span class="group-open:rotate-180 transition-transform">▼</span>
-          </summary>
-          <div class="mt-3 p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-2.5">
-            <p class="text-xs text-rose-800 leading-relaxed">
-              <strong>Atenção:</strong> A opção abaixo substitui os lançamentos locais pela base inicial de fábrica. Um backup automático (.json) será baixado antes da restauração.
-            </p>
-            <button type="button" onclick="resetarDadosOriginais()" class="w-full py-2 px-3 rounded-xl text-xs font-extrabold text-rose-700 bg-white border border-rose-300 hover:bg-rose-100 transition">
-              Restaurar Base Inicial de Testes (Requer Confirmação)
-            </button>
-          </div>
-        </details>
+        <p class="text-xs text-[#64748B] pt-2">Dica: exporte o backup (.json) de vez em quando e guarde no celular ou no e-mail.</p>
       </div>
     </div>
   </div>
