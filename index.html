@@ -1322,8 +1322,8 @@
             </button>
           </div>
 
-          <!-- Controle Explícito de Reembolso (Evita considerar automaticamente todo gasto como reembolso pendente) -->
-          <div id="boxReembolsoRapido" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+          <!-- Controle Explícito de Reembolso (Exibido quando quem pagou não é a conta EMTEC) -->
+          <div id="boxReembolsoRapido" class="hidden p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-[#23396B]">Precisa de reembolso?</span>
               <span id="legendaReembolsoRapido" class="text-xs text-[#64748B]">Pago direto pela conta da obra</span>
@@ -1387,10 +1387,12 @@
           </div>
         </div>
 
-        <!-- 6. Botão Salvar com Destaque Máximo -->
-        <button type="submit" class="ed-btn w-full py-3.5 text-sm sm:text-base font-extrabold shadow-xl">
-          <span id="btnSalvarLancRapidoTexto">Salvar Despesa Agora</span>
-        </button>
+        <!-- 6. Botão Salvar com Destaque Máximo (Fixo na base do modal no celular) -->
+        <div class="sticky bottom-0 pt-2 pb-1 bg-white">
+          <button type="submit" class="ed-btn w-full py-3.5 text-sm sm:text-base font-extrabold shadow-xl">
+            <span id="btnSalvarLancRapidoTexto">Salvar Despesa Agora</span>
+          </button>
+        </div>
       </form>
 
     </div>
@@ -1430,7 +1432,7 @@
   <!-- TOAST NOTIFICATION -->
   <!-- ===================================================================== -->
   <div id="toastFeedback" class="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 hidden items-center gap-2 px-4 py-3 rounded-2xl bg-[#0F172A] text-white text-xs font-bold shadow-2xl border border-[#4395D8]/40 transition-all">
-    ✅ Ação realizada com sucesso!
+    Ação realizada com sucesso!
   </div>
 
   <!-- ===================================================================== -->

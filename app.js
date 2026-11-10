@@ -1709,6 +1709,9 @@ function abrirModalLancamentoRapido() {
   const selSub = document.getElementById("lancRapidoSubtipo");
   if (selSub) selSub.value = "AUTO";
 
+  const selMov = document.getElementById("lancRapidoMovimento");
+  if (selMov) selMov.value = "SAIDA";
+
   // Seleciona EMTEC por padrão em 1 toque (sem reembolso)
   selecionarTitularRapido("EMTEC", false);
   selecionarStatusReembolsoRapido("NAO_REEMBOLSAVEL");
@@ -1778,6 +1781,9 @@ function abrirEdicaoRapida(id) {
   const selEmp = document.getElementById("lancRapidoEmpreitaId");
   if (selEmp) selEmp.value = item.empreitaId || "";
 
+  const selMov = document.getElementById("lancRapidoMovimento");
+  if (selMov) selMov.value = item.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : "SAIDA";
+
   const selSub = document.getElementById("lancRapidoSubtipo");
   if (selSub) {
     if (item.subtipoManual && item.subtipoManual !== "AUTO") {
@@ -1827,6 +1833,15 @@ function selecionarTitularRapido(titular, preservarReembolso = false) {
       btn.className = "py-2 px-1.5 rounded-xl text-center text-xs font-bold transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8] truncate";
     }
   });
+
+  const boxReemb = document.getElementById("boxReembolsoRapido");
+  if (boxReemb) {
+    if (titularRapidoAtivo === "EMTEC") {
+      boxReemb.classList.add("hidden");
+    } else {
+      boxReemb.classList.remove("hidden");
+    }
+  }
 
   if (!preservarReembolso) {
     const tipoResp = getTipoResponsavel(titularRapidoAtivo);
@@ -1923,13 +1938,16 @@ function salvarLancamentoRapido(e) {
   const subManualSelect = document.getElementById("lancRapidoSubtipo");
   const pagSelect = document.getElementById("lancRapidoPagamento");
   const empSelect = document.getElementById("lancRapidoEmpreitaId");
+  const movSelect = document.getElementById("lancRapidoMovimento");
 
   const rawVal = String(valorInput?.value || "").replace(",", ".");
   const valor = parseFloat(rawVal);
   const descricao = (descInput?.value || "").trim();
   const data = dataInput?.value || new Date().toISOString().split("T")[0];
   const titular = (titSelect?.value || titularRapidoAtivo || "EMTEC").toUpperCase();
-  const reembolsoStatus = reembSelect?.value || statusReembolsoRapidoAtivo || "NAO_REEMBOLSAVEL";
+  const movimento = movSelect?.value === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : "SAIDA";
+  const isEntrada = movimento === "ENTRADA_CAIXA";
+  const reembolsoStatus = isEntrada ? "NAO_REEMBOLSAVEL" : (reembSelect?.value || statusReembolsoRapidoAtivo || "NAO_REEMBOLSAVEL");
   const subtipoManual = subManualSelect?.value || "AUTO";
   const pagamento = pagSelect?.value || "PIX";
   const empreitaId = empSelect?.value || "";
@@ -1953,7 +1971,7 @@ function salvarLancamentoRapido(e) {
     return;
   }
 
-  const subtipo = detectarSubtipo(descricao, categoriaRapidaAtiva, subtipoManual);
+  const subtipo = isEntrada ? "ENTRADA_CAIXA" : detectarSubtipo(descricao, categoriaRapidaAtiva, subtipoManual);
   const hoje = new Date().toISOString().split("T")[0];
 
   if (idEdicao) {
@@ -1963,7 +1981,7 @@ function salvarLancamentoRapido(e) {
       if (!anterior.deletado && anterior.empreitaId && anterior.movimento !== "ENTRADA_CAIXA") {
         ajustarValorPagoEmpreita(obra, anterior.empreitaId, -Number(anterior.valor || 0));
       }
-      if (empreitaId) {
+      if (empreitaId && !isEntrada) {
         ajustarValorPagoEmpreita(obra, empreitaId, valor);
       }
       obra.lancamentos[idx] = {
@@ -1971,13 +1989,14 @@ function salvarLancamentoRapido(e) {
         descricao,
         tipo: categoriaRapidaAtiva,
         subtipo,
-        subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
+        subtipoManual: (!isEntrada && subtipoManual !== "AUTO") ? subtipoManual : undefined,
         valor,
         data,
         pagamento,
         titular,
         reembolsoStatus,
         reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? (anterior.reembolsadoEm || hoje) : undefined,
+        movimento,
         empreitaId: empreitaId || undefined,
         atualizadoEm: new Date().toISOString()
       };
@@ -1989,7 +2008,7 @@ function salvarLancamentoRapido(e) {
       descricao,
       tipo: categoriaRapidaAtiva,
       subtipo,
-      subtipoManual: subtipoManual !== "AUTO" ? subtipoManual : undefined,
+      subtipoManual: (!isEntrada && subtipoManual !== "AUTO") ? subtipoManual : undefined,
       valor,
       data,
       dataOriginal: data,
@@ -1997,7 +2016,7 @@ function salvarLancamentoRapido(e) {
       titular,
       reembolsoStatus,
       reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? hoje : undefined,
-      movimento: "SAIDA",
+      movimento,
       empreitaId: empreitaId || undefined,
       atualizadoEm: new Date().toISOString()
     };
