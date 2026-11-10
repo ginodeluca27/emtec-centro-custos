@@ -1327,15 +1327,23 @@ function formatarBadgeReembolso(item, compacto = false) {
   return "";
 }
 
-async function marcarReembolsoLancamento(id, novoStatus) {
-  const obra = getObraAtual();
+async function marcarReembolsoLancamento(id, novoStatus, idObra = obraAtualId) {
+  const obra = estado.obras.find(o => o.id === idObra);
   if (!obra) return;
   const anterior = (obra.lancamentos || []).find(l => l.id === id && !l.deletado);
   if (!anterior || anterior.movimento === "ENTRADA_CAIXA") return;
-  const data = novoStatus === "REEMBOLSADO" ? await pedirDataPagamento("Data do reembolso") : "";
+  const statusAnterior = anterior.reembolsoStatus;
+  const versaoAnterior = anterior.atualizadoEm;
+  if (statusAnterior === novoStatus) return;
+  const data = novoStatus === "REEMBOLSADO"
+    ? await pedirDataPagamento("Confirmar pagamento de " + formatBRL(anterior.valor) + " para " + getNomeResponsavel(anterior.titular))
+    : "";
   if (novoStatus === "REEMBOLSADO" && !data) return;
   const item = estado.obras.find(o => o.id === obra.id)?.lancamentos?.find(l => l.id === id && !l.deletado);
-  if (!item || item.reembolsoStatus !== anterior.reembolsoStatus) return;
+  if (!item || item.movimento === "ENTRADA_CAIXA" || item.reembolsoStatus !== statusAnterior || item.atualizadoEm !== versaoAnterior) {
+    mostrarNotificacaoToast("A despesa mudou. Confira os dados e tente novamente.");
+    return;
+  }
 
   item.reembolsoStatus = novoStatus;
   if (novoStatus === "REEMBOLSADO") {
@@ -1355,6 +1363,7 @@ async function marcarReembolsoLancamento(id, novoStatus) {
   } else {
     mostrarNotificacaoToast(`Status de reembolso atualizado.`);
   }
+  return true;
 }
 
 async function quitarReembolsosTitular(titularId) {
@@ -3260,32 +3269,77 @@ function linhasGeralObras() {
   return [...linhas, total];
 }
 
-function linhasRelatorioReembolsos() {
-  const obraId = document.getElementById("relReembObra").value;
-  const pessoa = document.getElementById("relReembPessoa").value;
-  const status = document.getElementById("relReembStatus").value;
-  const inicio = document.getElementById("relReembInicio").value;
-  const fim = document.getElementById("relReembFim").value;
+function filtrosRelatorioReembolsos() {
+  return {
+    obra: document.getElementById("relReembObra").value,
+    pessoa: document.getElementById("relReembPessoa").value,
+    inicio: document.getElementById("relReembInicio").value,
+    fim: document.getElementById("relReembFim").value,
+    situacao: document.querySelector(".reemb-vistas [aria-pressed='true']").dataset.situacaoReemb
+  };
+}
 
+function listarReembolsos({ obra: obraId, pessoa, inicio, fim }) {
   return estado.obras
     .filter(obra => !obraId || obra.id === obraId)
-    .flatMap(obra => (obra.lancamentos || []).filter(item => {
-      if (item.deletado || item.movimento === "ENTRADA_CAIXA") return false;
-      if (!["PENDENTE", "REEMBOLSADO"].includes(item.reembolsoStatus)) return false;
-      if (status && item.reembolsoStatus !== status) return false;
-      if (pessoa && (item.titular || "EMTEC").toUpperCase() !== pessoa) return false;
-      const data = item.reembolsoStatus === "REEMBOLSADO" ? item.reembolsadoEm : item.data;
-      return (!inicio || (data && data >= inicio)) && (!fim || (data && data <= fim));
-    }).map(item => ({
-      "Obra": obra.nome,
-      "Responsável": getNomeResponsavel(item.titular),
-      "Descrição": item.descricao,
-      "Data da despesa": item.data || "",
-      "Data da baixa": item.reembolsadoEm || "",
-      "Situação": item.reembolsoStatus === "REEMBOLSADO" ? "Pago" : "Pendente",
-      "Valor (R$)": Number(item.valor || 0)
-    })))
-    .sort((a, b) => (b["Data da baixa"] || b["Data da despesa"]).localeCompare(a["Data da baixa"] || a["Data da despesa"]));
+    .flatMap(obra => (obra.lancamentos || []).flatMap(item => {
+      if (item.deletado || item.movimento === "ENTRADA_CAIXA") return [];
+      if (!["PENDENTE", "REEMBOLSADO"].includes(item.reembolsoStatus)) return [];
+      if (pessoa && (item.titular || "EMTEC").toUpperCase() !== pessoa) return [];
+      const pago = item.reembolsoStatus === "REEMBOLSADO";
+      const data = pago ? item.reembolsadoEm : item.data;
+      if ((inicio && (!data || data < inicio)) || (fim && (!data || data > fim))) return [];
+      return [{ obra, item, pago, data: data || "" }];
+    }))
+    .sort((a, b) => b.data.localeCompare(a.data));
+}
+
+function reembolsosDaVista(registros, situacao) {
+  return situacao ? registros.filter(({ item }) => item.reembolsoStatus === situacao) : registros;
+}
+
+function linhasRelatorioReembolsos() {
+  const filtros = filtrosRelatorioReembolsos();
+  return reembolsosDaVista(listarReembolsos(filtros), filtros.situacao).map(({ obra, item, pago }) => ({
+    "Obra": obra.nome,
+    "Responsável": getNomeResponsavel(item.titular),
+    "Descrição": item.descricao,
+    "Data da despesa": item.data || "",
+    "Data da baixa": item.reembolsadoEm || "",
+    "Situação": pago ? "Pago" : "Pendente",
+    "Valor (R$)": Number(item.valor || 0)
+  }));
+}
+
+function selecionarVistaReembolso(botao) {
+  document.querySelectorAll("[data-situacao-reemb]").forEach(campo => {
+    campo.setAttribute("aria-pressed", String(campo === botao));
+  });
+  atualizarRelatorioReembolsos();
+}
+
+function limparFiltrosReembolso() {
+  ["relReembObra", "relReembPessoa", "relReembInicio", "relReembFim"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.querySelector(".reemb-periodo").open = false;
+  atualizarRelatorioReembolsos();
+}
+
+function abrirRelatorioReembolsoDaObra() {
+  mudarAba("reembolsos");
+  limparFiltrosReembolso();
+  document.getElementById("relReembObra").value = obraAtualId;
+  selecionarVistaReembolso(document.querySelector("[data-situacao-reemb='PENDENTE']"));
+}
+
+function abrirDespesasParaReembolso() {
+  const { obra, pessoa } = filtrosRelatorioReembolsos();
+  if (obra && obra !== obraAtualId) trocarObra(obra);
+  if (!getObraAtual()) return mudarAba("geral");
+  document.getElementById("filtroBusca").value = "";
+  document.getElementById("filtroCategoria").value = "TODOS";
+  filtrarPorResponsavel(pessoa || "TODOS");
 }
 
 function tabelaGerencial(linhas, consolidado = false, linksObras = false) {
@@ -3335,9 +3389,65 @@ function renderizarRelatoriosGerenciais() {
 }
 
 function atualizarRelatorioReembolsos() {
-  const linhas = linhasRelatorioReembolsos();
-  document.getElementById("tabelaRelReembolsos").innerHTML = tabelaGerencial(linhas);
-  document.getElementById("totaisRelReembolsos").textContent = resumoRelatorioReembolsos(linhas);
+  const filtros = filtrosRelatorioReembolsos();
+  const { obra, pessoa, inicio, fim, situacao } = filtros;
+  const periodoInvalido = inicio && fim && inicio > fim;
+  const registros = periodoInvalido ? [] : listarReembolsos(filtros);
+  const lista = reembolsosDaVista(registros, situacao);
+  const titulo = situacao === "PENDENTE" ? "A pagar" : situacao === "REEMBOLSADO" ? "Pagos" : "Todos";
+  const contar = quantidade => quantidade + (quantidade === 1 ? " reembolso" : " reembolsos");
+  const resumo = (status, totalId, qtdId) => {
+    const itens = reembolsosDaVista(registros, status);
+    document.getElementById(totalId).textContent = formatBRL(itens.reduce((soma, { item }) => soma + Number(item.valor || 0), 0));
+    document.getElementById(qtdId).textContent = contar(itens.length);
+  };
+  resumo("PENDENTE", "reembTotalPendente", "reembQtdPendente");
+  resumo("REEMBOLSADO", "reembTotalPago", "reembQtdPago");
+  document.getElementById("reembQtdTodos").textContent = contar(registros.length);
+  document.getElementById("totaisRelReembolsos").textContent = titulo + " · " + contar(lista.length);
+
+  const periodo = inicio && fim ? formatDataBR(inicio) + " a " + formatDataBR(fim)
+    : inicio ? "A partir de " + formatDataBR(inicio)
+      : fim ? "Até " + formatDataBR(fim) : "Todas as datas";
+  document.getElementById("relReembPeriodo").textContent = "Período · " + periodo;
+  const temFiltros = Boolean(obra || pessoa || inicio || fim);
+  document.getElementById("limparFiltrosReemb").hidden = !temFiltros;
+  document.querySelectorAll(".reemb-exportar button").forEach(botao => { botao.disabled = !lista.length; });
+
+  const container = document.getElementById("tabelaRelReembolsos");
+  if (lista.length) {
+    container.innerHTML = '<ul class="reemb-lista">' + lista.map(cartaoRelatorioReembolso).join("") + '</ul>';
+    return;
+  }
+
+  let mensagem;
+  let acao = "";
+  if (periodoInvalido) {
+    mensagem = "A data inicial precisa ser anterior ou igual à data final.";
+  } else if (registros.length) {
+    mensagem = situacao === "PENDENTE" ? "Nenhum reembolso a pagar nesta seleção." : "Nenhum pagamento registrado nesta seleção.";
+    acao = '<button type="button" class="ed-btn--transparent px-3 py-2 text-xs" onclick="selecionarVistaReembolso(document.getElementById(\'reembVistaTodos\'))">Ver todos os reembolsos</button>';
+  } else if (temFiltros) {
+    mensagem = "Nenhum reembolso para esta combinação de obra, pessoa e período.";
+    acao = '<button type="button" class="ed-btn--transparent px-3 py-2 text-xs" onclick="limparFiltrosReembolso()">Limpar filtros</button>';
+  } else {
+    mensagem = "Nenhuma despesa foi marcada para reembolso. Em Despesas, abra o lançamento e selecione A reembolsar ou Já reembolsado.";
+    acao = '<button type="button" class="ed-btn px-3 py-2 text-xs" onclick="abrirDespesasParaReembolso()">Ir para despesas</button>';
+  }
+  container.innerHTML = '<div class="reemb-vazio space-y-2"><p class="text-sm">' + mensagem + '</p>' + acao + '</div>';
+}
+
+function cartaoRelatorioReembolso({ obra, item, pago }) {
+  const situacao = pago ? "Pago" : "A pagar";
+  const data = pago
+    ? (item.reembolsadoEm ? "Pago em " + formatDataBR(item.reembolsadoEm) : "Data do pagamento não informada")
+    : "Despesa em " + formatDataBR(item.data);
+  const acao = pago ? '' : '<button type="button" class="ed-btn px-3 py-2 text-xs" data-reembolso-obra="' +
+    escaparCelula(obra.id) + '" data-reembolso-item="' + escaparCelula(item.id) + '">Marcar como pago</button>';
+  return '<li class="reemb-item"><div><p class="font-bold text-[#23396B]">' + escaparCelula(item.descricao || "Despesa") +
+    '</p><p class="text-xs text-[#64748B]">' + escaparCelula(getNomeResponsavel(item.titular) + " · " + obra.nome) +
+    '</p></div><div><strong>' + formatBRL(item.valor) + '</strong><p class="text-xs text-[#64748B]">' +
+    escaparCelula(situacao + " · " + data) + '</p></div>' + acao + '</li>';
 }
 
 function baixarRelatorioGerencial(tipo, imprimir = false) {
@@ -3345,6 +3455,7 @@ function baixarRelatorioGerencial(tipo, imprimir = false) {
   const titulo = geral ? "Geral de Obras" : "Relatório de Reembolsos";
   const linhas = geral ? linhasGeralObras() : linhasRelatorioReembolsos();
   const aba = geral ? "Geral de Obras" : "Reembolsos";
+  if (!geral && !linhas.length) return mostrarNotificacaoToast("Nenhum reembolso para exportar.");
   if (imprimir) {
     const container = document.getElementById("relatorioImpressaoA4");
     const resumo = geral ? "" : "<p>" + escaparCelula(resumoRelatorioReembolsos(linhas)) + "</p>";
@@ -3796,6 +3907,13 @@ function exportarExcelObra() {
 // 12. INICIALIZAÇÃO DA APLICAÇÃO
 // --------------------------------------------------------------------------
 function inicializarApp() {
+  document.getElementById("tabelaRelReembolsos").addEventListener("click", async evento => {
+    const botao = evento.target.closest("[data-reembolso-item]");
+    if (!botao) return;
+    const salvo = await marcarReembolsoLancamento(botao.dataset.reembolsoItem, "REEMBOLSADO", botao.dataset.reembolsoObra);
+    if (salvo) document.getElementById("totaisRelReembolsos").focus({ preventScroll: true });
+  });
+
   const hoje = dataLocalHoje();
   const inputData = document.getElementById("lancData");
   if (inputData) inputData.value = hoje;

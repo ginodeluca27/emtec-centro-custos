@@ -296,6 +296,49 @@
       gap: .625rem;
     }
     .filtros-relatorio label { min-width: 0; font-size: .75rem; font-weight: 700; }
+
+    body[data-aba="reembolsos"] .seletor-obra-header { display: none; }
+    .reemb-vistas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+    .reemb-vistas button {
+      display: grid;
+      align-content: start;
+      gap: .2rem;
+      padding: .65rem;
+      border: 1px solid #c8d9ee;
+      border-radius: .85rem;
+      background: #f1f6fc;
+      color: #23396b;
+      text-align: left;
+      font-size: .85rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .reemb-vistas button[aria-pressed="true"] { background: #23396b; border-color: #23396b; color: white; }
+    .reemb-vistas strong { font-size: clamp(.875rem, 2.2vw, 1.2rem); }
+    .reemb-vistas small { font-weight: 500; }
+    .reemb-filtros { display: grid; gap: .5rem; }
+    .reemb-filtros > button { justify-self: start; }
+    .reemb-periodo summary { cursor: pointer; padding: .6rem 0; color: #23396b; font-size: .875rem; font-weight: 700; }
+    .reemb-periodo p { margin-top: .5rem; }
+    .reemb-exportar button:disabled { opacity: .45; cursor: default; }
+    .reemb-lista { display: grid; gap: .5rem; }
+    .reemb-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(8rem, auto) minmax(9rem, auto);
+      gap: .5rem 1rem;
+      align-items: center;
+      border: 1px solid #c8d9ee;
+      border-radius: .75rem;
+      padding: .8rem;
+      overflow-wrap: anywhere;
+    }
+    .reemb-item .ed-btn { min-height: 44px; }
+    .reemb-vazio { border: 1px dashed #c8d9ee; border-radius: .75rem; background: #f8fafc; padding: 1rem; }
+    @media (max-width: 640px) {
+      .reemb-item { grid-template-columns: minmax(0, 1fr) auto; }
+      .reemb-item > :first-child { grid-column: 1 / -1; }
+      .reemb-vistas button { padding: .5rem; }
+    }
     .link-obra { color: #23396b; font-weight: 700; text-align: left; text-decoration: underline; }
     .tabela-gerencial { width: 100%; font-size: .8125rem; }
     .tabela-gerencial th, .tabela-gerencial td {
@@ -415,7 +458,7 @@
 
       <!-- Obra Selector & Botões de Ação -->
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 justify-end">
-        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 min-w-0 flex-1 max-w-[210px] sm:max-w-xs">
+        <div class="seletor-obra-header flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 min-w-0 flex-1 max-w-[210px] sm:max-w-xs">
           <span class="hidden sm:inline text-xs uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
           <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1 w-full">
           </select>
@@ -824,8 +867,8 @@
               <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Reembolso</label>
               <select id="lancReembolsoStatus" onchange="atualizarDataReembolsoDesktop()" class="ed-input text-xs font-semibold text-[#23396B]">
                 <option value="NAO_REEMBOLSAVEL" selected>Sem reembolso (pago pela obra/caixa)</option>
-                <option value="PENDENTE">Reembolso pendente (devolver a quem pagou)</option>
-                <option value="REEMBOLSADO">Já reembolsado (quitado)</option>
+                <option value="PENDENTE">A reembolsar</option>
+                <option value="REEMBOLSADO">Já reembolsado</option>
               </select>
             </div>
 
@@ -936,6 +979,7 @@
             <button type="button" onclick="filtrarStatusReembolso('')" data-filtro-reembolso="" aria-pressed="true" class="ed-btn--transparent text-xs">Todos</button>
             <button type="button" onclick="filtrarStatusReembolso('PENDENTE')" data-filtro-reembolso="PENDENTE" aria-pressed="false" class="ed-btn--transparent text-xs">A reembolsar</button>
             <button type="button" onclick="filtrarStatusReembolso('REEMBOLSADO')" data-filtro-reembolso="REEMBOLSADO" aria-pressed="false" class="ed-btn--transparent text-xs">Pagos</button>
+            <button type="button" onclick="abrirRelatorioReembolsoDaObra()" class="ed-btn--transparent text-xs">Ver relatório de reembolsos</button>
           </div>
           <!-- Banner Informativo com Total Filtrado -->
           <div class="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
@@ -1259,31 +1303,52 @@
     </section>
 
     <section id="aba-reembolsos" class="hidden ed-card p-3.5 sm:p-6 space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <span class="ed-eyebrow">PRESTAÇÃO DE CONTAS</span>
-          <h2 class="font-display text-lg font-bold text-[#23396B]">Relatório de Reembolsos</h2>
+          <h2 class="font-display text-lg font-bold text-[#23396B]">Reembolsos</h2>
+          <p class="text-sm text-[#64748B]">Veja quem precisa receber e confirme os pagamentos feitos.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button onclick="baixarRelatorioGerencial('reembolsos')" class="ed-btn py-2 px-3 text-xs">Baixar Excel</button>
-          <button onclick="baixarRelatorioGerencial('reembolsos', true)" class="ed-btn--navy py-2 px-3 text-xs">Imprimir / PDF</button>
+          <button type="button" onclick="abrirDespesasParaReembolso()" class="ed-btn--navy px-4 py-2 text-sm">Ver despesas</button>
         </div>
       </div>
-      <div class="filtros-relatorio" onchange="atualizarRelatorioReembolsos()">
-        <label>Obra<select id="relReembObra" class="ed-input text-xs"></select></label>
-        <label>Responsável<select id="relReembPessoa" class="ed-input text-xs"></select></label>
-        <label>Situação
-          <select id="relReembStatus" class="ed-input text-xs">
-            <option value="">Todos</option>
-            <option value="PENDENTE">Pendentes</option>
-            <option value="REEMBOLSADO">Pagos</option>
-          </select>
-        </label>
-        <label>De<input id="relReembInicio" type="date" class="ed-input text-xs" /></label>
-        <label>Até<input id="relReembFim" type="date" class="ed-input text-xs" /></label>
+
+      <div class="reemb-vistas" role="group" aria-label="Situação dos reembolsos">
+        <button type="button" data-situacao-reemb="PENDENTE" aria-pressed="true" onclick="selecionarVistaReembolso(this)">
+          <span>A pagar</span><strong id="reembTotalPendente"></strong><small id="reembQtdPendente"></small>
+        </button>
+        <button type="button" data-situacao-reemb="REEMBOLSADO" aria-pressed="false" onclick="selecionarVistaReembolso(this)">
+          <span>Pagos</span><strong id="reembTotalPago"></strong><small id="reembQtdPago"></small>
+        </button>
+        <button type="button" id="reembVistaTodos" data-situacao-reemb="" aria-pressed="false" onclick="selecionarVistaReembolso(this)">
+          <span>Todos</span><small id="reembQtdTodos"></small>
+        </button>
       </div>
-      <p class="text-xs text-[#64748B]">O período usa a data da despesa para os pendentes e a data da baixa para os pagos.</p>
-      <p id="totaisRelReembolsos" class="text-sm font-bold text-[#23396B]"></p>
+
+      <div class="reemb-filtros" onchange="atualizarRelatorioReembolsos()">
+        <div class="filtros-relatorio">
+          <label>Obra do relatório<select id="relReembObra" class="ed-input text-xs"></select></label>
+          <label>Quem pagou<select id="relReembPessoa" class="ed-input text-xs"></select></label>
+        </div>
+        <details class="reemb-periodo">
+          <summary id="relReembPeriodo">Período · Todas as datas</summary>
+          <div class="filtros-relatorio">
+            <label>De<input id="relReembInicio" type="date" class="ed-input text-xs" /></label>
+            <label>Até<input id="relReembFim" type="date" class="ed-input text-xs" /></label>
+          </div>
+          <p class="text-xs text-[#64748B]">Para os pendentes, o período usa a data da despesa. Para os pagos, usa a data do pagamento. Pagamentos sem data aparecem em Todas as datas.</p>
+        </details>
+        <button id="limparFiltrosReemb" type="button" class="ed-btn--transparent px-3 py-2 text-xs" onclick="limparFiltrosReembolso()" hidden>Limpar filtros</button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="totaisRelReembolsos" class="text-sm font-bold text-[#23396B]" tabindex="-1" aria-live="polite"></h3>
+        <div class="reemb-exportar flex flex-wrap gap-2">
+          <button type="button" onclick="baixarRelatorioGerencial('reembolsos')" class="ed-btn--transparent px-3 py-2 text-xs">Baixar Excel</button>
+          <button type="button" onclick="baixarRelatorioGerencial('reembolsos', true)" class="ed-btn--transparent px-3 py-2 text-xs">Imprimir / PDF</button>
+        </div>
+      </div>
       <div id="tabelaRelReembolsos"></div>
     </section>
 
