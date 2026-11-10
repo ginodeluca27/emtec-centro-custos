@@ -708,28 +708,70 @@ function calcularMetricasObra(obra) {
     entradasCaixaPorTitular[tit] = arredondarMoeda((entradasCaixaPorTitular[tit] || 0) + Number(ec.valor || 0));
   }
 
-  let medBrutaTotalContrato = 0;
+  let somaMedicoesBruta = 0;
+  let somaMedicoesLiquida = 0;
   let medBrutaRecebida = 0;
   let medLiquidaRecebida = 0;
-  let medLiquidaTotalContrato = 0;
+  let medBrutaFaturadaPendente = 0;
+  let medLiquidaFaturadaPendente = 0;
 
-  for (const m of (obra.medicoes || []).filter(m => !m.deletado)) {
+  // Filtra medições ativas (e ignora medições fictícias de contrato inicial criadas por versões antigas quando já há contrato definido)
+  const medicoesAtivas = (obra.medicoes || []).filter(m => {
+    if (!m || m.deletado) return false;
+    if (Number(obra.valorContratoBruto || 0) > 0 && String(m.id || "").startsWith("med-init-") && m.observacao === "Medição inicial cadastrada na abertura da obra") {
+      return false;
+    }
+    return true;
+  });
+
+  for (const m of medicoesAtivas) {
     const bruto = Number(m.valorBruto || 0);
     const desc = Number(m.descontoNotaPerc ?? obra.aliquotaImposto ?? 7.5);
     const liq = m.valorLiquido ? Number(m.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
-    medBrutaTotalContrato = arredondarMoeda(medBrutaTotalContrato + bruto);
-    medLiquidaTotalContrato = arredondarMoeda(medLiquidaTotalContrato + liq);
+    somaMedicoesBruta = arredondarMoeda(somaMedicoesBruta + bruto);
+    somaMedicoesLiquida = arredondarMoeda(somaMedicoesLiquida + liq);
     if (m.status === "Recebida") {
       medBrutaRecebida = arredondarMoeda(medBrutaRecebida + bruto);
       medLiquidaRecebida = arredondarMoeda(medLiquidaRecebida + liq);
+    } else {
+      medBrutaFaturadaPendente = arredondarMoeda(medBrutaFaturadaPendente + bruto);
+      medLiquidaFaturadaPendente = arredondarMoeda(medLiquidaFaturadaPendente + liq);
     }
+  }
+
+  // Separação estrita entre Valor do Contrato e Medições Cadastradas:
+  // Se obra.valorContratoBruto foi informado (ex.: R$ 100.000), lançar uma medição de R$ 30.000 NÃO soma R$ 130.000!
+  const contratoInformadoBruto = Number(obra.valorContratoBruto || 0);
+  const aliquotaPadrao = Number(obra.aliquotaImposto ?? 7.5);
+  let medBrutaTotalContrato = 0;
+  let medLiquidaTotalContrato = 0;
+
+  if (contratoInformadoBruto > 0) {
+    medBrutaTotalContrato = arredondarMoeda(Math.max(contratoInformadoBruto, somaMedicoesBruta));
+    if (somaMedicoesBruta >= contratoInformadoBruto) {
+      medLiquidaTotalContrato = somaMedicoesLiquida;
+    } else {
+      const saldoContratoNaoMedidoBruto = arredondarMoeda(contratoInformadoBruto - somaMedicoesBruta);
+      const saldoContratoNaoMedidoLiq = arredondarMoeda(saldoContratoNaoMedidoBruto * (1 - aliquotaPadrao / 100));
+      medLiquidaTotalContrato = arredondarMoeda(somaMedicoesLiquida + saldoContratoNaoMedidoLiq);
+    }
+  } else {
+    medBrutaTotalContrato = somaMedicoesBruta;
+    medLiquidaTotalContrato = somaMedicoesLiquida;
   }
 
   const medLiquidaAReceber = arredondarMoeda(Math.max(0, medLiquidaTotalContrato - medLiquidaRecebida));
   const medBrutaAReceber = arredondarMoeda(Math.max(0, medBrutaTotalContrato - medBrutaRecebida));
 
   const orc = obra.orcamentoPrevisto || {};
-  const tetoTotal = arredondarMoeda(Object.values(orc).reduce((a, b) => a + Number(b || 0), 0));
+  const orcamentoPrevisto = {
+    MAT: Number(orc.MAT || 0),
+    MO: Number(orc.MO || 0),
+    EQUIP: Number(orc.EQUIP || 0),
+    OUTROS: Number(orc.OUTROS || 0)
+  };
+  const tetoTotal = arredondarMoeda(Object.values(orcamentoPrevisto).reduce((a, b) => a + Number(b || 0), 0));
+  const percOrcamentoConsumido = tetoTotal > 0 ? (custoTotal / tetoTotal) * 100 : 0;
 
   // 1. Resultado Acumulado (Realizado até hoje): Receita Líquida Recebida - Despesas Realizadas
   const saldoAtual = arredondarMoeda(medLiquidaRecebida - custoTotal);
@@ -768,7 +810,8 @@ function calcularMetricasObra(obra) {
   const receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida;
   const receitaContratoBruta = medBrutaTotalContrato > 0 ? medBrutaTotalContrato : medBrutaRecebida;
 
-  // 6. Lucro se gastar todo o orçamento (cenário de teto, NÃO é previsão de ritmo de gastos)
+  // 6. Lucro se gastar todo o orçamento / Resultado Final Estimado
+  const lucroNoTetoPuro = arredondarMoeda(receitaContratoTotal - tetoTotal);
   const saldoProjetadoFinal = arredondarMoeda(receitaContratoTotal - custoTotalProjetado);
   const margemProjetadaFinalPerc = receitaContratoTotal > 0
     ? (saldoProjetadoFinal / receitaContratoTotal) * 100
@@ -788,6 +831,10 @@ function calcularMetricasObra(obra) {
     totalEntradasCaixa,
     entradasCaixa: totalEntradasCaixa,
     entradasCaixaPorTitular,
+    somaMedicoesBruta,
+    somaMedicoesLiquida,
+    medBrutaFaturadaPendente,
+    medLiquidaFaturadaPendente,
     medBrutaTotalContrato,
     medBrutaTotal: medBrutaTotalContrato,
     medBrutaRecebida,
@@ -798,6 +845,8 @@ function calcularMetricasObra(obra) {
     medLiquidaAReceber,
     medLiquidaPendente: medLiquidaAReceber,
     tetoTotal,
+    orcamentoPrevisto,
+    percOrcamentoConsumido,
     saldoAtual,
     margemRealizadaPerc,
     margemAtualPerc: margemRealizadaPerc,
@@ -808,6 +857,7 @@ function calcularMetricasObra(obra) {
     custoRestanteEstimado,
     custoTotalProjetado,
     excessoTetoProjetado,
+    lucroNoTetoPuro,
     receitaContratoTotal,
     receitaContratoBruta,
     saldoProjetadoFinal,
@@ -936,6 +986,20 @@ function atualizarTudo() {
     mobPendenciasSub.textContent = `Emp: ${formatBRL(m.saldoEmpreitasPendente)} | Reemb: ${formatBRL(m.reembolsosPendentesTotal)}`;
   }
 
+  const mobLucroPrevistoLabel = document.getElementById("mobLucroPrevistoLabel");
+  if (mobLucroPrevistoLabel) {
+    mobLucroPrevistoLabel.textContent = m.excessoTetoProjetado > 0
+      ? "Resultado Final Estimado (Acima do Teto):"
+      : "Lucro se gastar todo o orçamento:";
+  }
+
+  const mobCriterioLucroSub = document.getElementById("mobCriterioLucroSub");
+  if (mobCriterioLucroSub) {
+    mobCriterioLucroSub.textContent = m.excessoTetoProjetado > 0
+      ? `No teto (${formatBRL(m.tetoTotal)}) seria ${formatBRL(m.lucroNoTetoPuro)}:`
+      : "Margem se gastar o teto:";
+  }
+
   const mobLucroPrevistoValor = document.getElementById("mobLucroPrevistoValor");
   if (mobLucroPrevistoValor) {
     mobLucroPrevistoValor.textContent = formatBRL(m.saldoProjetadoFinal);
@@ -1003,13 +1067,20 @@ function atualizarTudo() {
     kpiSaldoSub.textContent = `Recebido (${formatBRL(m.medLiquidaRecebida)}) − Despesas pagas (${formatBRL(m.custoTotal)})`;
   }
 
-  // KPI 4: Lucro Previsto Final (Margem Projetada)
+  // KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado
+  const kpiTetoLabel = document.getElementById("kpiTetoLabel");
+  if (kpiTetoLabel) {
+    kpiTetoLabel.textContent = m.excessoTetoProjetado > 0
+      ? "Resultado Final Estimado (Acima do Teto)"
+      : "Lucro se gastar todo o orçamento";
+  }
+
   const kpiTetoValor = document.getElementById("kpiTetoValor");
   if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.saldoProjetadoFinal);
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   if (badgeTeto) {
-    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% no teto`;
+    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% ${m.excessoTetoProjetado > 0 ? "estimada" : "no teto"}`;
     badgeTeto.className = m.saldoProjetadoFinal >= 0
       ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
       : "text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
@@ -1020,9 +1091,9 @@ function atualizarTudo() {
     if (!(m.tetoTotal > 0)) {
       kpiTetoSub.textContent = "Defina o teto de custos para calcular o lucro";
     } else if (m.excessoTetoProjetado > 0) {
-      kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} (Acima do teto de ${formatBRL(m.tetoTotal)})`;
+      kpiTetoSub.textContent = `Custo c/ pendências: ${formatBRL(m.custoTotalProjetado)} (+${formatBRL(m.excessoTetoProjetado)} acima do teto de ${formatBRL(m.tetoTotal)})`;
     } else {
-      kpiTetoSub.textContent = `Custo proj.: ${formatBRL(m.custoTotalProjetado)} | Teto: ${formatBRL(m.tetoTotal)}`;
+      kpiTetoSub.textContent = `Cenário gastando todo o teto de ${formatBRL(m.tetoTotal)}`;
     }
   }
 
@@ -1045,6 +1116,7 @@ function atualizarTudo() {
   renderizarAbaResumo(obra, m);
   renderizarAbaMedicoes(obra, m);
   renderizarAbaEmpreitasETitulares(obra, m);
+  gerarRelatorioImpressaoA4(obra, m);
 }
 
 function renderizarMiniCards(m) {
@@ -1828,6 +1900,15 @@ function toggleOpcoesAvancadasRapidas() {
   }
 }
 
+function ajustarValorPagoEmpreita(obra, empreitaId, deltaValor) {
+  if (!obra || !empreitaId || !Array.isArray(obra.empreitas)) return;
+  const emp = obra.empreitas.find(e => e.id === empreitaId && !e.deletado);
+  if (!emp) return;
+  const atual = Number(emp.valorPago || 0);
+  emp.valorPago = arredondarMoeda(Math.max(0, atual + Number(deltaValor || 0)));
+  tocar(emp);
+}
+
 function salvarLancamentoRapido(e) {
   if (e) e.preventDefault();
   const obra = getObraAtual();
@@ -1879,6 +1960,12 @@ function salvarLancamentoRapido(e) {
     const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
     if (idx !== -1) {
       const anterior = obra.lancamentos[idx];
+      if (!anterior.deletado && anterior.empreitaId && anterior.movimento !== "ENTRADA_CAIXA") {
+        ajustarValorPagoEmpreita(obra, anterior.empreitaId, -Number(anterior.valor || 0));
+      }
+      if (empreitaId) {
+        ajustarValorPagoEmpreita(obra, empreitaId, valor);
+      }
       obra.lancamentos[idx] = {
         ...anterior,
         descricao,
@@ -2022,6 +2109,12 @@ function salvarLancamentoDesktop(e) {
     const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
     if (idx !== -1) {
       const anterior = obra.lancamentos[idx];
+      if (!anterior.deletado && anterior.empreitaId && anterior.movimento !== "ENTRADA_CAIXA") {
+        ajustarValorPagoEmpreita(obra, anterior.empreitaId, -Number(anterior.valor || 0));
+      }
+      if (empreitaId) {
+        ajustarValorPagoEmpreita(obra, empreitaId, valor);
+      }
       obra.lancamentos[idx] = {
         ...anterior,
         descricao: desc,
@@ -2110,6 +2203,9 @@ function excluirLancamento(id) {
   const obra = getObraAtual();
   const item = (obra.lancamentos || []).find(l => l.id === id);
   if (item) {
+    if (!item.deletado && item.empreitaId && item.movimento !== "ENTRADA_CAIXA") {
+      ajustarValorPagoEmpreita(obra, item.empreitaId, -Number(item.valor || 0));
+    }
     item.deletado = true;
     item.atualizadoEm = new Date().toISOString();
   }
@@ -2122,6 +2218,17 @@ function excluirLancamento(id) {
 // 8. MEDIÇÕES E CONTRATOS (Cards Mobile / Tabela Desktop)
 // --------------------------------------------------------------------------
 function renderizarAbaMedicoes(obra, m) {
+  const elContratoBruto = document.getElementById("medCardContratoBruto");
+  const elContratoLiq = document.getElementById("medCardContratoLiq");
+  const elRecLiq = document.getElementById("medCardRecebidoLiq");
+  const elARecLiq = document.getElementById("medCardAReceberLiq");
+  if (m) {
+    if (elContratoBruto) elContratoBruto.textContent = formatBRL(m.medBrutaTotalContrato);
+    if (elContratoLiq) elContratoLiq.textContent = formatBRL(m.medLiquidaTotalContrato);
+    if (elRecLiq) elRecLiq.textContent = formatBRL(m.medLiquidaRecebida);
+    if (elARecLiq) elARecLiq.textContent = formatBRL(m.medLiquidaAReceber);
+  }
+
   const containerMob = document.getElementById("cardsMedicoesMobile");
   const tbody = document.getElementById("tbodyMedicoes");
   const lista = (obra.medicoes || []).filter(med => !med.deletado);
@@ -2280,6 +2387,32 @@ function excluirMedicao(id) {
   }
   salvarEstado();
   atualizarTudo();
+}
+
+function editarValorContratoPrompt() {
+  const obra = getObraAtual();
+  if (!obra) return;
+  const atual = Number(obra.valorContratoBruto || 0);
+  const entrada = prompt("Informe o valor bruto total contratado com o cliente (R$):", atual > 0 ? String(atual) : "");
+  if (entrada === null) return;
+  const num = parseFloat(String(entrada).replace(/\./g, "").replace(",", "."));
+  if (isNaN(num) || num < 0) {
+    alert("Informe um valor numérico válido.");
+    return;
+  }
+  const impAtual = Number(obra.aliquotaImposto ?? 7.5);
+  const entradaImp = prompt("Alíquota de imposto/retenção NF sobre o contrato (%):", String(impAtual));
+  if (entradaImp !== null) {
+    const impNum = parseFloat(String(entradaImp).replace(",", "."));
+    if (!isNaN(impNum) && impNum >= 0 && impNum < 100) {
+      obra.aliquotaImposto = impNum;
+    }
+  }
+  obra.valorContratoBruto = arredondarMoeda(num);
+  tocar(obra);
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast("Valor contratado da obra atualizado.");
 }
 
 // --------------------------------------------------------------------------
@@ -2756,24 +2889,14 @@ function criarNovaObra(e) {
     status: "Em Andamento",
     dataInicio: new Date().toISOString().split("T")[0],
     aliquotaImposto,
+    valorContratoBruto: valorContrato > 0 ? arredondarMoeda(valorContrato) : 0,
     orcamentoPrevisto: {
       MAT: Math.round(tetoCusto * 0.50),
       MO: Math.round(tetoCusto * 0.38),
       EQUIP: Math.round(tetoCusto * 0.05),
       OUTROS: Math.round(tetoCusto * 0.07)
     },
-    medicoes: valorContrato > 0 ? [
-      {
-        id: "med-init-" + Date.now(),
-        titulo: "1ª Medição / Contrato Fechado",
-        data: new Date().toISOString().split("T")[0],
-        valorBruto: valorContrato,
-        descontoNotaPerc: aliquotaImposto,
-        valorLiquido: Math.round(valorContrato * (1 - aliquotaImposto / 100) * 100) / 100,
-        status: "Pendente",
-        observacao: "Medição inicial cadastrada na abertura da obra"
-      }
-    ] : [],
+    medicoes: [],
     empreitas: [],
     enviosCaixa: [],
     lancamentos: []
@@ -2836,11 +2959,267 @@ function importarBackupJSON(e) {
   reader.readAsText(file);
 }
 
+function gerarRelatorioImpressaoA4(obraParam, mParam) {
+  const container = document.getElementById("relatorioImpressaoA4");
+  if (!container) return;
+  const obra = obraParam || getObraAtual();
+  if (!obra) return;
+  const m = mParam || calcularMetricasObra(obra);
+  const sit = m.situacao || avaliarSituacaoFinanceira(obra, m);
+  const dataEmissao = formatDataBR(new Date().toISOString().split("T")[0]);
+  const horaEmissao = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  const categorias = [
+    { codigo: "MAT", nome: "Material e Insumos", teto: m.orcamentoPrevisto.MAT, real: m.porTipoOficial.MAT },
+    { codigo: "MO", nome: "Mão de Obra Geral (Inclui Alimentação/Transp.)", teto: m.orcamentoPrevisto.MO, real: m.porTipoOficial.MO },
+    { codigo: "EQUIP", nome: "Locação de Equipamentos e Maquinário", teto: m.orcamentoPrevisto.EQUIP, real: m.porTipoOficial.EQUIP },
+    { codigo: "OUTROS", nome: "Outros Custos, Taxas e Imprevistos", teto: m.orcamentoPrevisto.OUTROS, real: m.porTipoOficial.OUTROS }
+  ];
+
+  const rowsCatHtml = categorias.map(c => {
+    const saldo = c.teto - c.real;
+    const perc = c.teto > 0 ? ((c.real / c.teto) * 100).toFixed(1) + "%" : "Sem teto";
+    return `
+      <tr>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${c.codigo} — ${c.nome}</td>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(c.teto)}</td>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(c.real)}</td>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${saldo < 0 ? "#B91C1C" : "#15803D"};font-weight:700;">${formatBRL(saldo)}</td>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${perc}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const medicoesAtivas = (obra.medicoes || []).filter(med => !med.deletado);
+  const rowsMedHtml = medicoesAtivas.length === 0
+    ? `<tr><td colspan="5" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma medição registrada até o momento.</td></tr>`
+    : medicoesAtivas.map(med => {
+        const bruto = Number(med.valorBruto || 0);
+        const desc = Number(med.descontoNotaPerc ?? 7.5);
+        const liq = med.valorLiquido ? Number(med.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
+        return `
+          <tr>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;">${med.titulo}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${formatDataBR(med.data)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;font-weight:700;color:${med.status === "Recebida" ? "#15803D" : "#B45309"};">${med.status === "Recebida" ? "Recebida" : "Pendente"}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(bruto)} (-${desc}%)</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(liq)}</td>
+          </tr>
+        `;
+      }).join("");
+
+  const empreitasAtivas = (obra.empreitas || []).filter(e => !e.deletado);
+  const rowsEmpHtml = empreitasAtivas.length === 0
+    ? `<tr><td colspan="5" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhum contrato de empreiteiro cadastrado.</td></tr>`
+    : empreitasAtivas.map(e => {
+        const contratado = Number(e.valorContratado || 0);
+        const pago = Number(e.valorPago || 0);
+        const falta = Math.max(0, contratado - pago);
+        return `
+          <tr>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${e.fornecedor}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;">${e.servico || "-"}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(contratado)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#15803D;font-weight:600;">${formatBRL(pago)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${falta > 0 ? "#B45309" : "#15803D"};font-weight:700;">${formatBRL(falta)}</td>
+          </tr>
+        `;
+      }).join("");
+
+  const reembEntries = Object.entries(m.reembolsosPorTitular || {});
+  const rowsReembHtml = reembEntries.length === 0
+    ? `<tr><td colspan="5" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma despesa registrada.</td></tr>`
+    : reembEntries.map(([id, st]) => `
+        <tr>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${getNomeResponsavel(id)}</td>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${st.qtdTotal}</td>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:600;">${formatBRL(st.pagoTotal)}</td>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#15803D;">${formatBRL(st.reembolsado)}</td>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;color:${st.pendente > 0 ? "#B91C1C" : "#475569"};">${formatBRL(st.pendente)}</td>
+        </tr>
+      `).join("");
+
+  const lancAtivos = (obra.lancamentos || [])
+    .filter(l => !l.deletado)
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
+  const rowsLancHtml = lancAtivos.length === 0
+    ? `<tr><td colspan="6" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma despesa lançada nesta obra.</td></tr>`
+    : lancAtivos.map(l => {
+        const reembTxt = l.reembolsoStatus === "PENDENTE"
+          ? "Reemb. Pendente"
+          : l.reembolsoStatus === "REEMBOLSADO"
+            ? "Reembolsado"
+            : "Empresa / Direto";
+        return `
+          <tr>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;white-space:nowrap;">${formatDataBR(l.data)}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;font-weight:600;">${l.descricao}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${l.movimento === "ENTRADA_CAIXA" ? "Adiant. Caixa" : `${l.tipo} (${l.subtipo || l.tipo})`}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${getNomeResponsavel(l.titular)}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;color:${l.reembolsoStatus === "PENDENTE" ? "#B91C1C" : "#475569"};">${reembTxt}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(l.valor)}</td>
+          </tr>
+        `;
+      }).join("");
+
+  const rotuloResultadoFinal = m.excessoTetoProjetado > 0
+    ? "RESULTADO FINAL ESTIMADO (ACIMA DO TETO)"
+    : "LUCRO SE GASTAR TODO O ORÇAMENTO";
+
+  container.innerHTML = `
+    <div style="font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#0F172A;font-size:11px;line-height:1.4;">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #23396B;padding-bottom:10px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="/logo-emtec.png" alt="EMTEC Obras" style="height:38px;width:auto;object-fit:contain;" />
+          <div>
+            <div style="font-size:16px;font-weight:800;color:#23396B;letter-spacing:-0.02em;">RELATÓRIO EXECUTIVO DE CUSTOS E VIABILIDADE</div>
+            <div style="font-size:11px;color:#475569;font-weight:600;">Obra: <strong>${obra.nome}</strong> | Cliente: <strong>${obra.cliente || "Contrato"}</strong> | Status: <strong>${obra.status || "Em Andamento"}</strong></div>
+          </div>
+        </div>
+        <div style="text-align:right;font-size:10px;color:#475569;">
+          <div><strong>Emissão:</strong> ${dataEmissao} às ${horaEmissao}</div>
+          <div><strong>Diagnóstico:</strong> ${sit.rotulo}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
+        <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
+          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">1. Contrato Líquido (Após NF)</div>
+          <div style="font-size:15px;font-weight:800;color:#23396B;margin-top:2px;">${formatBRL(m.medLiquidaTotal)}</div>
+          <div style="font-size:9.5px;color:#64748B;">Bruto: ${formatBRL(m.medBrutaTotal)} | Recebido: <strong>${formatBRL(m.medLiquidaRecebida)}</strong></div>
+        </div>
+        <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
+          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">2. Despesas Realizadas</div>
+          <div style="font-size:15px;font-weight:800;color:#0F172A;margin-top:2px;">${formatBRL(m.custoTotal)}</div>
+          <div style="font-size:9.5px;color:#64748B;">Teto: ${formatBRL(m.tetoTotal)} (${m.percOrcamentoConsumido.toFixed(1)}% usado)</div>
+        </div>
+        <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
+          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">3. Resultado Acumulado Hoje</div>
+          <div style="font-size:15px;font-weight:800;color:${m.saldoAtual >= 0 ? "#15803D" : "#B91C1C"};margin-top:2px;">${formatBRL(m.saldoAtual)}</div>
+          <div style="font-size:9.5px;color:#64748B;">Recebido (${formatBRL(m.medLiquidaRecebida)}) − Gasto (${formatBRL(m.custoTotal)})</div>
+        </div>
+        <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
+          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">4. ${rotuloResultadoFinal}</div>
+          <div style="font-size:15px;font-weight:800;color:${m.saldoProjetadoFinal >= 0 ? "#23396B" : "#B91C1C"};margin-top:2px;">${formatBRL(m.saldoProjetadoFinal)}</div>
+          <div style="font-size:9.5px;color:#64748B;">Margem Final: ${m.margemProjetadaFinalPerc.toFixed(1)}% | Custo Proj.: ${formatBRL(m.custoTotalProjetado)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">A. Orçamento Planejado (Teto) vs. Realizado por Categoria</div>
+        <table style="width:100%;border-collapse:collapse;font-size:10.5px;">
+          <thead>
+            <tr style="background:#EFF6FF;color:#1E3A8A;">
+              <th style="padding:6px 8px;border:1px solid #CBD5E1;text-align:left;">Categoria Oficial</th>
+              <th style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">Teto Planejado</th>
+              <th style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">Realizado</th>
+              <th style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">Saldo do Teto</th>
+              <th style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">% Consumido</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsCatHtml}
+            <tr style="background:#F1F5F9;font-weight:800;">
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;">TOTAL CONSOLIDADO DA OBRA</td>
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(m.tetoTotal)}</td>
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(m.custoTotal)}</td>
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${m.tetoTotal - m.custoTotal < 0 ? "#B91C1C" : "#15803D"};">${formatBRL(m.tetoTotal - m.custoTotal)}</td>
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${m.percOrcamentoConsumido.toFixed(1)}%</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:9.5px;color:#475569;margin-top:4px;">
+          <strong>Detalhamento Analítico (Incluso nas categorias acima):</strong> Alimentação (ALIM): <strong>${formatBRL(m.porSubtipoReal.ALIM)}</strong> | Combustível e Transporte (TRANSP): <strong>${formatBRL(m.porSubtipoReal.TRANSP)}</strong>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">B. Medições e Recebimentos do Cliente</div>
+          <table style="width:100%;border-collapse:collapse;font-size:10px;">
+            <thead>
+              <tr style="background:#EFF6FF;color:#1E3A8A;">
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Parcela / Medição</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:center;">Data</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:center;">Status</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Bruto (NF)</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Líquido</th>
+              </tr>
+            </thead>
+            <tbody>${rowsMedHtml}</tbody>
+          </table>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">C. Prestação de Contas e Reembolsos</div>
+          <table style="width:100%;border-collapse:collapse;font-size:10px;">
+            <thead>
+              <tr style="background:#EFF6FF;color:#1E3A8A;">
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Quem Pagou</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:center;">Qtd</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Total Pago</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Reembolsado</th>
+                <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">A Reembolsar</th>
+              </tr>
+            </thead>
+            <tbody>${rowsReembHtml}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">D. Contratos com Empreiteiros e Saldos a Pagar</div>
+        <table style="width:100%;border-collapse:collapse;font-size:10px;">
+          <thead>
+            <tr style="background:#EFF6FF;color:#1E3A8A;">
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Empreiteiro / Fornecedor</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Serviço Contratado</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Valor Contratado</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Total Já Pago</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Saldo Pendente</th>
+            </tr>
+          </thead>
+          <tbody>${rowsEmpHtml}</tbody>
+        </table>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">E. Extrato Analítico de Despesas da Obra (${lancAtivos.length} lançamentos)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:9.5px;">
+          <thead>
+            <tr style="background:#EFF6FF;color:#1E3A8A;">
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Data</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Descrição da Despesa</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Categoria</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Quem Pagou</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:left;">Situação Reembolso</th>
+              <th style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;">Valor (R$)</th>
+            </tr>
+          </thead>
+          <tbody>${rowsLancHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function imprimirRelatorioExecutivo() {
+  const obra = getObraAtual();
+  if (!obra) return;
+  const m = calcularMetricasObra(obra);
+  gerarRelatorioImpressaoA4(obra, m);
+  window.print();
+}
+
 function exportarExcelObra() {
   const obra = getObraAtual();
   if (!obra) return;
   const m = calcularMetricasObra(obra);
   const sit = m.situacao || avaliarSituacaoFinanceira(obra, m);
+
+  const rotuloResultadoFinal = m.excessoTetoProjetado > 0
+    ? "Resultado Final Estimado (Acima do Teto) (R$)"
+    : "Lucro se gastar todo o orçamento (Receita líquida - Teto) (R$)";
 
   const rowsResumo = [
     { "INDICADOR DA OBRA": "Nome da Obra", "VALOR / INFORMAÇÃO": obra.nome },
@@ -2849,10 +3228,12 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Situação Financeira", "VALOR / INFORMAÇÃO": sit.rotulo },
     { "INDICADOR DA OBRA": "Data de Emissão do Relatório", "VALOR / INFORMAÇÃO": formatDataBR(new Date().toISOString().split("T")[0]) },
     { "INDICADOR DA OBRA": "--- RECEITAS E MEDIÇÕES ---", "VALOR / INFORMAÇÃO": "" },
-    { "INDICADOR DA OBRA": "Receita Bruta Contratada (R$)", "VALOR / INFORMAÇÃO": m.medBrutaTotal },
-    { "INDICADOR DA OBRA": "Receita Líquida Contratada após NF (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaTotal },
-    { "INDICADOR DA OBRA": "Valor Efetivamente Recebido (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaRecebida },
-    { "INDICADOR DA OBRA": "Saldo a Receber de Clientes (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaPendente },
+    { "INDICADOR DA OBRA": "Valor Bruto Total do Contrato (R$)", "VALOR / INFORMAÇÃO": m.medBrutaTotal },
+    { "INDICADOR DA OBRA": "Receita Líquida do Contrato após NF (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaTotal },
+    { "INDICADOR DA OBRA": "Total de Medições Lançadas (Bruto) (R$)", "VALOR / INFORMAÇÃO": m.somaMedicoesBruta },
+    { "INDICADOR DA OBRA": "Valor Efetivamente Recebido na Conta (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaRecebida },
+    { "INDICADOR DA OBRA": "Medições Pendentes Faturadas (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaPendente },
+    { "INDICADOR DA OBRA": "Saldo Total a Receber do Contrato (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaAReceber },
     { "INDICADOR DA OBRA": "--- DESPESAS REALIZADAS POR CATEGORIA ---", "VALOR / INFORMAÇÃO": "" },
     { "INDICADOR DA OBRA": "Material (MAT) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MAT },
     { "INDICADOR DA OBRA": "Mão de Obra Geral (MO) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MO },
@@ -2868,8 +3249,47 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Reembolsos Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.totalReembolsosPendentes },
     { "INDICADOR DA OBRA": "Custo Final Projetado da Obra (R$)", "VALOR / INFORMAÇÃO": m.custoTotalProjetado },
     { "INDICADOR DA OBRA": "Limite Orçamentário Planejado (Teto) (R$)", "VALOR / INFORMAÇÃO": m.tetoTotal },
-    { "INDICADOR DA OBRA": "Lucro se gastar todo o orçamento (Receita líquida - Teto) (R$)", "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
-    { "INDICADOR DA OBRA": "Margem se gastar todo o orçamento (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
+    { "INDICADOR DA OBRA": "Lucro no Cenário do Teto (Receita Líquida - Teto) (R$)", "VALOR / INFORMAÇÃO": m.lucroNoTetoPuro },
+    { "INDICADOR DA OBRA": rotuloResultadoFinal, "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
+    { "INDICADOR DA OBRA": "Margem Final Estimada (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
+  ];
+
+  const rowsOrcadoVsRealizado = [
+    {
+      "CATEGORIA": "MAT — Material e Insumos",
+      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.MAT,
+      "REALIZADO (R$)": m.porTipoOficial.MAT,
+      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.MAT - m.porTipoOficial.MAT),
+      "% CONSUMIDO": m.orcamentoPrevisto.MAT > 0 ? Number(((m.porTipoOficial.MAT / m.orcamentoPrevisto.MAT) * 100).toFixed(2)) : 0
+    },
+    {
+      "CATEGORIA": "MO — Mão de Obra Geral",
+      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.MO,
+      "REALIZADO (R$)": m.porTipoOficial.MO,
+      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.MO - m.porTipoOficial.MO),
+      "% CONSUMIDO": m.orcamentoPrevisto.MO > 0 ? Number(((m.porTipoOficial.MO / m.orcamentoPrevisto.MO) * 100).toFixed(2)) : 0
+    },
+    {
+      "CATEGORIA": "EQUIP — Equipamentos e Locação",
+      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.EQUIP,
+      "REALIZADO (R$)": m.porTipoOficial.EQUIP,
+      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.EQUIP - m.porTipoOficial.EQUIP),
+      "% CONSUMIDO": m.orcamentoPrevisto.EQUIP > 0 ? Number(((m.porTipoOficial.EQUIP / m.orcamentoPrevisto.EQUIP) * 100).toFixed(2)) : 0
+    },
+    {
+      "CATEGORIA": "OUTROS — Outros e Imprevistos",
+      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.OUTROS,
+      "REALIZADO (R$)": m.porTipoOficial.OUTROS,
+      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.OUTROS - m.porTipoOficial.OUTROS),
+      "% CONSUMIDO": m.orcamentoPrevisto.OUTROS > 0 ? Number(((m.porTipoOficial.OUTROS / m.orcamentoPrevisto.OUTROS) * 100).toFixed(2)) : 0
+    },
+    {
+      "CATEGORIA": "TOTAL CONSOLIDADO",
+      "TETO PLANEJADO (R$)": m.tetoTotal,
+      "REALIZADO (R$)": m.custoTotal,
+      "SALDO DO TETO (R$)": arredondarMoeda(m.tetoTotal - m.custoTotal),
+      "% CONSUMIDO": Number(m.percOrcamentoConsumido.toFixed(2))
+    }
   ];
 
   const rowsLanc = (obra.lancamentos || [])
@@ -2893,6 +3313,17 @@ function exportarExcelObra() {
       };
     });
 
+  rowsLanc.push({
+    "DATA": "TOTAL",
+    "DESCRIÇÃO": `Total de Despesas Realizadas (${rowsLanc.length} lançamentos)`,
+    "CATEGORIA": "",
+    "SUBCATEGORIA": "",
+    "VALOR (R$)": m.custoTotal,
+    "QUEM PAGOU": "",
+    "STATUS REEMBOLSO": "",
+    "MEIO DE PAGAMENTO": ""
+  });
+
   const rowsMedicoes = (obra.medicoes || [])
     .filter(med => !med.deletado)
     .map(med => {
@@ -2909,6 +3340,16 @@ function exportarExcelObra() {
         "OBSERVAÇÃO": med.observacao || ""
       };
     });
+
+  rowsMedicoes.push({
+    "PARCELA / MEDIÇÃO": "TOTAL MEDIÇÕES CADASTRADAS",
+    "DATA": "",
+    "STATUS": `Contrato Bruto: ${formatBRL(m.medBrutaTotal)}`,
+    "VALOR BRUTO (R$)": m.somaMedicoesBruta,
+    "IMPOSTO NF (%)": "",
+    "VALOR LÍQUIDO (R$)": m.somaMedicoesLiquida,
+    "OBSERVAÇÃO": `Recebido Líquido: ${formatBRL(m.medLiquidaRecebida)} | Falta Receber do Contrato: ${formatBRL(m.medLiquidaAReceber)}`
+  });
 
   const rowsEmpreitasEReemb = [];
   (obra.empreitas || []).filter(e => !e.deletado).forEach(e => {
@@ -2939,18 +3380,22 @@ function exportarExcelObra() {
     const wb = XLSX.utils.book_new();
 
     const wsRes = XLSX.utils.json_to_sheet(rowsResumo);
-    wsRes["!cols"] = [{ wch: 52 }, { wch: 28 }];
+    wsRes["!cols"] = [{ wch: 56 }, { wch: 28 }];
+
+    const wsOrc = XLSX.utils.json_to_sheet(rowsOrcadoVsRealizado);
+    wsOrc["!cols"] = [{ wch: 34 }, { wch: 22 }, { wch: 20 }, { wch: 22 }, { wch: 16 }];
 
     const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
-    wsLanc["!cols"] = [{ wch: 12 }, { wch: 36 }, { wch: 16 }, { wch: 16 }, { wch: 15 }, { wch: 24 }, { wch: 24 }, { wch: 18 }];
+    wsLanc["!cols"] = [{ wch: 12 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 15 }, { wch: 24 }, { wch: 24 }, { wch: 18 }];
 
     const wsMed = XLSX.utils.json_to_sheet(rowsMedicoes);
-    wsMed["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 30 }];
+    wsMed["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 24 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 44 }];
 
     const wsEmp = XLSX.utils.json_to_sheet(rowsEmpreitasEReemb);
     wsEmp["!cols"] = [{ wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 22 }];
 
     XLSX.utils.book_append_sheet(wb, wsRes, "Resumo da Obra");
+    XLSX.utils.book_append_sheet(wb, wsOrc, "Orcado vs Realizado");
     XLSX.utils.book_append_sheet(wb, wsLanc, "Despesas da Obra");
     XLSX.utils.book_append_sheet(wb, wsMed, "Recebimentos do Cliente");
     XLSX.utils.book_append_sheet(wb, wsEmp, "Empreiteiros e Reembolsos");

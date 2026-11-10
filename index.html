@@ -11,8 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   
   <!-- Estilos e bibliotecas locais (funcionam sem internet) -->
-  <link rel="icon" type="image/png" href="/logo-emtec.png" />
-  <link rel="apple-touch-icon" href="/logo-emtec.png" />
+  <link rel="icon" type="image/png" href="/favicon-emtec.png" />
+  <link rel="apple-touch-icon" href="/favicon-emtec.png" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="/vendor/chart.umd.js"></script>
   <script src="/vendor/xlsx.full.min.js"></script>
@@ -258,10 +258,16 @@
       .pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
     }
 
+    #relatorioImpressaoA4 {
+      display: none;
+    }
+
     @media print {
-      .no-print { display: none !important; }
-      body { background-color: #fff; padding-bottom: 0 !important; }
-      .ed-card { box-shadow: none; border: 1px solid #ccc; }
+      .no-print,
+      main { display: none !important; }
+      body { background: #FFFFFF !important; padding-bottom: 0 !important; color: #0F172A !important; }
+      #relatorioImpressaoA4 { display: block !important; }
+      .ed-card { box-shadow: none; border: 1px solid #CBD5E1; }
     }
   </style>
 </head>
@@ -327,7 +333,7 @@
       <!-- Logo & Cloud Sync Status -->
       <div class="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
         <a href="#topo" onclick="mudarAba('resumo'); return false;" class="flex items-center shrink-0 focus:outline-none" title="EMTEC Obras — Início">
-          <img src="/logo-emtec.png" alt="EMTEC | OBRAS" class="h-6 sm:h-8 md:h-9 w-auto max-w-[130px] sm:max-w-[180px] md:max-w-[205px] object-contain select-none" />
+          <img src="/logo-emtec.png" alt="EMTEC | OBRAS" class="h-7 sm:h-8 md:h-9 w-auto max-w-[136px] sm:max-w-[180px] md:max-w-[205px] object-contain select-none" />
         </a>
 
         <!-- Indicador Real de Nuvem (Desktop) — separado em status + hora -->
@@ -455,10 +461,10 @@
           <div class="text-xs text-emerald-100/90 mt-1" id="kpiSaldoSub">Receita líquida recebida − despesas pagas</div>
         </div>
 
-        <!-- KPI 4: Lucro se gastar todo o orçamento (cenário de teto) -->
+        <!-- KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado -->
         <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
           <div class="flex items-center justify-between text-white/80">
-            <span class="text-xs font-bold uppercase tracking-wider leading-tight">Lucro se gastar todo o orçamento</span>
+            <span class="text-xs font-bold uppercase tracking-wider leading-tight" id="kpiTetoLabel">Lucro se gastar todo o orçamento</span>
             <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiTetoPercBadge">+0.0% no teto</span>
           </div>
           <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiTetoValor">R$ 0,00</div>
@@ -560,14 +566,14 @@
           </div>
         </div>
 
-        <!-- Lucro Previsto até o Fim da Obra -->
+        <!-- Lucro Previsto / Resultado Final Estimado até o Fim da Obra -->
         <div class="p-3.5 rounded-xl bg-[#23396B]/5 border border-[#23396B]/15 text-xs space-y-1">
           <div class="flex items-center justify-between">
-            <span class="font-bold uppercase tracking-wider text-[#23396B]">Lucro se gastar todo o orçamento:</span>
+            <span class="font-bold uppercase tracking-wider text-[#23396B]" id="mobLucroPrevistoLabel">Lucro se gastar todo o orçamento:</span>
             <span id="mobLucroPrevistoValor" class="font-display text-sm font-extrabold text-[#23396B]">R$ 11.335,81</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-[#475569]">Margem se gastar o teto:</span>
+            <span class="text-[#475569]" id="mobCriterioLucroSub">Margem se gastar o teto:</span>
             <span id="mobMargemProj" class="font-bold text-[#16A34A]">+12.7% se gastar o teto</span>
           </div>
         </div>
@@ -841,15 +847,40 @@
     <section id="aba-medicoes" class="hidden space-y-6">
       <div class="ed-card p-4 sm:p-6 space-y-4">
         <!-- Topo com Título e Botão de Ação -->
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <span class="ed-eyebrow">FATURAMENTO & CONTRATO</span>
             <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Recebimentos do Cliente (Medições)</h3>
-            <p class="text-xs text-[#64748B]">Acompanhe os valores contratados, efetivamente recebidos e a receber.</p>
+            <p class="text-xs text-[#64748B]">O valor do contrato fica separado das medições faturadas para evitar duplicidade.</p>
           </div>
-          <button type="button" onclick="toggleFormNovaMedicao()" class="ed-btn py-2 px-3.5 text-xs font-extrabold shadow-sm">
-            <span id="btnToggleMedicaoTexto">+ Novo Recebimento</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="editarValorContratoPrompt()" class="ed-btn--transparent py-2 px-3 text-xs font-bold">
+              <span>Ajustar Contrato</span>
+            </button>
+            <button type="button" onclick="toggleFormNovaMedicao()" class="ed-btn py-2 px-3.5 text-xs font-extrabold shadow-sm">
+              <span id="btnToggleMedicaoTexto">+ Novo Recebimento</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quadro Resumo do Contrato vs. Medições -->
+        <div id="resumoContratoMedicoes" class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+          <div>
+            <span class="text-[#64748B] font-bold uppercase block">Contrato Bruto</span>
+            <strong id="medCardContratoBruto" class="font-display text-sm sm:text-base font-extrabold text-[#23396B] block mt-0.5">R$ 0,00</strong>
+          </div>
+          <div>
+            <span class="text-[#64748B] font-bold uppercase block">Contrato Líquido (NF)</span>
+            <strong id="medCardContratoLiq" class="font-display text-sm sm:text-base font-extrabold text-[#23396B] block mt-0.5">R$ 0,00</strong>
+          </div>
+          <div>
+            <span class="text-[#64748B] font-bold uppercase block">Efetivamente Recebido</span>
+            <strong id="medCardRecebidoLiq" class="font-display text-sm sm:text-base font-extrabold text-[#16A34A] block mt-0.5">R$ 0,00</strong>
+          </div>
+          <div>
+            <span class="text-[#64748B] font-bold uppercase block">Saldo a Receber (Líq.)</span>
+            <strong id="medCardAReceberLiq" class="font-display text-sm sm:text-base font-extrabold text-[#FF8C00] block mt-0.5">R$ 0,00</strong>
+          </div>
         </div>
 
         <!-- Formulário de Nova Medição (Recolhido por padrão para exibir a lista primeiro!) -->
@@ -986,8 +1017,8 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             <span>Baixar Relatório Excel (.xlsx)</span>
           </button>
-          <button onclick="window.print()" class="ed-btn--navy py-2.5 px-4 text-xs font-bold">
-            <span>Imprimir / Salvar PDF</span>
+          <button onclick="imprimirRelatorioExecutivo()" class="ed-btn--navy py-2.5 px-4 text-xs font-bold">
+            <span>Imprimir / Salvar PDF (Relatório A4)</span>
           </button>
         </div>
       </div>
@@ -1484,6 +1515,11 @@
       </div>
     </div>
   </div>
+
+  <!-- ===================================================================== -->
+  <!-- FOLHA DE RELATÓRIO EXECUTIVO A4 (EXIBIDA NA IMPRESSÃO / EXPORTAÇÃO PDF) -->
+  <!-- ===================================================================== -->
+  <div id="relatorioImpressaoA4" class="p-6 max-w-4xl mx-auto text-[#0F172A] space-y-6"></div>
 
   <!-- SCRIPTS -->
   <script src="data.js"></script>
