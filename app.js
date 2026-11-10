@@ -379,6 +379,11 @@ function atualizarBadgeNuvem(status, dataHora) {
     mobStatusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#B45309]">Salvo no aparelho</span>`;
     horaHtml = "Será enviado sozinho quando a internet voltar";
     mobHoraHtml = "Aguardando sinal";
+  } else if (status === "server") {
+    statusHtml = '<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span><span class="font-bold text-[#B45309]">Falha na sincronização</span>';
+    mobStatusHtml = statusHtml;
+    horaHtml = temPendencia() ? "Alterações salvas no aparelho. O app vai tentar novamente." : "O app vai tentar sincronizar novamente.";
+    mobHoraHtml = temPendencia() ? "Salvo no aparelho" : "Tentaremos novamente";
   } else if (status === "auth") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">PIN inválido</span>`;
     mobStatusHtml = statusHtml;
@@ -447,7 +452,7 @@ async function sincronizarComNuvem() {
       return;
     }
     if (!res.ok) {
-      atualizarBadgeNuvem(temPendencia() ? "pending" : "offline");
+      atualizarBadgeNuvem("server");
       return;
     }
 

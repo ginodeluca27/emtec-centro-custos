@@ -1,4 +1,4 @@
-import { get, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
+import { get, list, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 const BLOB_NAME = 'emtec-database.json';
@@ -105,6 +105,21 @@ function estavel(valor) {
 }
 
 async function lerNuvem(opcoes) {
+  if (opcoes.access === 'public') {
+    const { blobs } = await list({ prefix: BLOB_NAME, limit: 1, token: opcoes.token });
+    const arquivo = blobs.find(blob => blob.pathname === BLOB_NAME);
+    if (!arquivo) return { dados: null, etag: null };
+
+    const url = new URL(arquivo.url);
+    url.searchParams.set('sync', crypto.randomUUID());
+    const resposta = await fetch(url, { cache: 'no-store' });
+    const etag = resposta.headers.get('etag');
+    if (!resposta.ok || !etag) throw new Error('Falha na leitura do Blob público: ' + resposta.status);
+    const dados = await resposta.json();
+    if (!Array.isArray(dados?.obras)) throw new Error('Base na nuvem inválida.');
+    return { dados, etag };
+  }
+
   const blob = await get(BLOB_NAME, { ...opcoes, useCache: false });
   if (!blob) return { dados: null, etag: null };
   if (blob.statusCode !== 200 || !blob.blob.etag) throw new Error('Resposta inválida do armazenamento.');
