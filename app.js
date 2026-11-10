@@ -336,7 +336,7 @@ function renderizarControlesResponsaveis() {
     const valFiltro = selFiltro.value || "TODOS";
     selFiltro.innerHTML =
       `<option value="TODOS" ${valFiltro === "TODOS" ? "selected" : ""}>Quem pagou: Todos</option>` +
-      `<option value="REEMBOLSO_PENDENTE" ${valFiltro === "REEMBOLSO_PENDENTE" ? "selected" : ""}>⚠️ Reembolso Pendente</option>` +
+      `<option value="REEMBOLSO_PENDENTE" ${valFiltro === "REEMBOLSO_PENDENTE" ? "selected" : ""}>Reembolso Pendente</option>` +
       lista.map(r =>
         `<option value="${r.id}" ${r.id === valFiltro ? "selected" : ""}>${r.nome}</option>`
       ).join("");
@@ -1332,12 +1332,12 @@ function renderizarReembolsosHome(obra, m) {
     <!-- 3. Conta da Empresa vs Caixa de Campo -->
     <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
       <div class="flex items-center justify-between text-xs">
-        <span class="font-bold text-[#23396B]">🏢 EMTEC (Conta da Obra):</span>
+        <span class="font-bold text-[#23396B]">EMTEC (Conta da Obra):</span>
         <strong class="font-display text-sm text-[#23396B]">${formatBRL(mEmtec.pagoTotal)}</strong>
       </div>
       <div class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200">
         <div>
-          <span class="font-bold text-[#0F172A] block">👷 Caixa de Campo (Elon / Iago):</span>
+          <span class="font-bold text-[#0F172A] block">Caixa de Campo (Elon / Iago):</span>
           <span class="text-xs text-[#64748B]">Adiantado ao campo: ${formatBRL(m.entradasCaixa)}</span>
         </div>
         <div class="text-right">
