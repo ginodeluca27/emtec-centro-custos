@@ -1,7 +1,9 @@
-import { get, list, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
+import { get, head, list, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 const BLOB_NAME = 'emtec-database.json';
+// O app já tenta sincronizar novamente. Limita a espera por falhas do Blob.
+process.env.VERCEL_BLOB_RETRIES ??= '1';
 
 function hash(s) {
   return createHash('sha256').update(String(s)).digest();
@@ -106,18 +108,18 @@ function estavel(valor) {
 
 async function lerNuvem(opcoes) {
   if (opcoes.access === 'public') {
-    const { blobs } = await list({ prefix: BLOB_NAME, limit: 1, token: opcoes.token });
+    const { blobs } = await list({ prefix: BLOB_NAME, limit: 1, token: opcoes.token, abortSignal: opcoes.abortSignal });
     const arquivo = blobs.find(blob => blob.pathname === BLOB_NAME);
     if (!arquivo) return { dados: null, etag: null };
 
     const url = new URL(arquivo.url);
     url.searchParams.set('sync', crypto.randomUUID());
-    const resposta = await fetch(url, { cache: 'no-store' });
+    const resposta = await fetch(url, { cache: 'no-store', signal: opcoes.abortSignal });
     const etag = resposta.headers.get('etag');
     if (!resposta.ok || !etag) throw new Error('Falha na leitura do Blob público: ' + resposta.status);
     const dados = await resposta.json();
     if (!Array.isArray(dados?.obras)) throw new Error('Base na nuvem inválida.');
-    return { dados, etag };
+    return { dados, etag, url: arquivo.url };
   }
 
   const blob = await get(BLOB_NAME, { ...opcoes, useCache: false });
@@ -130,18 +132,25 @@ async function lerNuvem(opcoes) {
 
 export async function sincronizarEstado(payload, opcoes, legado) {
   for (let tentativa = 0; tentativa < 4; tentativa++) {
-    const { dados: nuvem, etag } = await lerNuvem(opcoes);
+    const { dados: nuvem, etag, url } = await lerNuvem(opcoes);
     // A primeira gravação no armazenamento privado preserva a base pública anterior.
     const anterior = nuvem ?? (legado ? (await lerNuvem(legado)).dados : null);
     const data = mesclarEstados(payload, anterior);
     if (nuvem && estavel(nuvem) === estavel(data)) return { data, gravou: false };
     if (!anterior && !data.obras.length && !data.responsaveis?.length) return { data, gravou: false };
+    let etagGravacao = etag;
+    if (url) {
+      const metadados = await head(url, { token: opcoes.token, abortSignal: opcoes.abortSignal });
+      const semAspas = valor => String(valor || '').replace(/^W\//, '').replace(/^"|"$/g, '');
+      if (!metadados.etag || semAspas(metadados.etag) !== semAspas(etag)) continue;
+      etagGravacao = metadados.etag;
+    }
     try {
-      await put(BLOB_NAME, JSON.stringify(data), {
+      await put(BLOB_NAME, Buffer.from(JSON.stringify(data)), {
         ...opcoes,
         addRandomSuffix: false,
         allowOverwrite: Boolean(etag),
-        ...(etag ? { ifMatch: etag } : {}),
+        ...(etagGravacao ? { ifMatch: etagGravacao } : {}),
         contentType: 'application/json'
       });
       return { data, gravou: true };
@@ -152,6 +161,7 @@ export async function sincronizarEstado(payload, opcoes, legado) {
       if (!etag && !(await lerNuvem(opcoes)).etag) throw erro;
     }
   }
+  console.warn('Sincronização interrompida por divergência de versão no Blob.');
   return null;
 }
 
@@ -178,12 +188,22 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Formato de dados inválido: esperava { obras: [...] }' });
       }
 
+      const controle = new AbortController();
+      const limite = setTimeout(() => controle.abort(), 12000);
       const tokenPrivado = process.env.EMTEC_BLOB_PRIVADO_TOKEN;
-      const publico = { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN };
-      const opcoes = tokenPrivado ? { access: 'private', token: tokenPrivado } : publico;
-      const resultado = await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
-      if (!resultado) return res.status(409).json({ error: 'A base mudou durante a sincronização. Tente novamente.' });
-      return res.status(200).json({ success: true, ...resultado, timestamp: new Date().toISOString() });
+      const publico = { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, abortSignal: controle.signal };
+      const opcoes = tokenPrivado ? { access: 'private', token: tokenPrivado, abortSignal: controle.signal } : publico;
+      try {
+        const resultado = await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
+        if (!resultado) return res.status(409).json({ error: 'A base mudou durante a sincronização. Tente novamente.', codigo: 'CONFLITO' });
+        return res.status(200).json({ success: true, ...resultado, timestamp: new Date().toISOString() });
+      } catch (erro) {
+        if (!controle.signal.aborted) throw erro;
+        console.warn('Tempo limite ao acessar o Blob durante a sincronização.', erro.name);
+        return res.status(503).json({ error: 'Tempo limite na sincronização.', codigo: 'TEMPO_LIMITE' });
+      } finally {
+        clearTimeout(limite);
+      }
     }
 
     return res.status(405).json({ error: 'Método não permitido.' });

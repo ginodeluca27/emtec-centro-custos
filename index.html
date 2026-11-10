@@ -347,6 +347,16 @@
       text-align: left;
       overflow-wrap: anywhere;
     }
+    .tabela-gerencial .valor-relatorio { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
+    .relatorio-indicadores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .625rem; }
+    .relatorio-indicadores > div { padding: .75rem; border: 1px solid #c8d9ee; border-radius: .8rem; background: #f1f6fc; }
+    .relatorio-indicadores span { display: block; font-size: .75rem; color: #475569; }
+    .relatorio-indicadores strong { color: #23396b; font-size: clamp(.85rem, 2.1vw, 1.2rem); font-variant-numeric: tabular-nums; }
+    body[data-aba="geral"] #alertaCustoObra, body[data-aba="reembolsos"] #alertaCustoObra { display: none; }
+    @media (max-width: 640px) {
+      .relatorio-indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tabela-gerencial .valor-relatorio { white-space: normal; }
+    }
     .tabela-gerencial th, .linha-total { background: #eff6ff; color: #23396b; font-weight: 700; }
     .chips-reembolso { display: flex; flex-wrap: wrap; gap: .375rem; }
     .chips-reembolso button { min-height: 2.75rem; padding: .25rem .65rem; }
@@ -367,7 +377,11 @@
       #modalLancamentoRapido button[id^="btnCatRapida_"], #modalLancamentoRapido button[id^="btnTitRapido_"],
       #modalLancamentoRapido button[id^="btnReembRapido_"] { min-height: 44px; }
     }
+    @page { size: A4; margin: 12mm; }
     @media print {
+      #relatorioImpressaoA4 { padding: 0; max-width: none; }
+      #relatorioImpressaoA4 thead { display: table-header-group; }
+      #relatorioImpressaoA4 tr { break-inside: avoid; }
       .tabela-gerencial { font-size: 9px; }
       .tabela-gerencial th, .tabela-gerencial td { padding: 4px; }
       .tabela-gerencial tr { break-inside: avoid; }
@@ -1186,19 +1200,22 @@
       <div class="ed-card p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span class="ed-eyebrow">RELATÓRIOS GERENCIAIS</span>
-          <h3 class="font-display text-lg font-extrabold text-[#23396B] mt-0.5">Fechamento e Exportação da Obra</h3>
-          <p class="text-xs text-[#64748B]">Exporte a planilha completa da obra atualizada ou imprima o demonstrativo executivo.</p>
+          <h3 class="font-display text-lg font-extrabold text-[#23396B] mt-0.5" id="relatorioObraNome">Relatório da obra</h3>
+          <p class="text-xs text-[#64748B]">O resumo traz os totais. O PDF detalhado inclui a lista de despesas.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2.5 no-print">
           <button onclick="exportarExcelObra()" class="ed-btn py-2.5 px-4 text-xs font-extrabold">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            <span>Baixar Relatório Excel (.xlsx)</span>
+            <span>Excel completo</span>
           </button>
           <button onclick="imprimirRelatorioExecutivo()" class="ed-btn--navy py-2.5 px-4 text-xs font-bold">
-            <span>Imprimir / Salvar PDF (Relatório A4)</span>
+            <span>Resumo em PDF</span>
           </button>
+          <button onclick="imprimirRelatorioExecutivo(true)" class="ed-btn--transparent py-2.5 px-4 text-xs font-bold">PDF detalhado</button>
         </div>
       </div>
+
+      <div id="indicadoresRelatorioObra" class="relatorio-indicadores"></div>
 
       <!-- Bloco Analítico (Gráfico e Tetos Orçamentários) -->
       <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1211,9 +1228,6 @@
           </div>
           <div class="relative h-64 sm:h-72 my-4">
             <canvas id="chartCategorias"></canvas>
-          </div>
-          <div class="pt-3 border-t border-slate-100 text-xs text-[#64748B] text-center">
-            Mão de obra e materiais representam a maior fatia do desembolso.
           </div>
         </div>
 
@@ -1295,11 +1309,23 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="abrirModalNovaObra()" class="ed-btn--transparent py-2 px-3 text-xs">+ Nova obra</button>
-          <button onclick="baixarRelatorioGerencial('geral')" class="ed-btn py-2 px-3 text-xs">Baixar Excel</button>
-          <button onclick="baixarRelatorioGerencial('geral', true)" class="ed-btn--navy py-2 px-3 text-xs">Imprimir / PDF</button>
+          <button data-exporta-geral onclick="baixarRelatorioGerencial('geral')" class="ed-btn py-2 px-3 text-xs">Baixar Excel</button>
+          <button data-exporta-geral onclick="baixarRelatorioGerencial('geral', true)" class="ed-btn--navy py-2 px-3 text-xs">Imprimir / PDF</button>
         </div>
       </div>
+      <div id="indicadoresGeralObras" class="relatorio-indicadores"></div>
+      <div class="filtros-relatorio">
+        <label>Situação das obras
+          <select id="relGeralSituacao" onchange="renderizarRelatoriosGerenciais()" class="ed-input text-xs">
+            <option value="">Todas as situações</option>
+            <option value="Em Andamento">Em andamento</option>
+            <option value="Pausada">Pausadas</option>
+            <option value="Concluída">Concluídas</option>
+          </select>
+        </label>
+      </div>
       <div id="tabelaGeralObras"></div>
+      <p id="notaConsumoGeral" class="text-xs text-[#64748B]" hidden>O consumo consolidado fica em branco quando há obras sem orçamento.</p>
     </section>
 
     <section id="aba-reembolsos" class="hidden ed-card p-3.5 sm:p-6 space-y-4">

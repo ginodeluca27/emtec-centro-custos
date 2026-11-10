@@ -350,7 +350,7 @@ function temPendencia() {
   return localStorage.getItem(PENDENTE_STORAGE_KEY) === "1";
 }
 
-function atualizarBadgeNuvem(status, dataHora) {
+function atualizarBadgeNuvem(status, dataHora, detalhe = "") {
   const badgeStatus = document.getElementById("cloudBadgeStatus");
   const badgeHora = document.getElementById("cloudBadgeHora");
   const mobStatus = document.getElementById("cloudBadgeMobStatus");
@@ -382,8 +382,8 @@ function atualizarBadgeNuvem(status, dataHora) {
   } else if (status === "server") {
     statusHtml = '<span class="w-2 h-2 rounded-full bg-[#FF8C00]"></span><span class="font-bold text-[#B45309]">Falha na sincronização</span>';
     mobStatusHtml = statusHtml;
-    horaHtml = temPendencia() ? "Alterações salvas no aparelho. O app vai tentar novamente." : "O app vai tentar sincronizar novamente.";
-    mobHoraHtml = temPendencia() ? "Salvo no aparelho" : "Tentaremos novamente";
+    horaHtml = [detalhe || "O servidor não concluiu o envio.", temPendencia() ? "Dados salvos no aparelho." : ""].filter(Boolean).join(" ");
+    mobHoraHtml = temPendencia() ? "Salvo no aparelho" : "Toque para tentar de novo";
   } else if (status === "auth") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">PIN inválido</span>`;
     mobStatusHtml = statusHtml;
@@ -427,7 +427,7 @@ let versaoLocal = 0;
 let novaSincronizacaoSolicitada = false;
 let intervaloSyncAtivo = null;
 
-async function sincronizarComNuvem() {
+async function sincronizarComNuvem(manual = false) {
   if (!verificarAuth()) return;
   if (isSincronizando) {
     novaSincronizacaoSolicitada = true;
@@ -452,7 +452,11 @@ async function sincronizarComNuvem() {
       return;
     }
     if (!res.ok) {
-      atualizarBadgeNuvem("server");
+      const detalhe = res.status === 409 ? "A nuvem está processando outra alteração."
+        : res.status === 503 ? "A nuvem demorou para responder."
+          : "O servidor retornou o erro " + res.status + ".";
+      atualizarBadgeNuvem("server", undefined, detalhe);
+      if (manual) mostrarNotificacaoToast(detalhe + " O app vai tentar de novo.");
       return;
     }
 
@@ -476,6 +480,7 @@ async function sincronizarComNuvem() {
       }
     }
     atualizarBadgeNuvem(temPendencia() || novaSincronizacaoSolicitada ? "syncing" : "success", json.timestamp);
+    if (manual && !temPendencia() && !novaSincronizacaoSolicitada) mostrarNotificacaoToast("Tudo salvo na nuvem.");
   } catch (err) {
     console.warn("Sincronização falhou (dados seguem salvos no aparelho):", err);
     atualizarBadgeNuvem(temPendencia() ? "pending" : "offline");
@@ -720,6 +725,24 @@ function distribuirOrcamento(total, anterior = {}) {
   }));
 }
 
+function medicoesDaObra(obra) {
+  // Filtra medições ativas (e ignora medições fictícias de contrato inicial criadas por versões antigas quando já há contrato definido)
+  return (obra.medicoes || []).filter(m => {
+    if (!m || m.deletado) return false;
+    if (Number(obra.valorContratoBruto || 0) > 0 && String(m.id || "").startsWith("med-init-") && m.observacao === "Medição inicial cadastrada na abertura da obra") {
+      return false;
+    }
+    return true;
+  });
+}
+
+function valoresMedicao(obra, med) {
+  const bruto = Number(med.valorBruto || 0);
+  const desc = Number(med.descontoNotaPerc ?? obra.aliquotaImposto ?? 7.5);
+  const liq = med.valorLiquido ? Number(med.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
+  return { bruto, desc, liq };
+}
+
 function calcularMetricasObra(obra) {
   if (!obra) return {};
   const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
@@ -794,19 +817,8 @@ function calcularMetricasObra(obra) {
   let medBrutaFaturadaPendente = 0;
   let medLiquidaFaturadaPendente = 0;
 
-  // Filtra medições ativas (e ignora medições fictícias de contrato inicial criadas por versões antigas quando já há contrato definido)
-  const medicoesAtivas = (obra.medicoes || []).filter(m => {
-    if (!m || m.deletado) return false;
-    if (Number(obra.valorContratoBruto || 0) > 0 && String(m.id || "").startsWith("med-init-") && m.observacao === "Medição inicial cadastrada na abertura da obra") {
-      return false;
-    }
-    return true;
-  });
-
-  for (const m of medicoesAtivas) {
-    const bruto = Number(m.valorBruto || 0);
-    const desc = Number(m.descontoNotaPerc ?? obra.aliquotaImposto ?? 7.5);
-    const liq = m.valorLiquido ? Number(m.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
+  for (const m of medicoesDaObra(obra)) {
+    const { bruto, liq } = valoresMedicao(obra, m);
     somaMedicoesBruta = arredondarMoeda(somaMedicoesBruta + bruto);
     somaMedicoesLiquida = arredondarMoeda(somaMedicoesLiquida + liq);
     if (m.status === "Recebida") {
@@ -1231,7 +1243,7 @@ function atualizarTudo() {
   renderizarAbaResumo(obra, m);
   renderizarAbaMedicoes(obra, m);
   renderizarAbaEmpreitasETitulares(obra, m);
-  gerarRelatorioImpressaoA4(obra, m);
+  renderizarResumoRelatorioObra(obra, m);
 }
 
 function renderizarMiniCards(m) {
@@ -3239,8 +3251,13 @@ function escaparCelula(valor) {
   })[c]);
 }
 
-function linhasGeralObras() {
-  const linhas = estado.obras.map(obra => {
+function obrasDoRelatorioGeral() {
+  const situacao = document.getElementById("relGeralSituacao").value;
+  return estado.obras.filter(obra => !situacao || (obra.status || "Em Andamento") === situacao);
+}
+
+function linhasGeralObras(obras = obrasDoRelatorioGeral()) {
+  const linhas = obras.map(obra => {
     const m = calcularMetricasObra(obra);
     const contratado = Number(obra.valorContratoBruto || 0);
     const liquidoContratado = arredondarMoeda(contratado * (1 - Number(obra.aliquotaImposto ?? 7.5) / 100));
@@ -3253,8 +3270,11 @@ function linhasGeralObras() {
       "Gasto (R$)": m.custoTotal,
       "Consumo (%)": m.tetoTotal > 0 ? Number(m.percOrcamentoConsumido.toFixed(2)) : null,
       "Recebido (R$)": m.medLiquidaRecebida,
+      "A receber (R$)": m.medLiquidaAReceber,
       "A reembolsar (R$)": m.totalReembolsosPendentes,
-      "Alerta": m.alertaCusto ? (m.percOrcamentoConsumido > 100 ? "Acima do estimado" : "A partir de 70%") : "—"
+      "Pendências a pagar (R$)": m.pagamentosPendentesTotal,
+      "Resultado acumulado (R$)": m.saldoAtual,
+      "Alerta": m.tetoTotal <= 0 ? "Sem orçamento" : m.alertaCusto ? (m.percOrcamentoConsumido > 100 ? "Acima do estimado" : "A partir de 70%") : "—"
     };
   });
   if (!linhas.length) return linhas;
@@ -3263,9 +3283,11 @@ function linhasGeralObras() {
   Object.keys(linhas[0]).filter(chave => chave.endsWith("(R$)")).forEach(chave => {
     total[chave] = arredondarMoeda(linhas.reduce((soma, linha) => soma + linha[chave], 0));
   });
-  total["Consumo (%)"] = total["Estimado (R$)"] > 0
-    ? Number((100 * total["Gasto (R$)"] / total["Estimado (R$)"]).toFixed(2)) : null;
-  total["Alerta"] = linhas.filter(linha => linha.Alerta !== "—").length + " obra(s) em alerta";
+  const temObraSemOrcamento = linhas.some(linha => linha["Consumo (%)"] === null);
+  total["Consumo (%)"] = temObraSemOrcamento ? null
+    : Number((100 * total["Gasto (R$)"] / total["Estimado (R$)"]).toFixed(2));
+  const alertas = linhas.filter(linha => linha["Consumo (%)"] >= LIMIAR_ALERTA_CUSTO).length;
+  total["Alerta"] = alertas + (alertas === 1 ? " obra em alerta" : " obras em alerta");
   return [...linhas, total];
 }
 
@@ -3342,7 +3364,27 @@ function abrirDespesasParaReembolso() {
   filtrarPorResponsavel(pessoa || "TODOS");
 }
 
-function tabelaGerencial(linhas, consolidado = false, linksObras = false) {
+function cartoesIndicadoresRelatorio(indicadores) {
+  return indicadores.map(([rotulo, valor]) => '<div><span>' + escaparCelula(rotulo) +
+    '</span><strong>' + escaparCelula(formatBRL(valor)) + '</strong></div>').join("");
+}
+
+function renderizarResumoRelatorioObra(obra, m) {
+  document.getElementById("relatorioObraNome").textContent = obra.nome;
+  document.getElementById("indicadoresRelatorioObra").innerHTML = cartoesIndicadoresRelatorio([
+    ["Recebido líquido", m.medLiquidaRecebida],
+    ["Despesas realizadas", m.custoTotal],
+    ["Resultado acumulado", m.saldoAtual],
+    ["Pendências a pagar", m.pagamentosPendentesTotal]
+  ]);
+}
+
+function visaoGeralResumida(linhas) {
+  const colunas = ["Obra", "Situação", "Estimado (R$)", "Gasto (R$)", "Consumo (%)", "Recebido (R$)", "A receber (R$)", "Alerta"];
+  return linhas.map(linha => Object.fromEntries(colunas.map(coluna => [coluna, linha[coluna]])));
+}
+
+function tabelaGerencial(linhas, consolidado = false, abrirObras = []) {
   if (!linhas.length) return '<p class="text-sm py-4">Nenhum registro encontrado.</p>';
   const colunas = Object.keys(linhas[0]);
   const titulo = colunas.map(coluna => '<th scope="col">' + escaparCelula(coluna) + '</th>').join("");
@@ -3352,11 +3394,12 @@ function tabelaGerencial(linhas, consolidado = false, linksObras = false) {
       if (coluna.endsWith("(R$)")) valor = formatBRL(valor);
       if (coluna === "Consumo (%)") valor = valor === null ? "—" : valor.toLocaleString("pt-BR") + "%";
       if (coluna.startsWith("Data ")) valor = formatDataBR(valor);
-      const obra = linksObras && coluna === "Obra" ? estado.obras[i] : null;
+      const obra = coluna === "Obra" ? abrirObras[i] : null;
       const conteudo = obra
         ? '<button type="button" data-abrir-obra="' + escaparCelula(obra.id) + '" class="link-obra">' + escaparCelula(valor) + '</button>'
         : escaparCelula(valor);
-      return '<td data-coluna="' + escaparCelula(coluna) + '">' + conteudo + '</td>';
+      const numerica = coluna.endsWith("(R$)") || coluna === "Consumo (%)";
+      return '<td data-coluna="' + escaparCelula(coluna) + '"' + (numerica ? ' class="valor-relatorio"' : '') + '>' + conteudo + '</td>';
     }).join("");
     return '<tr' + (consolidado && i === linhas.length - 1 ? ' class="linha-total"' : '') + '>' + celulas + '</tr>';
   }).join("");
@@ -3371,7 +3414,18 @@ function resumoRelatorioReembolsos(linhas) {
 function renderizarRelatoriosGerenciais() {
   const aba = document.body.dataset.aba;
   if (aba === "geral") {
-    document.getElementById("tabelaGeralObras").innerHTML = tabelaGerencial(linhasGeralObras(), true, true);
+    const obras = obrasDoRelatorioGeral();
+    const linhas = linhasGeralObras(obras);
+    const total = linhas.at(-1);
+    document.getElementById("indicadoresGeralObras").innerHTML = total ? cartoesIndicadoresRelatorio([
+      ["Recebido líquido", total["Recebido (R$)"]],
+      ["Despesas realizadas", total["Gasto (R$)"]],
+      ["A receber", total["A receber (R$)"]],
+      ["Pendências a pagar", total["Pendências a pagar (R$)"]]
+    ]) : "";
+    document.getElementById("tabelaGeralObras").innerHTML = tabelaGerencial(visaoGeralResumida(linhas), true, obras);
+    document.getElementById("notaConsumoGeral").hidden = !total || total["Consumo (%)"] !== null;
+    document.querySelectorAll("[data-exporta-geral]").forEach(botao => { botao.disabled = !total; });
     return;
   }
   if (aba !== "reembolsos") return;
@@ -3450,30 +3504,70 @@ function cartaoRelatorioReembolso({ obra, item, pago }) {
     escaparCelula(situacao + " · " + data) + '</p></div>' + acao + '</li>';
 }
 
+function anexarPlanilhaRelatorio(livro, nome, linhas, { filtrar = false, temTotal = false, larguras = [] } = {}) {
+  const planilha = XLSX.utils.json_to_sheet(linhas);
+  const colunas = Object.keys(linhas[0] || {});
+  planilha["!cols"] = colunas.map((coluna, i) => ({ wch: larguras[i] || Math.max(16, coluna.length + 3, /^(Obra|Descrição)$/i.test(coluna) ? 40 : 0) }));
+  linhas.forEach((linha, i) => colunas.forEach((coluna, c) => {
+    const celula = planilha[XLSX.utils.encode_cell({ r: i + 1, c })];
+    if (!celula) return;
+    const chave = coluna === "VALOR / INFORMAÇÃO" ? linha["INDICADOR DA OBRA"] : coluna;
+    if (celula.t === "n" && /\(R\$\)$/.test(chave)) celula.z = '"R$" #,##0.00;[Red]-"R$" #,##0.00';
+    if (celula.t === "n" && (/\(%\)$/.test(chave) || chave === "% CONSUMIDO")) celula.z = '0.00"%"';
+    if (/^DATA(?: |$)/i.test(coluna) && /^\d{4}-\d{2}-\d{2}$/.test(celula.v)) {
+      const milissegundos = Date.parse(celula.v + "T00:00:00Z");
+      if (!Number.isFinite(milissegundos)) return;
+      celula.t = "n";
+      celula.v = (milissegundos - Date.UTC(1899, 11, 30)) / 86400000;
+      celula.z = "dd/mm/yyyy";
+    }
+  }));
+  const ultimo = linhas.length - Number(temTotal);
+  if (filtrar && ultimo > 0 && colunas.length) {
+    planilha["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: ultimo, c: colunas.length - 1 } }) };
+  }
+  XLSX.utils.book_append_sheet(livro, planilha, nome);
+}
+
+function escopoRelatorioGerencial(geral) {
+  const rotulo = id => document.getElementById(id).selectedOptions[0]?.textContent || "";
+  const dados = [["Emissão", formatDataBR(dataLocalHoje())]];
+  if (geral) return [...dados, ["Situação das obras", rotulo("relGeralSituacao")]];
+  const { situacao } = filtrosRelatorioReembolsos();
+  return [...dados,
+    ["Obra", rotulo("relReembObra")],
+    ["Quem pagou", rotulo("relReembPessoa")],
+    ["Situação", situacao === "PENDENTE" ? "A pagar" : situacao === "REEMBOLSADO" ? "Pagos" : "Todos"],
+    ["Período", document.getElementById("relReembPeriodo").textContent.replace("Período · ", "")]
+  ];
+}
+
 function baixarRelatorioGerencial(tipo, imprimir = false) {
   const geral = tipo === "geral";
   const titulo = geral ? "Geral de Obras" : "Relatório de Reembolsos";
   const linhas = geral ? linhasGeralObras() : linhasRelatorioReembolsos();
   const aba = geral ? "Geral de Obras" : "Reembolsos";
-  if (!geral && !linhas.length) return mostrarNotificacaoToast("Nenhum reembolso para exportar.");
+  if (!linhas.length) return mostrarNotificacaoToast("Nenhum registro para exportar.");
+  const escopo = escopoRelatorioGerencial(geral);
   if (imprimir) {
     const container = document.getElementById("relatorioImpressaoA4");
     const resumo = geral ? "" : "<p>" + escaparCelula(resumoRelatorioReembolsos(linhas)) + "</p>";
-    container.innerHTML = '<h1 class="font-display font-bold text-lg">' + titulo + '</h1><p>Emitido em ' +
-      formatDataBR(dataLocalHoje()) + '</p>' + resumo + tabelaGerencial(linhas, geral);
+    const contexto = escopo.map(([chave, valor]) => escaparCelula(chave + " · " + valor)).join(" | ");
+    const observacao = geral && linhas.at(-1)["Consumo (%)"] === null
+      ? "<p>Consumo consolidado indisponível porque há obras sem orçamento.</p>" : "";
+    container.innerHTML = '<h1 class="font-display font-bold text-lg">' + titulo + '</h1><p>' +
+      contexto + '</p>' + resumo + tabelaGerencial(geral ? visaoGeralResumida(linhas) : linhas, geral) + observacao;
     window.print();
     return;
   }
   if (typeof XLSX === "undefined") return mostrarNotificacaoToast("Exportação Excel indisponível.");
-  if (!linhas.length) return mostrarNotificacaoToast("Nenhum registro para exportar.");
   const livro = XLSX.utils.book_new();
-  const planilha = XLSX.utils.json_to_sheet(linhas);
-  planilha["!cols"] = Object.keys(linhas[0]).map(coluna => ({ wch: Math.max(16, coluna.length + 3, ["Obra", "Descrição"].includes(coluna) ? 38 : 0) }));
-  XLSX.utils.book_append_sheet(livro, planilha, aba);
+  anexarPlanilhaRelatorio(livro, aba, linhas, { filtrar: true, temTotal: geral });
+  anexarPlanilhaRelatorio(livro, "Escopo", escopo.map(([Campo, Seleção]) => ({ Campo, Seleção })), { larguras: [24, 45] });
   XLSX.writeFile(livro, "EMTEC_" + tipo + "_" + dataLocalHoje() + ".xlsx");
 }
 
-function gerarRelatorioImpressaoA4(obraParam, mParam) {
+function gerarRelatorioImpressaoA4(obraParam, mParam, detalhado = false) {
   const container = document.getElementById("relatorioImpressaoA4");
   if (!container) return;
   const obra = obraParam || getObraAtual();
@@ -3501,17 +3595,15 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
     `;
   }).join("");
 
-  const medicoesAtivas = (obra.medicoes || []).filter(med => !med.deletado);
+  const medicoesAtivas = medicoesDaObra(obra);
   const rowsMedHtml = medicoesAtivas.length === 0
     ? `<tr><td colspan="5" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma medição registrada até o momento.</td></tr>`
     : medicoesAtivas.map(med => {
-        const bruto = Number(med.valorBruto || 0);
-        const desc = Number(med.descontoNotaPerc ?? 7.5);
-        const liq = med.valorLiquido ? Number(med.valorLiquido) : arredondarMoeda(bruto * (1 - desc / 100));
+        const { bruto, desc, liq } = valoresMedicao(obra, med);
         return `
           <tr>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;">${med.titulo}</td>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${formatDataBR(med.data)}${med.recebidoEm ? "<br>Recebido em " + formatDataBR(med.recebidoEm) : ""}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;">${escaparCelula(med.titulo)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${escaparCelula(formatDataBR(med.data))}${med.recebidoEm ? "<br>Recebido em " + escaparCelula(formatDataBR(med.recebidoEm)) : ""}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;font-weight:700;color:${med.status === "Recebida" ? "#15803D" : "#B45309"};">${med.status === "Recebida" ? "Recebida" : "Pendente"}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(bruto)} (-${desc}%)</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(liq)}</td>
@@ -3528,8 +3620,8 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
         const falta = Math.max(0, contratado - pago);
         return `
           <tr>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${e.fornecedor}</td>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;">${e.servico || "-"}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${escaparCelula(e.fornecedor)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;">${escaparCelula(e.servico || "-")}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(contratado)}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#15803D;font-weight:600;">${formatBRL(pago)}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${falta > 0 ? "#B45309" : "#15803D"};font-weight:700;">${formatBRL(falta)}</td>
@@ -3542,7 +3634,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
     ? `<tr><td colspan="5" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma despesa registrada.</td></tr>`
     : reembEntries.map(([id, st]) => `
         <tr>
-          <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${getNomeResponsavel(id)}</td>
+          <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;">${escaparCelula(getNomeResponsavel(id))}</td>
           <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${st.qtdTotal}</td>
           <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:600;">${formatBRL(st.pagoTotal)}</td>
           <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:#15803D;">${formatBRL(st.reembolsado)}</td>
@@ -3551,10 +3643,10 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
       `).join("");
 
   const lancAtivos = (obra.lancamentos || [])
-    .filter(l => !l.deletado)
+    .filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA")
     .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
-  const rowsLancHtml = lancAtivos.length === 0
+  const rowsLancHtml = !detalhado ? "" : lancAtivos.length === 0
     ? `<tr><td colspan="6" style="padding:8px;border:1px solid #CBD5E1;text-align:center;color:#64748B;">Nenhuma despesa lançada nesta obra.</td></tr>`
     : lancAtivos.map(l => {
         const reembTxt = l.reembolsoStatus === "PENDENTE"
@@ -3564,19 +3656,17 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
             : "Empresa / Direto";
         return `
           <tr>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;white-space:nowrap;">${formatDataBR(l.data)}</td>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;font-weight:600;">${l.descricao}</td>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${l.movimento === "ENTRADA_CAIXA" ? "Adiant. Caixa" : `${l.tipo} (${l.subtipo || l.tipo})`}</td>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${getNomeResponsavel(l.titular)}</td>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;color:${l.reembolsoStatus === "PENDENTE" ? "#B91C1C" : "#475569"};">${reembTxt}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;white-space:nowrap;">${escaparCelula(formatDataBR(l.data))}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;font-weight:600;">${escaparCelula(l.descricao)}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${escaparCelula(l.tipo + (l.subtipo && l.subtipo !== l.tipo ? " (" + l.subtipo + ")" : ""))}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${escaparCelula(getNomeResponsavel(l.titular))}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;color:${l.reembolsoStatus === "PENDENTE" ? "#B91C1C" : "#475569"};">${escaparCelula(reembTxt)}</td>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(l.valor)}</td>
           </tr>
         `;
       }).join("");
 
-  const rotuloResultadoFinal = m.excessoTetoProjetado > 0
-    ? "RESULTADO FINAL ESTIMADO (ACIMA DO TETO)"
-    : "LUCRO SE GASTAR TODO O ORÇAMENTO";
+  const rotuloResultadoFinal = obra.status === "Concluída" ? "RESULTADO SOBRE A RECEITA PREVISTA" : "RESULTADO FINAL ESTIMADO";
 
   container.innerHTML = `
     <div style="font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#0F172A;font-size:11px;line-height:1.4;">
@@ -3584,26 +3674,26 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
         <div style="display:flex;align-items:center;gap:12px;">
           <img src="/logo-emtec.png" alt="EMTEC Obras" style="height:38px;width:auto;object-fit:contain;" />
           <div>
-            <div style="font-size:16px;font-weight:800;color:#23396B;letter-spacing:-0.02em;">RELATÓRIO EXECUTIVO DE CUSTOS E VIABILIDADE</div>
-            <div style="font-size:11px;color:#475569;font-weight:600;">Obra: <strong>${obra.nome}</strong> | Cliente: <strong>${obra.cliente || "Contrato"}</strong> | Status: <strong>${obra.status || "Em Andamento"}</strong></div>
+            <div style="font-size:16px;font-weight:800;color:#23396B;letter-spacing:-0.02em;">RELATÓRIO DA OBRA · ${detalhado ? "DETALHADO" : "RESUMO"}</div>
+            <div style="font-size:11px;color:#475569;font-weight:600;">Obra: <strong>${escaparCelula(obra.nome)}</strong> | Cliente: <strong>${escaparCelula(obra.cliente || "Contrato")}</strong> | Status: <strong>${escaparCelula(obra.status || "Em Andamento")}</strong></div>
           </div>
         </div>
         <div style="text-align:right;font-size:10px;color:#475569;">
           <div><strong>Emissão:</strong> ${dataEmissao} às ${horaEmissao}</div>
-          <div><strong>Diagnóstico:</strong> ${sit.rotulo}</div>
+          <div><strong>Diagnóstico:</strong> ${escaparCelula(sit.rotulo)}</div>
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
         <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
-          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">1. Contrato Líquido (Após NF)</div>
+          <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">1. Receita Líquida Prevista</div>
           <div style="font-size:15px;font-weight:800;color:#23396B;margin-top:2px;">${formatBRL(m.medLiquidaTotal)}</div>
-          <div style="font-size:9.5px;color:#64748B;">Bruto: ${formatBRL(m.medBrutaTotal)} | Recebido: <strong>${formatBRL(m.medLiquidaRecebida)}</strong></div>
+          <div style="font-size:9.5px;color:#64748B;">A receber: ${formatBRL(m.medLiquidaAReceber)} | Recebido: <strong>${formatBRL(m.medLiquidaRecebida)}</strong></div>
         </div>
         <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
           <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">2. Despesas Realizadas</div>
           <div style="font-size:15px;font-weight:800;color:#0F172A;margin-top:2px;">${formatBRL(m.custoTotal)}</div>
-          <div style="font-size:9.5px;color:#64748B;">Teto: ${formatBRL(m.tetoTotal)} (${m.percOrcamentoConsumido.toFixed(1)}% usado)</div>
+          <div style="font-size:9.5px;color:#64748B;">${m.tetoTotal > 0 ? "Orçamento: " + formatBRL(m.tetoTotal) + " (" + m.percOrcamentoConsumido.toFixed(1).replace(".", ",") + "% usado)" : "Orçamento não informado"}</div>
         </div>
         <div style="border:1px solid #CBD5E1;border-radius:8px;padding:8px 10px;background:#F8FAFC;">
           <div style="font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;">3. Resultado Acumulado Hoje</div>
@@ -3616,6 +3706,8 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
           <div style="font-size:9.5px;color:#64748B;">Margem Final: ${m.margemProjetadaFinalPerc.toFixed(1)}% | Custo Proj.: ${formatBRL(m.custoTotalProjetado)}</div>
         </div>
       </div>
+
+      <p style="margin-bottom:14px;color:#475569;">Contrato bruto informado: <strong>${Number(obra.valorContratoBruto || 0) > 0 ? formatBRL(obra.valorContratoBruto) : "Não informado"}</strong> · Pendências a pagar: <strong>${formatBRL(m.pagamentosPendentesTotal)}</strong> · Adiantamentos de caixa: <strong>${formatBRL(m.totalEntradasCaixa)}</strong> (fora das despesas)</p>
 
       <div style="margin-bottom:14px;">
         <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">A. Orçamento Planejado (Teto) vs. Realizado por Categoria</div>
@@ -3636,7 +3728,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
               <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(m.tetoTotal)}</td>
               <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(m.custoTotal)}</td>
               <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${m.tetoTotal - m.custoTotal < 0 ? "#B91C1C" : "#15803D"};">${formatBRL(m.tetoTotal - m.custoTotal)}</td>
-              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${m.percOrcamentoConsumido.toFixed(1)}%</td>
+              <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${m.tetoTotal > 0 ? m.percOrcamentoConsumido.toFixed(1).replace(".", ",") + "%" : "—"}</td>
             </tr>
           </tbody>
         </table>
@@ -3694,7 +3786,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
         </table>
       </div>
 
-      <div>
+      ${detalhado ? `<div>
         <div style="font-size:11px;font-weight:800;color:#23396B;text-transform:uppercase;margin-bottom:5px;">E. Extrato Analítico de Despesas da Obra (${lancAtivos.length} lançamentos)</div>
         <table style="width:100%;border-collapse:collapse;font-size:9.5px;">
           <thead>
@@ -3709,16 +3801,16 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
           </thead>
           <tbody>${rowsLancHtml}</tbody>
         </table>
-      </div>
+      </div>` : ""}
     </div>
   `;
 }
 
-function imprimirRelatorioExecutivo() {
+function imprimirRelatorioExecutivo(detalhado = false) {
   const obra = getObraAtual();
   if (!obra) return;
   const m = calcularMetricasObra(obra);
-  gerarRelatorioImpressaoA4(obra, m);
+  gerarRelatorioImpressaoA4(obra, m, detalhado);
   window.print();
 }
 
@@ -3728,9 +3820,9 @@ function exportarExcelObra() {
   const m = calcularMetricasObra(obra);
   const sit = m.situacao || avaliarSituacaoFinanceira(obra, m);
 
-  const rotuloResultadoFinal = m.excessoTetoProjetado > 0
-    ? "Resultado Final Estimado (Acima do Teto) (R$)"
-    : "Lucro se gastar todo o orçamento (Receita líquida - Teto) (R$)";
+  const rotuloResultadoFinal = obra.status === "Concluída"
+    ? "Resultado sobre a receita prevista (R$)"
+    : "Resultado final estimado (receita prevista menos custo projetado) (R$)";
 
   const rowsResumo = [
     { "INDICADOR DA OBRA": "Nome da Obra", "VALOR / INFORMAÇÃO": obra.nome },
@@ -3739,11 +3831,11 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Situação Financeira", "VALOR / INFORMAÇÃO": sit.rotulo },
     { "INDICADOR DA OBRA": "Data de Emissão do Relatório", "VALOR / INFORMAÇÃO": formatDataBR(dataLocalHoje()) },
     { "INDICADOR DA OBRA": "--- RECEITAS E MEDIÇÕES ---", "VALOR / INFORMAÇÃO": "" },
-    { "INDICADOR DA OBRA": "Valor Bruto Total do Contrato (R$)", "VALOR / INFORMAÇÃO": m.medBrutaTotal },
-    { "INDICADOR DA OBRA": "Receita Líquida do Contrato após NF (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaTotal },
+    { "INDICADOR DA OBRA": "Valor bruto do contrato cadastrado (R$)", "VALOR / INFORMAÇÃO": Number(obra.valorContratoBruto || 0) || "Não informado" },
+    { "INDICADOR DA OBRA": "Receita líquida prevista (R$)", "VALOR / INFORMAÇÃO": m.receitaContratoTotal },
     { "INDICADOR DA OBRA": "Total de Medições Lançadas (Bruto) (R$)", "VALOR / INFORMAÇÃO": m.somaMedicoesBruta },
     { "INDICADOR DA OBRA": "Valor Efetivamente Recebido na Conta (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaRecebida },
-    { "INDICADOR DA OBRA": "Medições Pendentes Faturadas (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaPendente },
+    { "INDICADOR DA OBRA": "Medições lançadas a receber (líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaFaturadaPendente },
     { "INDICADOR DA OBRA": "Saldo Total a Receber do Contrato (Líquido) (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaAReceber },
     { "INDICADOR DA OBRA": "--- DESPESAS REALIZADAS POR CATEGORIA ---", "VALOR / INFORMAÇÃO": "" },
     { "INDICADOR DA OBRA": "Material (MAT) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MAT },
@@ -3754,11 +3846,13 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Alimentação (ALIM) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.ALIM },
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Combustível / Transporte (TRANSP) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.TRANSP },
     { "INDICADOR DA OBRA": "TOTAL DE DESPESAS REALIZADAS (R$)", "VALOR / INFORMAÇÃO": m.custoTotal },
+    { "INDICADOR DA OBRA": "Adiantamentos de caixa (fora das despesas) (R$)", "VALOR / INFORMAÇÃO": m.totalEntradasCaixa },
     { "INDICADOR DA OBRA": "--- RESULTADO, PENDÊNCIAS E VIABILIDADE ---", "VALOR / INFORMAÇÃO": "" },
     { "INDICADOR DA OBRA": "Resultado Acumulado (Recebido - Despesas Pagas) (R$)", "VALOR / INFORMAÇÃO": m.saldoAtual },
     { "INDICADOR DA OBRA": "Margem Realizada (%)", "VALOR / INFORMAÇÃO": Number(m.margemAtualPerc.toFixed(2)) },
     { "INDICADOR DA OBRA": "Empreiteiros Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.saldoEmpreitasPendente },
     { "INDICADOR DA OBRA": "Reembolsos Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.totalReembolsosPendentes },
+    { "INDICADOR DA OBRA": "Total de pendências a pagar (R$)", "VALOR / INFORMAÇÃO": m.pagamentosPendentesTotal },
     { "INDICADOR DA OBRA": "Custo Final Projetado da Obra (R$)", "VALOR / INFORMAÇÃO": m.custoTotalProjetado },
     { "INDICADOR DA OBRA": "Limite Orçamentário Planejado (Teto) (R$)", "VALOR / INFORMAÇÃO": m.tetoTotal },
     { "INDICADOR DA OBRA": "Lucro no Cenário do Teto (Receita Líquida - Teto) (R$)", "VALOR / INFORMAÇÃO": m.lucroNoTetoPuro },
@@ -3774,7 +3868,7 @@ function exportarExcelObra() {
       "TETO PLANEJADO (R$)": teto,
       "REALIZADO (R$)": realizado,
       "SALDO DO TETO (R$)": arredondarMoeda(teto - realizado),
-      "% CONSUMIDO": teto > 0 ? Number((realizado / teto * 100).toFixed(2)) : 0
+      "% CONSUMIDO": teto > 0 ? Number((realizado / teto * 100).toFixed(2)) : null
     };
   });
   rowsOrcadoVsRealizado.push({
@@ -3782,27 +3876,28 @@ function exportarExcelObra() {
     "TETO PLANEJADO (R$)": m.tetoTotal,
     "REALIZADO (R$)": m.custoTotal,
     "SALDO DO TETO (R$)": arredondarMoeda(m.tetoTotal - m.custoTotal),
-    "% CONSUMIDO": Number(m.percOrcamentoConsumido.toFixed(2))
+    "% CONSUMIDO": m.tetoTotal > 0 ? Number(m.percOrcamentoConsumido.toFixed(2)) : null
   });
 
-  const rowsLanc = (obra.lancamentos || [])
+  const lancamentos = (obra.lancamentos || [])
     .filter(l => !l.deletado)
-    .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
-    .map(l => {
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const rowsLanc = lancamentos.filter(l => l.movimento !== "ENTRADA_CAIXA").map(l => {
       const statusReemb = l.reembolsoStatus === "PENDENTE"
         ? "Reembolso Pendente"
         : l.reembolsoStatus === "REEMBOLSADO"
           ? `Reembolsado${l.reembolsadoEm ? ` (${formatDataBR(l.reembolsadoEm)})` : ""}`
           : "Sem Reembolso";
       return {
-        "DATA": formatDataBR(l.data),
+        "DATA": l.data || "",
         "DESCRIÇÃO": l.descricao,
-        "CATEGORIA": l.movimento === "ENTRADA_CAIXA" ? "ADIANTAMENTO DE CAIXA" : l.tipo,
-        "SUBCATEGORIA": l.movimento === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : (l.subtipo || l.tipo),
+        "CATEGORIA": l.tipo,
+        "SUBCATEGORIA": l.subtipo || l.tipo,
         "VALOR (R$)": Number(l.valor || 0),
         "QUEM PAGOU": getNomeResponsavel(l.titular),
         "STATUS REEMBOLSO": statusReemb,
-        "MEIO DE PAGAMENTO": l.pagamento || "PIX"
+        "DATA DA BAIXA": l.reembolsadoEm || "",
+        "MEIO DE PAGAMENTO": l.pagamento || ""
       };
     });
 
@@ -3814,19 +3909,24 @@ function exportarExcelObra() {
     "VALOR (R$)": m.custoTotal,
     "QUEM PAGOU": "",
     "STATUS REEMBOLSO": "",
+    "DATA DA BAIXA": "",
     "MEIO DE PAGAMENTO": ""
   });
 
-  const rowsMedicoes = (obra.medicoes || [])
-    .filter(med => !med.deletado)
-    .map(med => {
-      const bruto = Number(med.valorBruto || 0);
-      const desc = Number(med.descontoNotaPerc ?? 7.5);
-      const liq = med.valorLiquido ? Number(med.valorLiquido) : Math.round(bruto * (1 - desc / 100) * 100) / 100;
+  const rowsCaixa = lancamentos.filter(l => l.movimento === "ENTRADA_CAIXA").map(l => ({
+    "DATA": l.data || "",
+    "DESCRIÇÃO": l.descricao,
+    "RESPONSÁVEL": getNomeResponsavel(l.titular),
+    "VALOR (R$)": Number(l.valor || 0),
+    "MEIO DE PAGAMENTO": l.pagamento || ""
+  }));
+
+  const rowsMedicoes = medicoesDaObra(obra).map(med => {
+      const { bruto, desc, liq } = valoresMedicao(obra, med);
       return {
         "PARCELA / MEDIÇÃO": med.titulo,
-        "DATA DA MEDIÇÃO": formatDataBR(med.data),
-        "DATA DO RECEBIMENTO": med.recebidoEm ? formatDataBR(med.recebidoEm) : "",
+        "DATA DA MEDIÇÃO": med.data || "",
+        "DATA DO RECEBIMENTO": med.recebidoEm || "",
         "STATUS": med.status === "Recebida" ? "Recebida na Conta" : "A Receber (Pendente)",
         "VALOR BRUTO (R$)": bruto,
         "IMPOSTO NF (%)": desc,
@@ -3839,61 +3939,37 @@ function exportarExcelObra() {
     "PARCELA / MEDIÇÃO": "TOTAL MEDIÇÕES CADASTRADAS",
     "DATA DA MEDIÇÃO": "",
     "DATA DO RECEBIMENTO": "",
-    "STATUS": `Contrato Bruto: ${formatBRL(m.medBrutaTotal)}`,
+    "STATUS": "",
     "VALOR BRUTO (R$)": m.somaMedicoesBruta,
     "IMPOSTO NF (%)": "",
     "VALOR LÍQUIDO (R$)": m.somaMedicoesLiquida,
     "OBSERVAÇÃO": `Recebido Líquido: ${formatBRL(m.medLiquidaRecebida)} | Falta Receber do Contrato: ${formatBRL(m.medLiquidaAReceber)}`
   });
 
-  const rowsEmpreitasEReemb = [];
-  (obra.empreitas || []).filter(e => !e.deletado).forEach(e => {
-    const contratado = Number(e.valorContratado || 0);
-    const pago = Number(e.valorPago || 0);
-    rowsEmpreitasEReemb.push({
-      "TIPO": "Empreiteiro Contratado",
-      "NOME / FORNECEDOR": e.fornecedor,
-      "SERVIÇO / DETALHE": e.servico || "",
-      "TOTAL CONTRATADO / PAGO NA OBRA (R$)": contratado,
-      "JÁ PAGO / REEMBOLSADO (R$)": pago,
-      "PENDENTE A PAGAR (R$)": Math.max(0, contratado - pago)
-    });
-  });
+  const rowsEmpreitas = (obra.empreitas || []).filter(e => !e.deletado).map(e => ({
+    "FORNECEDOR": e.fornecedor,
+    "SERVIÇO": e.servico || "",
+    "CONTRATADO (R$)": Number(e.valorContratado || 0),
+    "PAGO (R$)": Number(e.valorPago || 0),
+    "A PAGAR (R$)": arredondarMoeda(Math.max(0, Number(e.valorContratado || 0) - Number(e.valorPago || 0)))
+  }));
 
-  Object.entries(m.reembolsosPorTitular || {}).forEach(([id, st]) => {
-    rowsEmpreitasEReemb.push({
-      "TIPO": "Responsável Financeiro",
-      "NOME / FORNECEDOR": getNomeResponsavel(id),
-      "SERVIÇO / DETALHE": `${st.qtdTotal} lançamento(s) na obra`,
-      "TOTAL CONTRATADO / PAGO NA OBRA (R$)": st.pagoTotal,
-      "JÁ PAGO / REEMBOLSADO (R$)": st.reembolsado,
-      "PENDENTE A PAGAR (R$)": st.pendente
-    });
-  });
+  const rowsReembolsos = Object.entries(m.reembolsosPorTitular || {}).map(([id, st]) => ({
+    "RESPONSÁVEL": getNomeResponsavel(id),
+    "DESPESAS REGISTRADAS (R$)": st.pagoTotal,
+    "REEMBOLSADO (R$)": st.reembolsado,
+    "A REEMBOLSAR (R$)": st.pendente
+  }));
 
   if (typeof XLSX !== "undefined") {
     const wb = XLSX.utils.book_new();
-
-    const wsRes = XLSX.utils.json_to_sheet(rowsResumo);
-    wsRes["!cols"] = [{ wch: 56 }, { wch: 28 }];
-
-    const wsOrc = XLSX.utils.json_to_sheet(rowsOrcadoVsRealizado);
-    wsOrc["!cols"] = [{ wch: 34 }, { wch: 22 }, { wch: 20 }, { wch: 22 }, { wch: 16 }];
-
-    const wsLanc = XLSX.utils.json_to_sheet(rowsLanc);
-    wsLanc["!cols"] = [{ wch: 12 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 15 }, { wch: 24 }, { wch: 24 }, { wch: 18 }];
-
-    const wsMed = XLSX.utils.json_to_sheet(rowsMedicoes);
-    wsMed["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 23 }, { wch: 24 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 44 }];
-
-    const wsEmp = XLSX.utils.json_to_sheet(rowsEmpreitasEReemb);
-    wsEmp["!cols"] = [{ wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 22 }];
-
-    XLSX.utils.book_append_sheet(wb, wsRes, "Resumo da Obra");
-    XLSX.utils.book_append_sheet(wb, wsOrc, "Orcado vs Realizado");
-    XLSX.utils.book_append_sheet(wb, wsLanc, "Despesas da Obra");
-    XLSX.utils.book_append_sheet(wb, wsMed, "Recebimentos do Cliente");
-    XLSX.utils.book_append_sheet(wb, wsEmp, "Empreiteiros e Reembolsos");
+    anexarPlanilhaRelatorio(wb, "Resumo da Obra", rowsResumo, { larguras: [70, 45] });
+    anexarPlanilhaRelatorio(wb, "Orcado vs Realizado", rowsOrcadoVsRealizado, { temTotal: true, larguras: [32] });
+    anexarPlanilhaRelatorio(wb, "Despesas da Obra", rowsLanc, { filtrar: true, temTotal: true, larguras: [16, 45] });
+    anexarPlanilhaRelatorio(wb, "Recebimentos do Cliente", rowsMedicoes, { filtrar: true, temTotal: true, larguras: [32] });
+    if (rowsCaixa.length) anexarPlanilhaRelatorio(wb, "Adiantamentos de Caixa", rowsCaixa, { filtrar: true, larguras: [16, 44, 28] });
+    if (rowsEmpreitas.length) anexarPlanilhaRelatorio(wb, "Empreiteiros", rowsEmpreitas, { filtrar: true, larguras: [34, 34] });
+    if (rowsReembolsos.length) anexarPlanilhaRelatorio(wb, "Reembolsos por Pessoa", rowsReembolsos, { filtrar: true, larguras: [34] });
 
     const nomeArquivo = `Relatorio_EMTEC_${obra.nome.replace(/[^a-zA-Z0-9_-]+/g, "_")}.xlsx`;
     XLSX.writeFile(wb, nomeArquivo);
