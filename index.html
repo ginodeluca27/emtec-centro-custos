@@ -347,6 +347,34 @@
       text-align: left;
       overflow-wrap: anywhere;
     }
+
+    .consumo-obra { min-width: 7.25rem; white-space: normal; }
+    .consumo-obra strong { display: block; color: #23396b; }
+    .consumo-obra small { display: block; margin-top: .25rem; color: #475569; }
+    .consumo-obra .saldo-estourado { color: #991b1b; font-weight: 700; }
+    .consumo-trilho { position: relative; height: .45rem; margin-top: .25rem; border-radius: 99px; background: #dce6f2; }
+    .consumo-trilho::after { content: ""; position: absolute; inset-block: -2px; left: var(--limiar); border-left: 2px solid #334155; }
+    .consumo-trilho span { display: block; height: 100%; border-radius: inherit; background: #2f70a5; }
+    .consumo-trilho[data-faixa="atencao"] span { background: #a65a00; }
+    .consumo-trilho[data-faixa="limite"] span { background: #b91c1c; }
+    .lancamento-rapido-painel { display: flex; flex-direction: column; min-height: 0; max-height: 92vh; max-height: 92dvh; overflow: hidden; }
+    .lancamento-rapido-cabecalho { flex: none; padding: .9rem 1rem .65rem; margin: 0; }
+    #formLancamentoRapido { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: .8rem 1rem; }
+    .lancamento-rapido-acoes {
+      display: flex; flex: none; gap: .5rem; padding: .65rem 1rem max(.65rem, env(safe-area-inset-bottom));
+      border-top: 1px solid #c8d9ee; background: white;
+    }
+    .lancamento-rapido-acoes button { flex: 1; min-width: 0; min-height: 44px; padding: .5rem; white-space: normal; }
+    @media (max-width: 767px) {
+      #modalLancamentoRapido {
+        top: var(--lancamento-topo, 0px);
+        bottom: auto;
+        height: var(--lancamento-altura, 100dvh);
+        align-items: end;
+        padding: 0;
+      }
+      .lancamento-rapido-painel { max-height: calc(100% - .25rem); }
+    }
     .tabela-gerencial .valor-relatorio { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
     .relatorio-indicadores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .625rem; }
     .relatorio-indicadores > div { padding: .75rem; border: 1px solid #c8d9ee; border-radius: .8rem; background: #f1f6fc; }
@@ -372,7 +400,6 @@
       .tabela-gerencial td { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: .5rem; padding: .25rem; }
       .tabela-gerencial td::before { content: attr(data-coluna); font-weight: 700; color: #475569; }
       .tabela-gerencial td:last-child { border-bottom: 0; }
-      #modalLancamentoRapido > div { max-height: 92dvh; }
       #modalLancamentoRapido input { font-size: 16px; }
       #modalLancamentoRapido button[id^="btnCatRapida_"], #modalLancamentoRapido button[id^="btnTitRapido_"],
       #modalLancamentoRapido button[id^="btnReembRapido_"] { min-height: 44px; }
@@ -1324,6 +1351,7 @@
           </select>
         </label>
       </div>
+      <p class="text-xs text-[#64748B]">A marca na barra indica 70% de consumo. O fim da barra indica 100%.</p>
       <div id="tabelaGeralObras"></div>
       <p id="notaConsumoGeral" class="text-xs text-[#64748B]" hidden>O consumo consolidado fica em branco quando há obras sem orçamento.</p>
     </section>
@@ -1482,9 +1510,8 @@
   <!-- MODAL DE LANÇAMENTO RÁPIDO DE 5 SEGUNDOS (MOBILE / DESKTOP) -->
   <!-- ===================================================================== -->
   <div id="modalLancamentoRapido" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-xs z-50 hidden items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-6 border border-[#CBD5E1] shadow-2xl max-h-[92vh] overflow-y-auto">
-      
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+    <div class="lancamento-rapido-painel bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full border border-[#CBD5E1] shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="modalLancRapidoTitulo" aria-describedby="obraLancRapido">
+      <div class="lancamento-rapido-cabecalho flex items-center justify-between border-b border-slate-100">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-[#FF8C00]">LANÇAMENTO RÁPIDO</span>
           <p id="obraLancRapido" class="text-xs font-semibold text-[#64748B]"></p>
@@ -1493,7 +1520,7 @@
         <button type="button" onclick="fecharModalLancamentoRapido()" class="w-9 h-9 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-base flex items-center justify-center transition">✕</button>
       </div>
 
-      <form onsubmit="salvarLancamentoRapido(event)" class="space-y-3.5">
+      <form id="formLancamentoRapido" onsubmit="salvarLancamentoRapido(event)" class="space-y-3.5">
         <input type="hidden" id="lancRapidoIdEdicao" />
         <input type="hidden" id="lancRapidoTitular" value="EMTEC" />
         <input type="hidden" id="lancRapidoReembolsoStatus" value="NAO_REEMBOLSAVEL" />
@@ -1681,13 +1708,15 @@
           </div>
         </div>
 
-        <!-- 6. Botão Salvar com Destaque Máximo (Fixo na base do modal no celular) -->
-        <div class="sticky bottom-0 pt-2 pb-1 bg-white">
-          <button type="submit" class="ed-btn w-full py-3.5 text-sm sm:text-base font-extrabold shadow-xl">
-            <span id="btnSalvarLancRapidoTexto">Salvar Despesa Agora</span>
-          </button>
-        </div>
       </form>
+
+      <div class="lancamento-rapido-acoes">
+        <button type="submit" form="formLancamentoRapido" class="ed-btn text-sm font-extrabold">
+          <span id="btnSalvarLancRapidoTexto">Salvar despesa</span>
+        </button>
+        <button id="btnSalvarOutraDespesa" type="submit" form="formLancamentoRapido" value="outra"
+          class="ed-btn--transparent text-xs font-bold">Salvar e lançar outra</button>
+      </div>
 
     </div>
   </div>

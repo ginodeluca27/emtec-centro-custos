@@ -1857,12 +1857,22 @@ function atualizarPreviewSubtipoRapido() {
   }
 }
 
+function ajustarAlturaLancamentoRapido() {
+  const modal = document.getElementById("modalLancamentoRapido");
+  const viewport = window.visualViewport;
+  if (!viewport || modal.classList.contains("hidden")) return;
+  modal.style.setProperty("--lancamento-altura", viewport.height + "px");
+  modal.style.setProperty("--lancamento-topo", viewport.offsetTop + "px");
+}
+
 function abrirModalLancamentoRapido() {
   const modal = document.getElementById("modalLancamentoRapido");
   if (!modal) return;
   document.getElementById("obraLancRapido").textContent = getObraAtual()?.nome || "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
+  ajustarAlturaLancamentoRapido();
+  document.getElementById("formLancamentoRapido").scrollTop = 0;
 
   // Reset do modo edição para novo lançamento
   const idEd = document.getElementById("lancRapidoIdEdicao");
@@ -1872,7 +1882,8 @@ function abrirModalLancamentoRapido() {
   if (titModal) titModal.textContent = "Registrar Despesa";
 
   const btnTexto = document.getElementById("btnSalvarLancRapidoTexto");
-  if (btnTexto) btnTexto.textContent = "Salvar Despesa Agora";
+  if (btnTexto) btnTexto.textContent = "Salvar despesa";
+  document.getElementById("btnSalvarOutraDespesa").classList.remove("hidden");
 
   const aviso = document.getElementById("avisoDuplicidadeRapido");
   if (aviso) aviso.classList.add("hidden");
@@ -1886,6 +1897,8 @@ function abrirModalLancamentoRapido() {
 
   const selMov = document.getElementById("lancRapidoMovimento");
   if (selMov) selMov.value = "SAIDA";
+  document.getElementById("lancRapidoPagamento").value = "PIX";
+  document.getElementById("lancRapidoEmpreitaId").value = "";
 
   // Seleciona EMTEC por padrão em 1 toque (sem reembolso)
   selecionarTitularRapido("EMTEC", false);
@@ -1928,12 +1941,15 @@ function abrirEdicaoRapida(id) {
   document.getElementById("obraLancRapido").textContent = getObraAtual()?.nome || "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
+  ajustarAlturaLancamentoRapido();
+  document.getElementById("formLancamentoRapido").scrollTop = 0;
 
   const titModal = document.getElementById("modalLancRapidoTitulo");
   if (titModal) titModal.textContent = "Editar Despesa";
 
   const btnTexto = document.getElementById("btnSalvarLancRapidoTexto");
-  if (btnTexto) btnTexto.textContent = "Salvar Alterações";
+  if (btnTexto) btnTexto.textContent = "Salvar alterações";
+  document.getElementById("btnSalvarOutraDespesa").classList.add("hidden");
 
   const idEd = document.getElementById("lancRapidoIdEdicao");
   if (idEd) idEd.value = item.id;
@@ -2217,6 +2233,11 @@ function salvarLancamentoRapido(e) {
 
   salvarEstado();
   atualizarTudo();
+  if (!idEdicao && e?.submitter?.value === "outra") {
+    abrirModalLancamentoRapido();
+    if (navigator.vibrate) navigator.vibrate(40);
+    return;
+  }
   fecharModalLancamentoRapido();
 
   if (valorInput) valorInput.value = "";
@@ -3268,6 +3289,7 @@ function linhasGeralObras(obras = obrasDoRelatorioGeral()) {
       "Contrato líquido (R$)": liquidoContratado,
       "Estimado (R$)": m.tetoTotal,
       "Gasto (R$)": m.custoTotal,
+      "Saldo do orçamento (R$)": m.tetoTotal > 0 ? arredondarMoeda(m.tetoTotal - m.custoTotal) : null,
       "Consumo (%)": m.tetoTotal > 0 ? Number(m.percOrcamentoConsumido.toFixed(2)) : null,
       "Recebido (R$)": m.medLiquidaRecebida,
       "A receber (R$)": m.medLiquidaAReceber,
@@ -3284,6 +3306,7 @@ function linhasGeralObras(obras = obrasDoRelatorioGeral()) {
     total[chave] = arredondarMoeda(linhas.reduce((soma, linha) => soma + linha[chave], 0));
   });
   const temObraSemOrcamento = linhas.some(linha => linha["Consumo (%)"] === null);
+  if (temObraSemOrcamento) total["Saldo do orçamento (R$)"] = null;
   total["Consumo (%)"] = temObraSemOrcamento ? null
     : Number((100 * total["Gasto (R$)"] / total["Estimado (R$)"]).toFixed(2));
   const alertas = linhas.filter(linha => linha["Consumo (%)"] >= LIMIAR_ALERTA_CUSTO).length;
@@ -3384,6 +3407,20 @@ function visaoGeralResumida(linhas) {
   return linhas.map(linha => Object.fromEntries(colunas.map(coluna => [coluna, linha[coluna]])));
 }
 
+function indicadorConsumoObra(linha, percentual) {
+  if (percentual === "—") return "Sem orçamento";
+  const consumo = linha["Consumo (%)"];
+  const saldo = arredondarMoeda(linha["Estimado (R$)"] - linha["Gasto (R$)"]);
+  const faixa = saldo <= 0 ? "limite" : linha.Alerta !== "—" ? "atencao" : "normal";
+  const largura = Math.max(0, Math.min(100, consumo));
+  const texto = saldo < 0 ? formatBRL(-saldo) + " acima do orçamento"
+    : saldo === 0 ? "Orçamento esgotado" : "Restam " + formatBRL(saldo);
+  return '<div class="consumo-obra"><strong>' + escaparCelula(percentual) + '</strong>' +
+    '<div class="consumo-trilho" data-faixa="' + faixa + '" aria-hidden="true" style="--limiar:' + LIMIAR_ALERTA_CUSTO + '%">' +
+    '<span style="width:' + largura + '%"></span></div><small' +
+    (saldo <= 0 ? ' class="saldo-estourado"' : '') + '>' + escaparCelula(texto) + '</small></div>';
+}
+
 function tabelaGerencial(linhas, consolidado = false, abrirObras = []) {
   if (!linhas.length) return '<p class="text-sm py-4">Nenhum registro encontrado.</p>';
   const colunas = Object.keys(linhas[0]);
@@ -3395,7 +3432,9 @@ function tabelaGerencial(linhas, consolidado = false, abrirObras = []) {
       if (coluna === "Consumo (%)") valor = valor === null ? "—" : valor.toLocaleString("pt-BR") + "%";
       if (coluna.startsWith("Data ")) valor = formatDataBR(valor);
       const obra = coluna === "Obra" ? abrirObras[i] : null;
-      const conteudo = obra
+      const conteudo = coluna === "Consumo (%)" && abrirObras[i]
+        ? indicadorConsumoObra(linha, valor)
+        : obra
         ? '<button type="button" data-abrir-obra="' + escaparCelula(obra.id) + '" class="link-obra">' + escaparCelula(valor) + '</button>'
         : escaparCelula(valor);
       const numerica = coluna.endsWith("(R$)") || coluna === "Consumo (%)";
@@ -3987,6 +4026,8 @@ function exportarExcelObra() {
 // 12. INICIALIZAÇÃO DA APLICAÇÃO
 // --------------------------------------------------------------------------
 function inicializarApp() {
+  window.visualViewport?.addEventListener("resize", ajustarAlturaLancamentoRapido);
+  window.visualViewport?.addEventListener("scroll", ajustarAlturaLancamentoRapido);
   document.getElementById("tabelaRelReembolsos").addEventListener("click", async evento => {
     const botao = evento.target.closest("[data-reembolso-item]");
     if (!botao) return;
