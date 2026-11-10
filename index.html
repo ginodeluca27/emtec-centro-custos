@@ -418,8 +418,8 @@
         <rect x="436" y="216" width="8" height="8" fill="#16A34A"/>
       </svg>
 
-      <div class="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 border-b border-[#4395D8]/25 pb-6">
-        <div>
+      <div class="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-[#4395D8]/25 pb-6">
+        <div class="min-w-0">
           <span class="ed-eyebrow-light" id="obraClienteTag">CONTRATO ATIVO</span>
           <div class="flex flex-wrap items-center gap-2.5 mt-1">
             <h2 id="obraTitulo" class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Reforma Piscina</h2>
@@ -440,12 +440,12 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3 no-print">
-          <button onclick="abrirModalLancamentoRapido()" class="ed-btn font-extrabold shadow-lg">
+        <div class="flex flex-wrap items-center gap-2.5 no-print shrink-0">
+          <button onclick="abrirModalLancamentoRapido()" class="ed-btn font-extrabold shadow-lg whitespace-nowrap">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             <span>Registrar Despesa</span>
           </button>
-          <button onclick="mudarAba('medicoes')" class="px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-[#4395D8]/40 transition">
+          <button onclick="mudarAba('medicoes')" class="px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-[#4395D8]/40 transition whitespace-nowrap">
             Recebimentos do Cliente
           </button>
         </div>
@@ -454,43 +454,51 @@
       <!-- 4 KPIS EXECUTIVOS -->
       <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
         <!-- KPI 1: Receita Contratada & Recebida -->
-        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
-          <div class="flex items-center justify-between text-white/80">
-            <span class="text-xs font-bold uppercase tracking-wider">Recebido do Cliente</span>
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiDescNotaTag">-7.5% NF</span>
+        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between gap-2 text-white/80">
+              <span class="text-xs font-bold uppercase tracking-wider leading-tight">Recebido do Cliente</span>
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD] whitespace-nowrap shrink-0" id="kpiDescNotaTag">-7.5% NF</span>
+            </div>
+            <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiMedicaoLiquida">R$ 0,00</div>
           </div>
-          <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiMedicaoLiquida">R$ 0,00</div>
-          <div class="text-xs text-white/80 mt-1" id="kpiMedicaoSub">Contratado Líq.: R$ 0,00</div>
+          <div class="text-xs text-white/80 mt-1.5 leading-snug" id="kpiMedicaoSub">Contratado Líq.: R$ 0,00</div>
         </div>
 
         <!-- KPI 2: Despesas Realizadas & Pendentes -->
-        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
-          <div class="flex items-center justify-between text-white/80">
-            <span class="text-xs font-bold uppercase tracking-wider">Despesas Realizadas</span>
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-white/90" id="kpiQtdLancamentos">0 registros</span>
+        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between gap-2 text-white/80">
+              <span class="text-xs font-bold uppercase tracking-wider leading-tight">Despesas Realizadas</span>
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-white/90 whitespace-nowrap shrink-0" id="kpiQtdLancamentos">0 lanç.</span>
+            </div>
+            <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiCustoTotal">R$ 0,00</div>
           </div>
-          <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiCustoTotal">R$ 0,00</div>
-          <div class="text-xs text-white/80 mt-1" id="kpiCustoSub">Pendentes: R$ 0,00</div>
+          <div class="text-xs text-white/80 mt-1.5 leading-snug" id="kpiCustoSub">Pendentes: R$ 0,00</div>
         </div>
 
         <!-- KPI 3: Resultado Acumulado (Margem Realizada) -->
-        <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs" id="cardSaldoBox">
-          <div class="flex items-center justify-between gap-1">
-            <span class="text-xs font-bold uppercase tracking-wider text-[#86EFAC] whitespace-nowrap" id="cardSaldoLabel">Resultado Acumulado</span>
-            <span class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] shrink-0" id="kpiMargemPerc">0% realizada</span>
+        <div class="rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs overflow-hidden flex flex-col justify-between" id="cardSaldoBox">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-[#86EFAC] leading-tight" id="cardSaldoLabel">Resultado Acumulado</span>
+              <span class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] whitespace-nowrap shrink-0" id="kpiMargemPerc">+0.0%</span>
+            </div>
+            <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiSaldoFinal">R$ 0,00</div>
           </div>
-          <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiSaldoFinal">R$ 0,00</div>
-          <div class="text-xs text-emerald-100/90 mt-1" id="kpiSaldoSub">Receita líquida recebida − despesas pagas</div>
+          <div class="text-xs text-emerald-100/90 mt-1.5 leading-snug" id="kpiSaldoSub">Receita líquida recebida − despesas pagas</div>
         </div>
 
         <!-- KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado -->
-        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs">
-          <div class="flex items-center justify-between text-white/80">
-            <span class="text-xs font-bold uppercase tracking-wider leading-tight" id="kpiTetoLabel">Lucro se gastar todo o orçamento</span>
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD]" id="kpiTetoPercBadge">+0.0% no teto</span>
+        <div class="rounded-2xl p-4 bg-white/[0.08] border border-[#4395D8]/25 backdrop-blur-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between gap-2 text-white/80">
+              <span class="text-xs font-bold uppercase tracking-wider leading-tight" id="kpiTetoLabel">Lucro se gastar todo o orçamento</span>
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD] whitespace-nowrap shrink-0" id="kpiTetoPercBadge">+0.0%</span>
+            </div>
+            <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiTetoValor">R$ 0,00</div>
           </div>
-          <div class="font-display text-2xl font-extrabold text-white mt-1.5" id="kpiTetoValor">R$ 0,00</div>
-          <div class="text-xs text-white/80 mt-1" id="kpiTetoSub">Descontando empreitas e custos previstos</div>
+          <div class="text-xs text-white/80 mt-1.5 leading-snug" id="kpiTetoSub">Descontando empreitas e custos previstos</div>
         </div>
       </div>
     </section>

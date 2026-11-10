@@ -930,8 +930,9 @@ function atualizarTudo() {
   // Selo de Situação Financeira (Informativo, separado do status operacional)
   const badgeViab = document.getElementById("viabilidadeBadge");
   if (badgeViab) {
-    badgeViab.className = `inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full border shadow-sm select-none ${sit.corBadgeDesktop}`;
-    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full ${sit.corDot}"></span> ${sit.rotulo}`;
+    badgeViab.className = `inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider px-3.5 py-1.5 rounded-full border shadow-sm select-none whitespace-nowrap ${sit.corBadgeDesktop}`;
+    badgeViab.title = sit.rotulo;
+    badgeViab.innerHTML = `<span class="w-2 h-2 rounded-full shrink-0 ${sit.corDot}"></span> ${sit.rotuloCurto || sit.rotulo}`;
   }
 
   const mobBadgeViab = document.getElementById("mobViabilidadeBadge");
@@ -1071,7 +1072,7 @@ function atualizarTudo() {
   if (kpiCustoTotal) kpiCustoTotal.textContent = formatBRL(m.custoTotal);
 
   const kpiQtdLanc = document.getElementById("kpiQtdLancamentos");
-  if (kpiQtdLanc) kpiQtdLanc.textContent = `${m.qtdSaidas} despesas`;
+  if (kpiQtdLanc) kpiQtdLanc.textContent = `${m.qtdSaidas} lanç.`;
 
   const kpiCustoSub = document.getElementById("kpiCustoSub");
   if (kpiCustoSub) {
@@ -1085,15 +1086,15 @@ function atualizarTudo() {
   const kpiMargemPerc = document.getElementById("kpiMargemPerc");
   const kpiSaldoSub = document.getElementById("kpiSaldoSub");
 
-  if (cardSaldoBox) cardSaldoBox.className = sit.corCardDesktop;
-  if (cardSaldoLabel) cardSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Acumulado Final";
+  if (cardSaldoBox) cardSaldoBox.className = `${sit.corCardDesktop} overflow-hidden flex flex-col justify-between`;
+  if (cardSaldoLabel) cardSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Final";
   if (kpiSaldoFinal) kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
 
   if (kpiMargemPerc) {
     if (m.medLiquidaRecebida > 0) {
-      kpiMargemPerc.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% realizada`;
+      kpiMargemPerc.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}%`;
     } else {
-      kpiMargemPerc.textContent = "Sem receita recebida";
+      kpiMargemPerc.textContent = "0%";
     }
   }
   if (kpiSaldoSub) {
@@ -1104,7 +1105,7 @@ function atualizarTudo() {
   const kpiTetoLabel = document.getElementById("kpiTetoLabel");
   if (kpiTetoLabel) {
     kpiTetoLabel.textContent = m.excessoTetoProjetado > 0
-      ? "Resultado Final Estimado (Acima do Teto)"
+      ? "Resultado Estimado (Acima do Teto)"
       : "Lucro se gastar todo o orçamento";
   }
 
@@ -1113,10 +1114,10 @@ function atualizarTudo() {
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   if (badgeTeto) {
-    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% ${m.excessoTetoProjetado > 0 ? "estimada" : "no teto"}`;
+    badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}%`;
     badgeTeto.className = m.saldoProjetadoFinal >= 0
-      ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
-      : "text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300";
+      ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] whitespace-nowrap shrink-0"
+      : "text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 whitespace-nowrap shrink-0";
   }
 
   const kpiTetoSub = document.getElementById("kpiTetoSub");
