@@ -30,6 +30,12 @@
       --cr-border-tint: #C8D9EE;
     }
 
+    html {
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
     body {
       font-family: "Plus Jakarta Sans", sans-serif;
       background-color: var(--cr-bg);
@@ -41,6 +47,9 @@
       color: #334155;
       -webkit-font-smoothing: antialiased;
       padding-bottom: 72px; /* Espaço para Bottom Navigation no mobile */
+      overflow-x: hidden;
+      max-width: 100%;
+      width: 100%;
     }
 
     @media (min-width: 768px) {
@@ -126,7 +135,15 @@
       border-radius: 2px;
     }
 
+    /* Garante que classes utilitárias .hidden nunca sejam sobrescritas por componentes */
+    .hidden {
+      display: none !important;
+    }
+
     /* Botão Primário Laranja com ALTO CONTRASTE WCAG AAA */
+    .ed-btn:not(.hidden) {
+      display: inline-flex;
+    }
     .ed-btn {
       background: #FF8C00;
       color: #0F172A; /* Escuro navy de alto contraste (ratio > 6.5:1) */
@@ -137,7 +154,6 @@
       font-weight: 800;
       transition: all 0.2s ease-in-out;
       cursor: pointer;
-      display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
@@ -153,6 +169,9 @@
       transform: scale(0.98);
     }
 
+    .ed-btn--navy:not(.hidden) {
+      display: inline-flex;
+    }
     .ed-btn--navy {
       background: #23396B;
       color: #FFFFFF;
@@ -163,7 +182,6 @@
       font-weight: 700;
       transition: all 0.2s ease-in-out;
       cursor: pointer;
-      display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
@@ -174,6 +192,9 @@
       border-color: #0F172A;
     }
 
+    .ed-btn--transparent:not(.hidden) {
+      display: inline-flex;
+    }
     .ed-btn--transparent {
       background: transparent;
       color: #23396B;
@@ -184,7 +205,6 @@
       font-weight: 700;
       transition: all 0.2s ease-in-out;
       cursor: pointer;
-      display: inline-flex;
       align-items: center;
       gap: 6px;
     }
@@ -194,6 +214,9 @@
     }
 
     /* Abas Desktop */
+    .tab-btn:not(.hidden) {
+      display: inline-flex;
+    }
     .tab-btn {
       padding: 10px 20px;
       border-radius: 35px;
@@ -203,7 +226,6 @@
       background: rgba(255, 255, 255, 0.9);
       border: 1px solid #C4D6EC;
       transition: all 0.2s ease;
-      display: inline-flex;
       align-items: center;
       gap: 8px;
       box-shadow: 0 2px 6px rgba(35, 57, 107, 0.05);
@@ -346,15 +368,15 @@
       </div>
 
       <!-- Obra Selector & Botões de Ação -->
-      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
-        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2 sm:px-3 py-1.5 min-w-[105px] max-w-[155px] sm:max-w-xs">
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 justify-end">
+        <div class="flex items-center bg-[#F8FAFC] border border-[#CBD5E1] rounded-full px-2.5 sm:px-3 py-1.5 min-w-0 flex-1 max-w-[175px] sm:max-w-xs">
           <span class="hidden sm:inline text-xs uppercase tracking-wider text-[#64748B] mr-1 font-bold shrink-0">Obra:</span>
           <select id="obraSelect" onchange="trocarObra(this.value)" class="bg-transparent text-[#23396B] font-bold text-xs sm:text-sm focus:outline-none cursor-pointer truncate pr-1 w-full">
           </select>
         </div>
 
         <!-- Perfil do Usuário Ativo (Melo / Pilar) -->
-        <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B]" title="Clique para alternar entre Melo e Pilar">
+        <button onclick="abrirModalPerfil()" id="btnPerfilAtivo" class="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] hover:border-[#4395D8] transition text-xs font-bold text-[#23396B] shrink-0" title="Clique para alternar entre Melo e Pilar">
           <span id="avatarUsuarioPill" class="w-5 h-5 rounded-full bg-[#FF8C00] text-[#0F172A] font-extrabold text-xs flex items-center justify-center">P</span>
           <span id="nomeUsuarioPill" class="hidden sm:inline">Pilar</span>
         </button>
@@ -364,14 +386,14 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
 
-        <!-- Botão Nova Obra (Desktop - no mobile fica no menu Mais) -->
-        <button onclick="abrirModalNovaObra()" id="btnNovaObraHeader" class="hidden sm:inline-flex ed-btn py-1.5 px-3.5 text-xs font-extrabold shadow-sm shrink-0" title="Cadastrar Nova Obra">
+        <!-- Botão Nova Obra (Desktop apenas - no mobile fica no menu Mais) -->
+        <button onclick="abrirModalNovaObra()" id="btnNovaObraHeader" class="hidden md:inline-flex ed-btn py-1.5 px-3.5 text-xs font-extrabold shadow-sm shrink-0" title="Cadastrar Nova Obra">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           <span>Nova Obra</span>
         </button>
 
-        <!-- Botão Backup / Nuvem (Desktop - no mobile fica no menu Mais) -->
-        <button onclick="abrirModalNuvem()" class="hidden sm:inline-flex p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Backup e Nuvem">
+        <!-- Botão Backup / Nuvem (Desktop apenas - no mobile fica no menu Mais) -->
+        <button onclick="abrirModalNuvem()" class="hidden md:inline-flex p-2 rounded-full border border-[#CBD5E1] bg-[#F8FAFC] hover:bg-[#23396B] hover:text-white text-[#23396B] transition shrink-0" title="Backup e Nuvem">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
         </button>
       </div>
@@ -504,85 +526,108 @@
     <!-- =================================================================== -->
     <section id="aba-resumo" class="space-y-6">
       
-      <!-- CARD RESUMO EXECUTIVO MOBILE (Visível Apenas na Aba Obra) -->
-      <div id="heroMobile" class="md:hidden ed-card p-5 border-2 border-[#4395D8]/30 bg-gradient-to-b from-white to-[#F0F6FD] space-y-4">
-        <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-[#FF8C00] shrink-0"></span>
-              <span id="mobObraNome" class="font-display font-extrabold text-base text-[#23396B]">Reforma Piscina</span>
+      <!-- CARD RESUMO EXECUTIVO MOBILE (Identidade Executiva Navy + Cards Claros para Pilar e Melo) -->
+      <div id="heroMobile" class="md:hidden rounded-3xl overflow-hidden shadow-xl border border-[#23396B]/20 bg-white">
+        <!-- Topo Executivo Navy (Mesma Identidade Visual do PC) -->
+        <div class="bg-gradient-to-br from-[#0F172A] via-[#23396B] to-[#1E3A8A] p-5 text-white relative overflow-hidden space-y-3.5">
+          <svg class="absolute right-0 top-0 h-full w-2/3 opacity-20 pointer-events-none" viewBox="0 0 320 200" fill="none">
+            <path d="M40 0V110H200V200" stroke="#4395D8" stroke-width="1.2"/>
+            <path d="M140 0V65H300V170" stroke="#4395D8" stroke-width="1.2"/>
+            <rect x="196" y="106" width="7" height="7" fill="#FF8C00"/>
+            <rect x="136" y="61" width="7" height="7" fill="#4395D8"/>
+          </svg>
+
+          <div class="relative z-10 flex items-start justify-between gap-2">
+            <div class="space-y-1.5 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#FF8C00] shrink-0"></span>
+                <span id="mobObraNome" class="font-display font-extrabold text-lg text-white leading-tight truncate">Reforma Piscina</span>
+              </div>
+              <!-- Status Operacional + Situação Financeira Informativa (Sem clique acidental) -->
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span id="mobStatusOperacionalBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/15 text-white border border-white/25">
+                  Em Andamento
+                </span>
+                <span id="mobViabilidadeBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] select-none">
+                  Obra Viável
+                </span>
+              </div>
             </div>
-            <!-- Status Operacional + Situação Financeira Informativa (Sem clique acidental) -->
-            <div class="flex flex-wrap items-center gap-1.5">
-              <span id="mobStatusOperacionalBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-[#23396B] border border-slate-300">
-                Em Andamento
+            <span id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0.5 text-right shrink-0 bg-white/95 px-2.5 py-1 rounded-xl border border-white/40 shadow-xs">
+              <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-xs font-bold text-[#16A34A]">
+                <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
               </span>
-              <span id="mobViabilidadeBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] select-none">
-                Obra Viável
-              </span>
-            </div>
-          </div>
-          <span id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0.5 text-right shrink-0">
-            <span id="cloudBadgeMobStatus" class="inline-flex items-center gap-1 text-xs font-bold text-[#16A34A]">
-              <span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>Conectado
+              <span id="cloudBadgeMobHora" class="text-xs text-[#64748B] font-medium leading-none hidden"></span>
             </span>
-            <span id="cloudBadgeMobHora" class="text-xs text-[#64748B] font-medium leading-none hidden"></span>
-          </span>
-        </div>
+          </div>
 
-        <!-- Resultado Acumulado da Obra -->
-        <div>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-xs font-extrabold uppercase tracking-wider text-[#64748B]" id="mobSaldoLabel">Resultado Acumulado</span>
-            <span id="mobMargemRealizadaBadge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]">+23.3% realizada</span>
-          </div>
-          <div id="mobSaldoAtual" class="font-display text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5">
-            R$ 20.835,81
-          </div>
-          <p class="text-xs text-[#64748B] mt-0.5" id="mobSaldoExplicacao">Receita líquida recebida menos despesas realizadas até hoje.</p>
-        </div>
-
-        <!-- Grid 2x2: Receita Contratada, Recebido, Despesas Realizadas e Pagamentos Pendentes -->
-        <div class="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
-          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <span class="text-xs font-bold uppercase text-[#64748B] block">Contratado (Líq.)</span>
-            <span id="mobReceitaContratada" class="font-display text-sm font-extrabold text-[#23396B] block mt-0.5">R$ 89.540,00</span>
-            <span id="mobContratoBrutoSub" class="text-xs text-[#64748B] block mt-0.5">Bruto: R$ 96.800,00</span>
-          </div>
-          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <span class="text-xs font-bold uppercase text-[#64748B] block">Efetiv. Recebido</span>
-            <span id="mobReceitaLiq" class="font-display text-sm font-extrabold text-[#16A34A] block mt-0.5">R$ 89.540,00</span>
-            <span id="mobAReceberSub" class="text-xs text-[#64748B] block mt-0.5">A receber: R$ 0,00</span>
-          </div>
-          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <span class="text-xs font-bold uppercase text-[#64748B] block">Despesas Pagas</span>
-            <span id="mobCustoReal" class="font-display text-sm font-extrabold text-[#0F172A] block mt-0.5">R$ 68.704,19</span>
-            <span id="mobTetoSub" class="text-xs text-[#64748B] block mt-0.5">Teto: R$ 77.000,00</span>
-          </div>
-          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <span class="text-xs font-bold uppercase text-[#64748B] block">Pagam. Pendentes</span>
-            <span id="mobPagamentosPendentes" class="font-display text-sm font-extrabold text-[#FF8C00] block mt-0.5">R$ 9.500,00</span>
-            <span id="mobPendenciasSub" class="text-xs text-[#64748B] block mt-0.5">Empreiteiros + Reemb.</span>
+          <!-- Resultado Acumulado da Obra (Destaque Principal) -->
+          <div id="mobCardSaldoBox" class="relative z-10 rounded-2xl p-3.5 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-[#86EFAC]" id="mobSaldoLabel">Resultado Acumulado</span>
+              <span id="mobMargemRealizadaBadge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]">+23.3% realizada</span>
+            </div>
+            <div id="mobSaldoAtual" class="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1">
+              R$ 20.835,81
+            </div>
+            <p class="text-xs text-emerald-100/90 mt-0.5" id="mobSaldoExplicacao">Receita líquida recebida menos despesas realizadas até hoje.</p>
           </div>
         </div>
 
-        <!-- Lucro Previsto / Resultado Final Estimado até o Fim da Obra -->
-        <div class="p-3.5 rounded-xl bg-[#23396B]/5 border border-[#23396B]/15 text-xs space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="font-bold uppercase tracking-wider text-[#23396B]" id="mobLucroPrevistoLabel">Lucro se gastar todo o orçamento:</span>
-            <span id="mobLucroPrevistoValor" class="font-display text-sm font-extrabold text-[#23396B]">R$ 11.335,81</span>
+        <!-- Corpo Claro: Indicadores 2x2 + Cenário do Orçamento + Ações Rápidas -->
+        <div class="p-4 space-y-3.5 bg-white">
+          <!-- Grid 2x2: Receita Contratada, Recebido, Despesas Realizadas e Pagamentos Pendentes -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 border-l-4 border-l-[#23396B]">
+              <span class="text-xs font-bold uppercase text-[#64748B] block">Contratado (Líq.)</span>
+              <span id="mobReceitaContratada" class="font-display text-sm font-extrabold text-[#23396B] block mt-0.5">R$ 89.540,00</span>
+              <span id="mobContratoBrutoSub" class="text-xs text-[#64748B] block mt-0.5">Bruto: R$ 96.800,00</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 border-l-4 border-l-[#16A34A]">
+              <span class="text-xs font-bold uppercase text-[#64748B] block">Efetiv. Recebido</span>
+              <span id="mobReceitaLiq" class="font-display text-sm font-extrabold text-[#16A34A] block mt-0.5">R$ 89.540,00</span>
+              <span id="mobAReceberSub" class="text-xs text-[#64748B] block mt-0.5">A receber: R$ 0,00</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 border-l-4 border-l-[#4395D8]">
+              <span class="text-xs font-bold uppercase text-[#64748B] block">Despesas Pagas</span>
+              <span id="mobCustoReal" class="font-display text-sm font-extrabold text-[#0F172A] block mt-0.5">R$ 68.704,19</span>
+              <span id="mobTetoSub" class="text-xs text-[#64748B] block mt-0.5">Teto: R$ 77.000,00</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 border-l-4 border-l-[#FF8C00]">
+              <span class="text-xs font-bold uppercase text-[#64748B] block">Pagam. Pendentes</span>
+              <span id="mobPagamentosPendentes" class="font-display text-sm font-extrabold text-[#FF8C00] block mt-0.5">R$ 9.500,00</span>
+              <span id="mobPendenciasSub" class="text-xs text-[#64748B] block mt-0.5">Empreiteiros + Reemb.</span>
+            </div>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-[#475569]" id="mobCriterioLucroSub">Margem se gastar o teto:</span>
-            <span id="mobMargemProj" class="font-bold text-[#16A34A]">+12.7% se gastar o teto</span>
+
+          <!-- Lucro Previsto / Resultado Final Estimado até o Fim da Obra (Empilhado sem colisão de texto!) -->
+          <div class="p-3.5 rounded-2xl bg-[#EDF4FC] border border-[#C8D9EE] text-xs space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-extrabold uppercase tracking-wider text-[#23396B] leading-snug" id="mobLucroPrevistoLabel">Lucro se gastar todo o orçamento:</span>
+              <span id="mobLucroPrevistoValor" class="font-display text-base font-extrabold text-[#23396B] shrink-0 whitespace-nowrap">R$ 11.335,81</span>
+            </div>
+            <div id="mobMargemProj" class="font-bold text-[#16A34A] leading-snug">+12.7% se gastar o teto</div>
+            <div class="text-[#475569] leading-snug" id="mobCriterioLucroSub">Cenário considerando o teto planejado da obra.</div>
+          </div>
+
+          <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) + Atalhos Rápidos da Pilar -->
+          <div class="space-y-2">
+            <button onclick="abrirModalLancamentoRapido()" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-lg">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span>Registrar Despesa</span>
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="mudarAba('medicoes')" class="py-2 px-3 rounded-xl bg-[#EDF4FC] hover:bg-[#DCE8F6] border border-[#C8D9EE] text-xs font-extrabold text-[#23396B] flex items-center justify-center gap-1.5 transition">
+                <span>Recebimentos</span>
+                <span class="text-[#4395D8]">&rarr;</span>
+              </button>
+              <button type="button" onclick="mudarAba('empreitas')" class="py-2 px-3 rounded-xl bg-[#EDF4FC] hover:bg-[#DCE8F6] border border-[#C8D9EE] text-xs font-extrabold text-[#23396B] flex items-center justify-center gap-1.5 transition">
+                <span>Empreiteiros / Reemb.</span>
+                <span class="text-[#4395D8]">&rarr;</span>
+              </button>
+            </div>
           </div>
         </div>
-
-        <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) -->
-        <button onclick="abrirModalLancamentoRapido()" class="ed-btn w-full py-3.5 text-sm font-extrabold shadow-lg">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          <span>Registrar Despesa</span>
-        </button>
       </div>
 
       <!-- Mini Cards de Categorias (Desktop apenas; no mobile o Resumo Executivo é direto e enxuto) -->
@@ -790,8 +835,8 @@
 
           <!-- Filtros de Categoria e Quem Pagou em Grid de 2 Colunas -->
           <div class="grid grid-cols-2 gap-2 w-full">
-            <select id="filtroCategoria" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs w-full truncate font-semibold text-[#23396B]">
-              <option value="TODOS">Categorias: Todas</option>
+            <select id="filtroCategoria" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs py-2 px-2.5 w-full truncate font-semibold text-[#23396B]">
+              <option value="TODOS">Todas Categorias</option>
               <option value="MO">Mão de Obra</option>
               <option value="MAT">Material</option>
               <option value="EQUIP">Equipamento</option>
@@ -801,8 +846,8 @@
               <option value="ENTRADA_CAIXA">Adiantamentos de Caixa</option>
             </select>
 
-            <select id="filtroTitular" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs w-full truncate font-semibold text-[#23396B]">
-              <option value="TODOS">Quem pagou: Todos</option>
+            <select id="filtroTitular" onchange="renderizarTabelaLancamentos()" class="ed-input text-xs py-2 px-2.5 w-full truncate font-semibold text-[#23396B]">
+              <option value="TODOS">Todos Pagadores</option>
               <option value="REEMBOLSO_PENDENTE">Reembolso Pendente</option>
               <option value="EMTEC">EMTEC (conta da obra)</option>
               <option value="MELO">Melo</option>

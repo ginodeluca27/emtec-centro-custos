@@ -335,10 +335,10 @@ function renderizarControlesResponsaveis() {
   if (selFiltro) {
     const valFiltro = selFiltro.value || "TODOS";
     selFiltro.innerHTML =
-      `<option value="TODOS" ${valFiltro === "TODOS" ? "selected" : ""}>Quem pagou: Todos</option>` +
+      `<option value="TODOS" ${valFiltro === "TODOS" ? "selected" : ""}>Todos Pagadores</option>` +
       `<option value="REEMBOLSO_PENDENTE" ${valFiltro === "REEMBOLSO_PENDENTE" ? "selected" : ""}>Reembolso Pendente</option>` +
       lista.map(r =>
-        `<option value="${r.id}" ${r.id === valFiltro ? "selected" : ""}>${r.nome}</option>`
+        `<option value="${r.id}" ${valFiltro === r.id ? "selected" : ""}>${r.nome}</option>`
       ).join("");
   }
 }
@@ -359,25 +359,37 @@ function atualizarBadgeNuvem(status, dataHora) {
 
   let statusHtml = "";
   let horaHtml = "";
+  let mobStatusHtml = "";
+  let mobHoraHtml = "";
 
   if (status === "syncing") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#FF8C00]">Enviando...</span>`;
+    mobStatusHtml = statusHtml;
     horaHtml = "";
+    mobHoraHtml = "";
   } else if (status === "success") {
     const hora = dataHora
       ? new Date(dataHora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
       : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     statusHtml = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span><span class="font-bold text-[#16A34A]">Tudo salvo na nuvem</span>`;
+    mobStatusHtml = `<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span><span class="font-bold text-[#16A34A]">Salvo na nuvem</span>`;
     horaHtml = `Última sincronização: ${hora}`;
+    mobHoraHtml = `Sinc.: ${hora}`;
   } else if (status === "pending") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#B45309]">Sem sinal: salvo no aparelho</span>`;
+    mobStatusHtml = `<span class="w-2 h-2 rounded-full bg-[#FF8C00] animate-pulse"></span><span class="font-bold text-[#B45309]">Salvo no aparelho</span>`;
     horaHtml = "Será enviado sozinho quando a internet voltar";
+    mobHoraHtml = "Aguardando sinal";
   } else if (status === "auth") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">PIN inválido</span>`;
+    mobStatusHtml = statusHtml;
     horaHtml = "Entre novamente para sincronizar";
+    mobHoraHtml = "Toque para entrar";
   } else if (status === "offline") {
     statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Sem conexão com a nuvem</span>`;
+    mobStatusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Sem sinal</span>`;
     horaHtml = temPendencia() ? "Alterações guardadas no aparelho, aguardando envio" : "";
+    mobHoraHtml = temPendencia() ? "Salvo no celular" : "";
   }
 
   if (badgeStatus) badgeStatus.innerHTML = statusHtml;
@@ -389,10 +401,10 @@ function atualizarBadgeNuvem(status, dataHora) {
       badgeHora.classList.add("hidden");
     }
   }
-  if (mobStatus) mobStatus.innerHTML = statusHtml;
+  if (mobStatus) mobStatus.innerHTML = mobStatusHtml;
   if (mobHora) {
-    if (horaHtml) {
-      mobHora.textContent = horaHtml;
+    if (mobHoraHtml) {
+      mobHora.textContent = mobHoraHtml;
       mobHora.classList.remove("hidden");
     } else {
       mobHora.classList.add("hidden");
@@ -553,6 +565,7 @@ function avaliarSituacaoFinanceira(obra, m) {
       return {
         codigo: "CONCLUIDA_LUCRO",
         rotulo: `Concluída com Resultado Positivo (${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}%)`,
+        rotuloCurto: `Concluída (${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}%)`,
         corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
         corDot: "bg-[#16A34A]",
         corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -561,6 +574,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "CONCLUIDA_PREJUIZO",
       rotulo: `Concluída no Vermelho (${formatBRL(m.saldoAtual)})`,
+      rotuloCurto: "Concluída no Vermelho",
       corBadgeDesktop: "bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]",
       corDot: "bg-rose-600",
       corCardDesktop: "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs"
@@ -572,6 +586,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "SEM_RECEITA_CADASTRADA",
       rotulo: "Atenção • Sem Receita Contratada",
+      rotuloCurto: "Sem Receita Contratada",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
@@ -582,6 +597,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "SEM_TETO",
       rotulo: "Atenção • Defina o Teto de Custos",
+      rotuloCurto: "Defina o Teto",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
@@ -592,6 +608,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "RISCO_PREJUIZO",
       rotulo: `Risco de Prejuízo (${formatBRL(m.saldoProjetadoFinal)} no cenário)`,
+      rotuloCurto: "Risco de Prejuízo",
       corBadgeDesktop: "bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]",
       corDot: "bg-rose-600",
       corCardDesktop: "rounded-2xl p-4 bg-rose-500/20 border border-rose-400/50 backdrop-blur-xs"
@@ -602,6 +619,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "RESULTADO_ACUMULADO_NEGATIVO",
       rotulo: "Desembolso Maior que Recebido",
+      rotuloCurto: "Gasto > Recebido",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#FF8C00]/20 border border-[#FF8C00]/50 backdrop-blur-xs"
@@ -612,6 +630,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "VIAVEL_ACIMA_TETO",
       rotulo: `Viável • Acima do Teto (+${m.margemProjetadaFinalPerc.toFixed(1)}% no custo projetado)`,
+      rotuloCurto: "Viável • Acima do Teto",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -622,6 +641,7 @@ function avaliarSituacaoFinanceira(obra, m) {
     return {
       codigo: "MARGEM_APERTADA",
       rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
+      rotuloCurto: "Margem Apertada",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
       corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -631,6 +651,7 @@ function avaliarSituacaoFinanceira(obra, m) {
   return {
     codigo: "OBRA_SAUDAVEL",
     rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
+    rotuloCurto: "Obra Saudável",
     corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
     corDot: "bg-[#16A34A]",
     corCardDesktop: "rounded-2xl p-4 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
@@ -900,10 +921,10 @@ function atualizarTudo() {
   if (mobStatusBadge) {
     mobStatusBadge.textContent = statusOp;
     mobStatusBadge.className = statusOp === "Concluída"
-      ? "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#23396B] text-white"
+      ? "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#DCFCE7] text-[#14532D]"
       : (statusOp === "Pausada"
           ? "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300"
-          : "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-[#23396B] border border-slate-300");
+          : "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/15 text-white border border-white/25");
   }
 
   // Selo de Situação Financeira (Informativo, separado do status operacional)
@@ -915,27 +936,39 @@ function atualizarTudo() {
 
   const mobBadgeViab = document.getElementById("mobViabilidadeBadge");
   if (mobBadgeViab) {
-    mobBadgeViab.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold border select-none ${sit.corBadgeDesktop}`;
-    mobBadgeViab.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${sit.corDot}"></span> ${sit.rotulo}`;
+    mobBadgeViab.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold border select-none whitespace-nowrap ${sit.corBadgeDesktop}`;
+    mobBadgeViab.innerHTML = `<span class="w-1.5 h-1.5 rounded-full shrink-0 ${sit.corDot}"></span> ${sit.rotuloCurto || sit.rotulo}`;
   }
 
   // Mobile Hero Card
   const mobObraNome = document.getElementById("mobObraNome");
   if (mobObraNome) mobObraNome.textContent = obra.nome;
 
+  const mobCardSaldoBox = document.getElementById("mobCardSaldoBox");
+  if (mobCardSaldoBox) {
+    mobCardSaldoBox.className = m.saldoAtual >= 0
+      ? "relative z-10 rounded-2xl p-3.5 bg-[#16A34A]/20 border border-[#16A34A]/60 backdrop-blur-xs"
+      : "relative z-10 rounded-2xl p-3.5 bg-rose-500/20 border border-rose-400/60 backdrop-blur-xs";
+  }
+
   const mobSaldoLabel = document.getElementById("mobSaldoLabel");
-  if (mobSaldoLabel) mobSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Acumulado Final";
+  if (mobSaldoLabel) {
+    mobSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Final";
+    mobSaldoLabel.className = m.saldoAtual >= 0
+      ? "text-xs font-extrabold uppercase tracking-wider text-[#86EFAC] whitespace-nowrap"
+      : "text-xs font-extrabold uppercase tracking-wider text-rose-200 whitespace-nowrap";
+  }
 
   const mobMargemRealizadaBadge = document.getElementById("mobMargemRealizadaBadge");
   if (mobMargemRealizadaBadge) {
     if (m.medLiquidaRecebida > 0) {
-      mobMargemRealizadaBadge.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% margem realizada`;
+      mobMargemRealizadaBadge.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% realizada`;
       mobMargemRealizadaBadge.className = m.saldoAtual >= 0
-        ? "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D]"
-        : "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#991B1B]";
+        ? "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] whitespace-nowrap shrink-0"
+        : "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#991B1B] whitespace-nowrap shrink-0";
     } else {
-      mobMargemRealizadaBadge.textContent = "Sem medição recebida";
-      mobMargemRealizadaBadge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-[#64748B]";
+      mobMargemRealizadaBadge.textContent = "Sem medição";
+      mobMargemRealizadaBadge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white/90 whitespace-nowrap shrink-0";
     }
   }
 
@@ -943,8 +976,8 @@ function atualizarTudo() {
   if (mobSaldoAtual) {
     mobSaldoAtual.textContent = formatBRL(m.saldoAtual);
     mobSaldoAtual.className = m.saldoAtual >= 0
-      ? "font-display text-2xl sm:text-3xl font-extrabold text-[#16A34A] tracking-tight mt-0.5"
-      : "font-display text-2xl sm:text-3xl font-extrabold text-rose-600 tracking-tight mt-0.5";
+      ? "font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1"
+      : "font-display text-2xl sm:text-3xl font-extrabold text-rose-200 tracking-tight mt-1";
   }
 
   const mobReceitaContratada = document.getElementById("mobReceitaContratada");
@@ -989,34 +1022,34 @@ function atualizarTudo() {
   const mobLucroPrevistoLabel = document.getElementById("mobLucroPrevistoLabel");
   if (mobLucroPrevistoLabel) {
     mobLucroPrevistoLabel.textContent = m.excessoTetoProjetado > 0
-      ? "Resultado Final Estimado (Acima do Teto):"
+      ? "Resultado Estimado (Acima do Teto):"
       : "Lucro se gastar todo o orçamento:";
   }
 
   const mobCriterioLucroSub = document.getElementById("mobCriterioLucroSub");
   if (mobCriterioLucroSub) {
     mobCriterioLucroSub.textContent = m.excessoTetoProjetado > 0
-      ? `No teto (${formatBRL(m.tetoTotal)}) seria ${formatBRL(m.lucroNoTetoPuro)}:`
-      : "Margem se gastar o teto:";
+      ? `Se gastasse apenas o teto (${formatBRL(m.tetoTotal)}), o lucro seria ${formatBRL(m.lucroNoTetoPuro)}.`
+      : `Calculado sobre o teto planejado de ${formatBRL(m.tetoTotal)}.`;
   }
 
   const mobLucroPrevistoValor = document.getElementById("mobLucroPrevistoValor");
   if (mobLucroPrevistoValor) {
     mobLucroPrevistoValor.textContent = formatBRL(m.saldoProjetadoFinal);
     mobLucroPrevistoValor.className = m.saldoProjetadoFinal >= 0
-      ? "font-display text-sm font-extrabold text-[#16A34A]"
-      : "font-display text-sm font-extrabold text-rose-600";
+      ? "font-display text-base font-extrabold text-[#16A34A] shrink-0 whitespace-nowrap"
+      : "font-display text-base font-extrabold text-rose-600 shrink-0 whitespace-nowrap";
   }
 
   const mobMargemProj = document.getElementById("mobMargemProj");
   if (mobMargemProj) {
     if (isEmAndamento) {
-      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : "";
-      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto${notaTeto}`;
-      mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
+      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : " se gastar o teto";
+      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% de margem estimada${notaTeto}`;
+      mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
     } else {
-      mobMargemProj.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% final realizada`;
-      mobMargemProj.className = m.saldoAtual >= 0 ? "font-bold text-[#16A34A]" : "font-bold text-rose-600";
+      mobMargemProj.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% de margem final realizada`;
+      mobMargemProj.className = m.saldoAtual >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
     }
   }
 
@@ -1170,7 +1203,7 @@ function formatarBadgeReembolso(item, compacto = false) {
   if (status === "PENDENTE") {
     return `
       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-extrabold bg-[#FEF3C7] text-[#B45309] border border-amber-300">
-        ⏳ Reembolso Pendente
+        <span class="w-1.5 h-1.5 rounded-full bg-[#B45309]"></span>Reembolso Pendente
       </span>
       <button onclick="marcarReembolsoLancamento('${item.id}', 'REEMBOLSADO')"
         class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold bg-[#16A34A] text-white hover:bg-[#15803D] transition shadow-2xs"
@@ -1183,7 +1216,7 @@ function formatarBadgeReembolso(item, compacto = false) {
     const dt = item.reembolsadoEm ? ` (${formatDataBR(item.reembolsadoEm)})` : "";
     return `
       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#DCFCE7] text-[#14532D] border border-emerald-200">
-        ✅ Reembolsado${compacto ? "" : dt}
+        ✓ Reembolsado${compacto ? "" : dt}
       </span>
       ${compacto ? "" : `
         <button onclick="marcarReembolsoLancamento('${item.id}', 'PENDENTE')"
@@ -3480,7 +3513,7 @@ function inicializarApp() {
 
   // Uso sem internet: guarda a página e os scripts no aparelho
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then(reg => { if (reg && reg.update) reg.update(); }).catch(() => {});
   }
 }
 
