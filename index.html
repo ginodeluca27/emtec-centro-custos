@@ -32,7 +32,7 @@
 
     html {
       scroll-behavior: smooth;
-      overflow-x: hidden;
+      overflow-x: clip;
       max-width: 100%;
     }
 
@@ -46,7 +46,7 @@
       color: #334155;
       -webkit-font-smoothing: antialiased;
       padding-bottom: 72px; /* Espaço para Bottom Navigation no mobile */
-      overflow-x: hidden;
+      overflow-x: clip;
       max-width: 100%;
       width: 100%;
     }
@@ -270,6 +270,64 @@
 
     #relatorioImpressaoA4 {
       display: none;
+    }
+
+
+    .aviso-custo {
+      padding: .75rem 1rem;
+      border: 1px solid #f59e0b;
+      border-radius: .75rem;
+      background: #fffbeb;
+      color: #78350f;
+      font-size: .875rem;
+      font-weight: 700;
+    }
+    .dialog-pagamento {
+      width: min(26rem, calc(100% - 2rem));
+      margin: auto;
+      padding: 1.25rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 1rem;
+    }
+    .dialog-pagamento::backdrop { background: #0f172acc; }
+    .filtros-relatorio {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+      gap: .625rem;
+    }
+    .filtros-relatorio label { min-width: 0; font-size: .75rem; font-weight: 700; }
+    .link-obra { color: #23396b; font-weight: 700; text-align: left; text-decoration: underline; }
+    .tabela-gerencial { width: 100%; font-size: .8125rem; }
+    .tabela-gerencial th, .tabela-gerencial td {
+      padding: .55rem;
+      border-bottom: 1px solid #cbd5e1;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .tabela-gerencial th, .linha-total { background: #eff6ff; color: #23396b; font-weight: 700; }
+    .chips-reembolso { display: flex; flex-wrap: wrap; gap: .375rem; }
+    .chips-reembolso button { min-height: 2.75rem; padding: .25rem .65rem; }
+    .chips-reembolso button[aria-pressed="true"] { background: #23396b; color: white; }
+    body[data-aba="geral"] .ed-hero-panel, body[data-aba="reembolsos"] .ed-hero-panel { display: none; }
+    @media screen and (min-width: 768px) {
+      .filtros-despesa { position: sticky; top: var(--altura-cabecalho, 0px); z-index: 10; background: white; padding-top: .5rem; }
+    }
+    @media screen and (max-width: 860px) {
+      .tabela-gerencial, .tabela-gerencial tbody, .tabela-gerencial tr { display: block; }
+      .tabela-gerencial thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      .tabela-gerencial tr { border: 1px solid #cbd5e1; border-radius: .75rem; margin-bottom: .625rem; padding: .3rem .6rem; }
+      .tabela-gerencial td { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: .5rem; padding: .25rem; }
+      .tabela-gerencial td::before { content: attr(data-coluna); font-weight: 700; color: #475569; }
+      .tabela-gerencial td:last-child { border-bottom: 0; }
+      #modalLancamentoRapido > div { max-height: 92dvh; }
+      #modalLancamentoRapido input { font-size: 16px; }
+      #modalLancamentoRapido button[id^="btnCatRapida_"], #modalLancamentoRapido button[id^="btnTitRapido_"],
+      #modalLancamentoRapido button[id^="btnReembRapido_"] { min-height: 44px; }
+    }
+    @media print {
+      .tabela-gerencial { font-size: 9px; }
+      .tabela-gerencial th, .tabela-gerencial td { padding: 4px; }
+      .tabela-gerencial tr { break-inside: avoid; }
     }
 
     @media print {
@@ -500,6 +558,7 @@
     <!-- ABAS DE NAVEGAÇÃO DESKTOP -->
     <!-- =================================================================== -->
     <nav class="hidden md:flex flex-wrap items-center gap-2.5 no-print">
+      <button onclick="mudarAba('geral')" id="tabBtn_geral" class="tab-btn">Geral de Obras</button>
       <button onclick="mudarAba('resumo')" id="tabBtn_resumo" class="tab-btn active">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#FF8C00]"></span>
         <span>Visão da Obra</span>
@@ -518,13 +577,16 @@
       </button>
       <button onclick="mudarAba('auditoria')" id="tabBtn_auditoria" class="tab-btn">
         <span class="tab-dot w-2 h-2 rounded-full bg-[#4395D8]"></span>
-        <span>Relatórios</span>
+        <span>Relatório da Obra</span>
       </button>
+      <button onclick="mudarAba('reembolsos')" id="tabBtn_reembolsos" class="tab-btn">Reembolsos</button>
     </nav>
 
     <!-- =================================================================== -->
     <!-- ABA 1: VISÃO DA OBRA (HOME SIMPLIFICADA) -->
     <!-- =================================================================== -->
+    <p id="alertaCustoObra" role="status" class="aviso-custo" hidden></p>
+
     <section id="aba-resumo" class="space-y-6">
       
       <!-- CARD RESUMO EXECUTIVO MOBILE (Identidade Executiva Navy + Cards Claros para Pilar e Melo) -->
@@ -723,7 +785,9 @@
                 <option value="MO">Mão de Obra (MO)</option>
                 <option value="MAT">Material (MAT)</option>
                 <option value="EQUIP">Equipamento (EQUIP)</option>
-                <option value="OUTROS">Outros / Alimentação / Transp.</option>
+                <option value="ADM">Administração</option>
+                <option value="ALIM">Alimentação</option>
+                <option value="OUTROS">Outros / Transporte</option>
                 <option value="ENTRADA_CAIXA">Adiantamento de Caixa (Campo)</option>
               </select>
             </div>
@@ -758,7 +822,7 @@
 
             <div class="sm:col-span-4">
               <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Reembolso</label>
-              <select id="lancReembolsoStatus" class="ed-input text-xs font-semibold text-[#23396B]">
+              <select id="lancReembolsoStatus" onchange="atualizarDataReembolsoDesktop()" class="ed-input text-xs font-semibold text-[#23396B]">
                 <option value="NAO_REEMBOLSAVEL" selected>Sem reembolso (pago pela obra/caixa)</option>
                 <option value="PENDENTE">Reembolso pendente (devolver a quem pagou)</option>
                 <option value="REEMBOLSADO">Já reembolsado (quitado)</option>
@@ -778,6 +842,11 @@
               </select>
               <p id="hintSubtipoDesktop" class="mt-1 text-xs font-semibold text-[#4395D8]"></p>
             </div>
+          </div>
+
+          <div class="hidden">
+            <label for="lancDataReembolso" class="block text-xs font-bold mb-1">Data do reembolso</label>
+            <input type="date" id="lancDataReembolso" class="ed-input text-xs" />
           </div>
 
           <!-- Campos Opcionais Recolhidos (Meio de Pagamento e Vínculo com Empreiteiro) -->
@@ -830,7 +899,7 @@
         </div>
 
         <!-- Filtros Rápidos (Totalmente Responsivos) -->
-        <div class="space-y-2.5 border-b border-slate-100 pb-3.5">
+        <div class="filtros-despesa space-y-2.5 border-b border-slate-100 pb-3.5">
           <!-- Campo de Busca -->
           <div class="w-full">
             <input type="text" id="filtroBusca" oninput="renderizarTabelaLancamentos()" placeholder="Buscar por descrição, quem pagou ou forma de pagamento..."
@@ -844,6 +913,7 @@
               <option value="MO">Mão de Obra</option>
               <option value="MAT">Material</option>
               <option value="EQUIP">Equipamento</option>
+              <option value="ADM">Administração</option>
               <option value="SUB_ALIM">Alimentação</option>
               <option value="SUB_TRANSP">Transporte / Combustível</option>
               <option value="OUTROS">Outros / Taxas</option>
@@ -862,6 +932,11 @@
             </select>
           </div>
 
+          <div class="chips-reembolso" aria-label="Filtrar reembolsos">
+            <button type="button" onclick="filtrarStatusReembolso('')" data-filtro-reembolso="" aria-pressed="true" class="ed-btn--transparent text-xs">Todos</button>
+            <button type="button" onclick="filtrarStatusReembolso('PENDENTE')" data-filtro-reembolso="PENDENTE" aria-pressed="false" class="ed-btn--transparent text-xs">A reembolsar</button>
+            <button type="button" onclick="filtrarStatusReembolso('REEMBOLSADO')" data-filtro-reembolso="REEMBOLSADO" aria-pressed="false" class="ed-btn--transparent text-xs">Pagos</button>
+          </div>
           <!-- Banner Informativo com Total Filtrado -->
           <div class="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
             <span class="text-[#64748B] font-bold">Total exibido:</span>
@@ -873,6 +948,7 @@
         <div id="cardsLancamentosMobile" class="md:hidden space-y-3"></div>
 
         <!-- Tabela Desktop -->
+        <button type="button" id="maisLancamentosMobile" onclick="mostrarMaisLancamentos()" class="md:hidden ed-btn--transparent w-full py-2 text-xs hidden">Mostrar mais lançamentos</button>
         <div class="hidden md:block overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
@@ -973,10 +1049,18 @@
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-bold text-[#475569] mb-1">Situação</label>
-              <select id="medStatus" class="ed-input text-xs font-semibold">
+              <select id="medStatus" onchange="atualizarDataRecebimento()" class="ed-input text-xs font-semibold">
                 <option value="Pendente" selected>A receber (Previsto)</option>
                 <option value="Recebida">Recebido em conta</option>
               </select>
+            </div>
+            <div class="sm:col-span-3">
+              <label for="medData" class="block text-xs font-bold mb-1">Data da medição</label>
+              <input type="date" id="medData" required class="ed-input text-xs" />
+            </div>
+            <div class="hidden sm:col-span-3">
+              <label for="medDataRecebimento" class="block text-xs font-bold mb-1">Data do recebimento</label>
+              <input type="date" id="medDataRecebimento" class="ed-input text-xs" />
             </div>
             <div class="sm:col-span-12 flex items-center justify-end gap-2 pt-1 border-t border-slate-200">
               <button type="button" onclick="toggleFormNovaMedicao()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#475569] hover:bg-slate-200 transition">Cancelar</button>
@@ -1158,6 +1242,51 @@
     <!-- =================================================================== -->
     <!-- ABA 6: MAIS (HUB DE FERRAMENTAS & NAVEGAÇÃO COMPLETA NO CELULAR) -->
     <!-- =================================================================== -->
+
+    <section id="aba-geral" class="hidden ed-card p-3.5 sm:p-6 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="ed-eyebrow">VISÃO DA CARTEIRA</span>
+          <h2 class="font-display text-lg font-bold text-[#23396B]">Geral de Obras</h2>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="abrirModalNovaObra()" class="ed-btn--transparent py-2 px-3 text-xs">+ Nova obra</button>
+          <button onclick="baixarRelatorioGerencial('geral')" class="ed-btn py-2 px-3 text-xs">Baixar Excel</button>
+          <button onclick="baixarRelatorioGerencial('geral', true)" class="ed-btn--navy py-2 px-3 text-xs">Imprimir / PDF</button>
+        </div>
+      </div>
+      <div id="tabelaGeralObras"></div>
+    </section>
+
+    <section id="aba-reembolsos" class="hidden ed-card p-3.5 sm:p-6 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="ed-eyebrow">PRESTAÇÃO DE CONTAS</span>
+          <h2 class="font-display text-lg font-bold text-[#23396B]">Relatório de Reembolsos</h2>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="baixarRelatorioGerencial('reembolsos')" class="ed-btn py-2 px-3 text-xs">Baixar Excel</button>
+          <button onclick="baixarRelatorioGerencial('reembolsos', true)" class="ed-btn--navy py-2 px-3 text-xs">Imprimir / PDF</button>
+        </div>
+      </div>
+      <div class="filtros-relatorio" onchange="atualizarRelatorioReembolsos()">
+        <label>Obra<select id="relReembObra" class="ed-input text-xs"></select></label>
+        <label>Responsável<select id="relReembPessoa" class="ed-input text-xs"></select></label>
+        <label>Situação
+          <select id="relReembStatus" class="ed-input text-xs">
+            <option value="">Todos</option>
+            <option value="PENDENTE">Pendentes</option>
+            <option value="REEMBOLSADO">Pagos</option>
+          </select>
+        </label>
+        <label>De<input id="relReembInicio" type="date" class="ed-input text-xs" /></label>
+        <label>Até<input id="relReembFim" type="date" class="ed-input text-xs" /></label>
+      </div>
+      <p class="text-xs text-[#64748B]">O período usa a data da despesa para os pendentes e a data da baixa para os pagos.</p>
+      <p id="totaisRelReembolsos" class="text-sm font-bold text-[#23396B]"></p>
+      <div id="tabelaRelReembolsos"></div>
+    </section>
+
     <section id="aba-mais" class="hidden space-y-4">
       <div class="border-b border-slate-100 pb-3">
         <span class="ed-eyebrow">FERRAMENTAS DA OBRA</span>
@@ -1167,6 +1296,8 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
         
+        <button onclick="mudarAba('geral')" class="ed-btn--navy px-4 py-3 text-sm">Geral de Obras</button>
+        <button onclick="mudarAba('reembolsos')" class="ed-btn--navy px-4 py-3 text-sm">Relatório de Reembolsos</button>
         <!-- Opção 1: Relatórios & Gráficos -->
         <button onclick="mudarAba('auditoria')" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#4395D8] transition group">
           <div class="w-12 h-12 rounded-2xl bg-[#23396B]/10 text-[#23396B] group-hover:bg-[#23396B] group-hover:text-white flex items-center justify-center shrink-0 transition">
@@ -1265,6 +1396,7 @@
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-[#FF8C00]">LANÇAMENTO RÁPIDO</span>
+          <p id="obraLancRapido" class="text-xs font-semibold text-[#64748B]"></p>
           <h3 id="modalLancRapidoTitulo" class="font-display text-base sm:text-lg font-extrabold text-[#23396B]">Registrar Despesa</h3>
         </div>
         <button type="button" onclick="fecharModalLancamentoRapido()" class="w-9 h-9 rounded-full bg-slate-100 text-[#64748B] hover:text-[#23396B] font-bold text-base flex items-center justify-center transition">✕</button>
@@ -1312,13 +1444,18 @@
           </datalist>
         </div>
 
+        <div>
+          <label for="lancRapidoData" class="block text-xs font-bold mb-1">Data do pagamento / movimento</label>
+          <input type="date" id="lancRapidoData" required class="ed-input text-xs py-1.5" />
+        </div>
+
         <!-- 3. Categoria em Pills de 1 Toque + Subcategoria Analítica Corrigível -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <label class="text-xs font-extrabold uppercase tracking-wider text-[#64748B]">Categoria (1 toque) *</label>
             <span id="badgeSubtipoDetectadoRapido" class="text-xs font-bold text-[#4395D8]">Classificação automática</span>
           </div>
-          <div class="grid grid-cols-4 gap-1.5 sm:gap-2">
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
             <button type="button" id="btnCatRapida_MO" onclick="selecionarCategoriaRapida('MO')"
               class="py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
               Mão Obra
@@ -1335,6 +1472,8 @@
               class="py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]">
               Outros
             </button>
+            <button type="button" id="btnCatRapida_ADM" onclick="selecionarCategoriaRapida('ADM')" class="py-2 px-1 rounded-xl text-xs font-bold border">Administração</button>
+            <button type="button" id="btnCatRapida_ALIM" onclick="selecionarCategoriaRapida('ALIM')" class="py-2 px-1 rounded-xl text-xs font-bold border">Alimentação</button>
           </div>
           <!-- Subcategoria Analítica (Automática para Alimentação/Transporte ou correção manual simples) -->
           <div class="flex items-center gap-2 bg-[#F8FAFC] border border-slate-200 rounded-xl px-3 py-1.5">
@@ -1408,19 +1547,20 @@
           </div>
         </div>
 
+        <div class="hidden">
+          <label for="lancRapidoDataReembolso" class="block text-xs font-bold mb-1">Data do reembolso</label>
+          <input type="date" id="lancRapidoDataReembolso" class="ed-input text-xs" />
+        </div>
+
         <!-- 5. Mais Opções (Colapsado para Manter a Tela Enxuta) -->
         <div class="pt-0.5">
           <button type="button" onclick="toggleOpcoesAvancadasRapidas()" class="text-xs font-bold text-[#4395D8] hover:text-[#23396B] flex items-center gap-1.5 transition">
             <span id="iconeOpcoesAvancadasRapidas" class="w-4 h-4 rounded-full bg-[#4395D8]/15 text-[#4395D8] flex items-center justify-center font-bold text-xs">+</span>
-            <span>Data, forma de pagamento ou empreiteiro (opcional)</span>
+            <span>Forma de pagamento, adiantamento ou empreiteiro</span>
           </button>
 
           <div id="opcoesAvancadasRapidas" class="hidden mt-2 pt-2.5 space-y-2.5 bg-[#F8FAFC] p-3 rounded-2xl border border-[#CBD5E1]">
             <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-xs font-bold uppercase text-[#64748B] mb-1">Data</label>
-                <input type="date" id="lancRapidoData" class="ed-input text-xs py-1.5" />
-              </div>
               <div>
                 <label class="block text-xs font-bold uppercase text-[#64748B] mb-1">Forma</label>
                 <select id="lancRapidoPagamento" class="ed-input text-xs py-1.5">
@@ -1533,7 +1673,7 @@
             <input type="number" step="0.01" id="novaObraValorContrato" placeholder="Ex: 50000" inputmode="decimal" class="ed-input" />
           </div>
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Teto de custo R$ * (obrigatório)</label>
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Custo estimado da obra (R$) *</label>
             <input type="number" step="0.01" id="novaObraTetoCusto" required min="1" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
           </div>
         </div>
@@ -1586,12 +1726,23 @@
   </div>
 
   <!-- ===================================================================== -->
+  <dialog id="dialogDataPagamento" class="dialog-pagamento" aria-labelledby="tituloDataPagamento">
+    <form method="dialog" class="space-y-3">
+      <h3 id="tituloDataPagamento" class="font-display font-bold text-[#23396B]"></h3>
+      <label for="dataPagamento" class="block text-sm">Data do pagamento</label>
+      <input type="date" id="dataPagamento" class="ed-input" required />
+      <div class="flex justify-end gap-2">
+        <button value="cancelar" formnovalidate class="ed-btn--transparent px-3 py-2">Cancelar</button>
+        <button value="salvar" class="ed-btn px-3 py-2">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- FOLHA DE RELATÓRIO EXECUTIVO A4 (EXIBIDA NA IMPRESSÃO / EXPORTAÇÃO PDF) -->
   <!-- ===================================================================== -->
   <div id="relatorioImpressaoA4" class="p-6 max-w-4xl mx-auto text-[#0F172A] space-y-6"></div>
 
   <!-- SCRIPTS -->
-  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

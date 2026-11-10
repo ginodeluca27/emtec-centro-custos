@@ -1,24 +1,14 @@
-import { put, list } from '@vercel/blob';
+import { get, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 const BLOB_NAME = 'emtec-database.json';
-
-// O PIN deve ser configurado na variável de ambiente EMTEC_PIN no painel da Vercel.
-// Caso ainda não tenha sido configurado na Vercel, usa um hash SHA-256 de contingência
-// sem expor nenhum PIN em texto puro no código-fonte nem no navegador.
-const FALLBACK_PIN_SHA256 = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 
 function hash(s) {
   return createHash('sha256').update(String(s)).digest();
 }
 
-function pinConfere(informado) {
-  if (!informado) return false;
-  const informadoHash = hash(informado);
-  const esperadoHash = process.env.EMTEC_PIN
-    ? hash(process.env.EMTEC_PIN)
-    : Buffer.from(FALLBACK_PIN_SHA256, 'hex');
-  return timingSafeEqual(informadoHash, esperadoHash);
+function pinConfere(informado, esperado) {
+  return !!informado && timingSafeEqual(hash(informado), hash(esperado));
 }
 
 async function parseRequestBody(req) {
@@ -110,21 +100,49 @@ function estavel(valor) {
   return JSON.stringify(valor);
 }
 
-async function lerNuvem() {
-  const { blobs } = await list({ prefix: BLOB_NAME, limit: 1 });
-  const alvo = blobs.find(b => b.pathname === BLOB_NAME) || blobs[0];
-  if (!alvo) return { dados: null, uploadedAt: null };
-  const r = await fetch(alvo.url, { cache: 'no-store' });
-  if (!r.ok) throw new Error('Falha ao ler dados da nuvem: ' + r.statusText);
-  return { dados: await r.json(), uploadedAt: alvo.uploadedAt };
+async function lerNuvem(opcoes) {
+  const blob = await get(BLOB_NAME, { ...opcoes, useCache: false });
+  if (!blob) return { dados: null, etag: null };
+  if (blob.statusCode !== 200 || !blob.blob.etag) throw new Error('Resposta inválida do armazenamento.');
+  const dados = await new Response(blob.stream).json();
+  if (!Array.isArray(dados?.obras)) throw new Error('Base na nuvem inválida.');
+  return { dados, etag: blob.blob.etag };
+}
+
+export async function sincronizarEstado(payload, opcoes, legado) {
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const { dados: nuvem, etag } = await lerNuvem(opcoes);
+    // A primeira gravação no armazenamento privado preserva a base pública anterior.
+    const anterior = nuvem ?? (legado ? (await lerNuvem(legado)).dados : null);
+    const data = mesclarEstados(payload, anterior);
+    if (nuvem && estavel(nuvem) === estavel(data)) return { data, gravou: false };
+    if (!anterior && !data.obras.length && !data.responsaveis?.length) return { data, gravou: false };
+    try {
+      await put(BLOB_NAME, JSON.stringify(data), {
+        ...opcoes,
+        addRandomSuffix: false,
+        allowOverwrite: Boolean(etag),
+        ...(etag ? { ifMatch: etag } : {}),
+        contentType: 'application/json'
+      });
+      return { data, gravou: true };
+    } catch (erro) {
+      // Uma criação simultânea sem ETag também precisa de nova leitura antes de mesclar.
+      if (!(erro instanceof BlobError)) throw erro;
+      if (etag && !(erro instanceof BlobPreconditionFailedError)) throw erro;
+      if (!etag && !(await lerNuvem(opcoes)).etag) throw erro;
+    }
+  }
+  return null;
 }
 
 export default async function handler(req, res) {
   // Mesma origem apenas: nenhum cabeçalho CORS aberto.
   res.setHeader('Cache-Control', 'no-store');
 
-  const pinCliente = req.headers['x-emtec-pin'];
-  if (!pinConfere(pinCliente)) {
+  const pin = process.env.EMTEC_PIN;
+  if (!pin) return res.status(503).json({ error: 'Configure EMTEC_PIN no servidor.' });
+  if (!pinConfere(req.headers['x-emtec-pin'], pin)) {
     // pequena espera para dificultar tentativa em massa
     await new Promise(r => setTimeout(r, 400));
     return res.status(401).json({ error: 'PIN de acesso incorreto.', codigo: 'PIN_INVALIDO' });
@@ -142,27 +160,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Formato de dados inválido: esperava { obras: [...] }' });
       }
 
-      const { dados: nuvem } = await lerNuvem();
-      const mesclado = mesclarEstados(payload, nuvem);
-
-      // Só grava se algo mudou (evita escrita a cada 40s por aparelho)
-      const mudou = !nuvem || estavel(nuvem) !== estavel(mesclado);
-      if (mudou) {
-        await put(BLOB_NAME, JSON.stringify(mesclado), {
-          access: 'public',
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: 'application/json'
-        });
-      }
-
-      // Devolve o estado mesclado: o aparelho adota SEM perder o que ainda não enviou
-      return res.status(200).json({
-        success: true,
-        gravou: mudou,
-        data: mesclado,
-        timestamp: new Date().toISOString()
-      });
+      const tokenPrivado = process.env.EMTEC_BLOB_PRIVADO_TOKEN;
+      const publico = { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN };
+      const opcoes = tokenPrivado ? { access: 'private', token: tokenPrivado } : publico;
+      const resultado = await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
+      if (!resultado) return res.status(409).json({ error: 'A base mudou durante a sincronização. Tente novamente.' });
+      return res.status(200).json({ success: true, ...resultado, timestamp: new Date().toISOString() });
     }
 
     return res.status(405).json({ error: 'Método não permitido.' });

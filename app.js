@@ -220,8 +220,7 @@ function carregarEstadoLocal() {
   } catch (e) {
     console.error("Erro ao carregar localStorage:", e);
   }
-  const inicial = JSON.parse(JSON.stringify(window.INITIAL_EMTEC_DATA || { obras: [] }));
-  return sanearDadosCarregados(inicial);
+  return { obras: [], responsaveis: [] };
 }
 
 function getResponsaveis() {
@@ -456,6 +455,7 @@ async function sincronizarComNuvem() {
     if (json && json.data && Array.isArray(json.data.obras) && json.data.obras.length > 0) {
       if (versaoEnviada === versaoLocal) {
         // Nada mudou durante o envio: adotar o resultado mesclado (já contém tudo que era local)
+        const primeiraCarga = !getObraAtual();
         estado = sanearDadosCarregados(json.data);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
         localStorage.removeItem(PENDENTE_STORAGE_KEY);
@@ -464,6 +464,7 @@ async function sincronizarComNuvem() {
         }
         renderizarSeletorObras();
         atualizarTudo();
+        if (primeiraCarga && innerWidth < 768 && document.body.dataset.aba === "geral") mudarAba("resumo");
       } else {
         // O usuário lançou algo enquanto enviava: não sobrescrever; enviar de novo
         novaSincronizacaoSolicitada = true;
@@ -515,6 +516,32 @@ function formatBRL(val) {
   return Number(val || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function novoId(prefixo) {
+  const id = globalThis.crypto?.randomUUID?.() || Date.now() + "-" + Math.random().toString(36).slice(2);
+  return prefixo + "-" + id;
+}
+
+function dataLocalHoje() {
+  const hoje = new Date();
+  const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoje.getDate()).padStart(2, "0");
+  return [hoje.getFullYear(), mes, dia].join("-");
+}
+
+async function pedirDataPagamento(titulo) {
+  const modal = document.getElementById("dialogDataPagamento");
+  const campo = document.getElementById("dataPagamento");
+  if (modal.open) return "";
+  document.getElementById("tituloDataPagamento").textContent = titulo;
+  campo.value = dataLocalHoje();
+  campo.max = campo.value;
+  modal.returnValue = "";
+  return new Promise(resolve => {
+    modal.addEventListener("close", () => resolve(modal.returnValue === "salvar" ? campo.value : ""), { once: true });
+    modal.showModal();
+  });
+}
+
 function formatDataBR(iso) {
   if (!iso) return "-";
   const parts = iso.split("-");
@@ -530,6 +557,7 @@ const REGEX_ALIMENTACAO = /\b(ALMOC|JANTA|REFEI|LANCHE|MARMITA|QUENTINHA|VALE AL
 const REGEX_TRANSPORTE = /\b(GASOLINA|COMBUSTIVEL|ABASTEC|PASSAGE|FRETE|DIESEL|ETANOL|PEDAGIO|ESTACIONAMENTO|OLEO (DA )?MOTO)|\bUBER\b/;
 function detectarSubtipo(desc, tipoEscolhido, subtipoManual = "AUTO") {
   if (tipoEscolhido === "ENTRADA_CAIXA") return "CAIXA";
+  if (tipoEscolhido === "ADM") return "ADM";
   if (subtipoManual && subtipoManual !== "AUTO") return subtipoManual;
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return tipoEscolhido;
 
@@ -545,7 +573,7 @@ function detectarSubtipo(desc, tipoEscolhido, subtipoManual = "AUTO") {
 function sugerirCategoriaPorDescricao(desc) {
   const d = semAcento(desc);
   if (d.trim().length < 3) return "";
-  if (REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR")) return "OUTROS";
+  if (REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR")) return "ALIM";
   if (REGEX_TRANSPORTE.test(d)) return "OUTROS";
   if (/\b(DIARIA|DIARIAS|DIARISTA|PEDREIRO|SERVENTE|AJUDANTE|EMPREITA|FOLHA|MAO DE OBRA|ELETRICISTA|ENCANADOR|PINTOR|DEMOLICAO|SALARIO|ADIANTAMENTO)\b/.test(d)) return "MO";
   if (/\b(LOCACAO|ALUGUEL|ANDAIME|CONTEINER|BETONEIRA|MARTELETE|MISTURADOR|REFLETOR)\b/.test(d)) return "EQUIP";
@@ -554,7 +582,8 @@ function sugerirCategoriaPorDescricao(desc) {
   return "";
 }
 function normalizarTipoOficial(tipoEscolhido) {
-  if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return "OUTROS";
+  if (tipoEscolhido === "ALIM") return "MO";
+  if (tipoEscolhido === "TRANSP") return "OUTROS";
   return tipoEscolhido;
 }
 
@@ -662,13 +691,37 @@ function arredondarMoeda(v) {
   return Math.round((Number(v) || 0) * 100) / 100;
 }
 
+const GRUPOS_CUSTO = [
+  { codigo: "MAT", nome: "Material e insumos", peso: 50 },
+  { codigo: "MO", nome: "Mão de obra", peso: 38 },
+  { codigo: "EQUIP", nome: "Equipamentos", peso: 5 },
+  { codigo: "OUTROS", nome: "Outros e taxas", peso: 7 },
+  { codigo: "ADM", nome: "Administração", peso: 0 }
+];
+const LIMIAR_ALERTA_CUSTO = 70;
+
+function distribuirOrcamento(total, anterior = {}) {
+  const grupos = GRUPOS_CUSTO.map(({ codigo, peso }) => [codigo, anterior[codigo] ?? peso]);
+  const soma = grupos.reduce((acumulado, [, peso]) => acumulado + peso, 0);
+  const centavos = Math.round(total * 100);
+  let pesoAcumulado = 0;
+  let valorAcumulado = 0;
+  return Object.fromEntries(grupos.map(([codigo, peso]) => {
+    pesoAcumulado += peso;
+    const parcelaAcumulada = Math.round(centavos * pesoAcumulado / soma);
+    const valor = (parcelaAcumulada - valorAcumulado) / 100;
+    valorAcumulado = parcelaAcumulada;
+    return [codigo, valor];
+  }));
+}
+
 function calcularMetricasObra(obra) {
   if (!obra) return {};
   const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
   const entradasCaixa = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento === "ENTRADA_CAIXA");
 
-  const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0 };
-  const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0 };
+  const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0, ADM: 0 };
+  const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0, ADM: 0 };
   const porTitular = {};
   const reembolsosPorTitular = {};
 
@@ -787,9 +840,10 @@ function calcularMetricasObra(obra) {
   const orc = obra.orcamentoPrevisto || {};
   const orcamentoPrevisto = {
     MAT: Number(orc.MAT || 0),
-    MO: Number(orc.MO || 0),
+    MO: Number(orc.MO || 0) + Number(orc.ALIM || 0),
     EQUIP: Number(orc.EQUIP || 0),
-    OUTROS: Number(orc.OUTROS || 0)
+    OUTROS: Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0),
+    ADM: Number(orc.ADM || 0)
   };
   const tetoTotal = arredondarMoeda(Object.values(orcamentoPrevisto).reduce((a, b) => a + Number(b || 0), 0));
   const percOrcamentoConsumido = tetoTotal > 0 ? (custoTotal / tetoTotal) * 100 : 0;
@@ -868,6 +922,7 @@ function calcularMetricasObra(obra) {
     tetoTotal,
     orcamentoPrevisto,
     percOrcamentoConsumido,
+    alertaCusto: percOrcamentoConsumido >= LIMIAR_ALERTA_CUSTO,
     saldoAtual,
     margemRealizadaPerc,
     margemAtualPerc: margemRealizadaPerc,
@@ -895,10 +950,15 @@ function calcularMetricasObra(obra) {
 // 4. ATUALIZAÇÃO GERAL DA INTERFACE (DESKTOP E MOBILE)
 // --------------------------------------------------------------------------
 function atualizarTudo() {
+  renderizarRelatoriosGerenciais();
   const obra = getObraAtual();
+  document.getElementById("alertaCustoObra").hidden = true;
   if (!obra) return;
   renderizarControlesResponsaveis();
   const m = calcularMetricasObra(obra);
+  const alerta = document.getElementById("alertaCustoObra");
+  alerta.hidden = !m.alertaCusto;
+  alerta.textContent = `Atenção • ${m.percOrcamentoConsumido.toFixed(1).replace(".", ",")}% do custo estimado consumido • ${formatBRL(m.custoTotal)} de ${formatBRL(m.tetoTotal)}`;
 
   const statusOp = obra.status || "Em Andamento";
   const isEmAndamento = statusOp !== "Concluída";
@@ -1197,6 +1257,12 @@ function renderizarMiniCards(m) {
       val: m.porTipoOficial.OUTROS,
       sub: `Taxas/ART | Comb: ${formatBRL(m.porSubtipoReal.TRANSP)}`,
       dot: "bg-[#6C757D]"
+    },
+    {
+      label: "Administração (ADM)",
+      val: m.porTipoOficial.ADM,
+      sub: "Despesas administrativas",
+      dot: "bg-[#23396B]"
     }
   ];
 
@@ -1256,15 +1322,19 @@ function formatarBadgeReembolso(item, compacto = false) {
   return "";
 }
 
-function marcarReembolsoLancamento(id, novoStatus) {
+async function marcarReembolsoLancamento(id, novoStatus) {
   const obra = getObraAtual();
   if (!obra) return;
-  const item = (obra.lancamentos || []).find(l => l.id === id);
-  if (!item) return;
+  const anterior = (obra.lancamentos || []).find(l => l.id === id && !l.deletado);
+  if (!anterior || anterior.movimento === "ENTRADA_CAIXA") return;
+  const data = novoStatus === "REEMBOLSADO" ? await pedirDataPagamento("Data do reembolso") : "";
+  if (novoStatus === "REEMBOLSADO" && !data) return;
+  const item = estado.obras.find(o => o.id === obra.id)?.lancamentos?.find(l => l.id === id && !l.deletado);
+  if (!item || item.reembolsoStatus !== anterior.reembolsoStatus) return;
 
   item.reembolsoStatus = novoStatus;
   if (novoStatus === "REEMBOLSADO") {
-    item.reembolsadoEm = new Date().toISOString().split("T")[0];
+    item.reembolsadoEm = data;
   } else {
     delete item.reembolsadoEm;
   }
@@ -1282,7 +1352,7 @@ function marcarReembolsoLancamento(id, novoStatus) {
   }
 }
 
-function quitarReembolsosTitular(titularId) {
+async function quitarReembolsosTitular(titularId) {
   const obra = getObraAtual();
   if (!obra) return;
   const pendentes = (obra.lancamentos || []).filter(
@@ -1294,14 +1364,14 @@ function quitarReembolsosTitular(titularId) {
   }
   const soma = pendentes.reduce((acc, i) => acc + Number(i.valor || 0), 0);
   const nome = getNomeResponsavel(titularId);
-  if (!confirm(`Confirmar baixa de ${pendentes.length} reembolso(s) pendente(s) de ${nome} no valor total de ${formatBRL(soma)}?\n\nIsso marca os gastos como "Já Reembolsados" sem duplicar nenhuma despesa na obra.`)) {
-    return;
-  }
-  const hoje = new Date().toISOString().split("T")[0];
+  const data = await pedirDataPagamento(`Quitar ${pendentes.length} reembolso(s) de ${nome} • ${formatBRL(soma)}`);
+  if (!data) return;
+  const ids = new Set(pendentes.map(item => item.id));
+  const atuais = estado.obras.find(o => o.id === obra.id)?.lancamentos || [];
   const agora = new Date().toISOString();
-  pendentes.forEach(item => {
+  atuais.filter(item => ids.has(item.id) && !item.deletado && item.reembolsoStatus === "PENDENTE").forEach(item => {
     item.reembolsoStatus = "REEMBOLSADO";
-    item.reembolsadoEm = hoje;
+    item.reembolsadoEm = data;
     item.atualizadoEm = agora;
   });
   salvarEstado();
@@ -1313,8 +1383,8 @@ function filtrarPorResponsavel(filtroValor) {
   mudarAba("lancamentos");
   const sel = document.getElementById("filtroTitular");
   if (sel) {
-    sel.value = filtroValor;
-    renderizarTabelaLancamentos();
+    sel.value = filtroValor === "REEMBOLSO_PENDENTE" ? "TODOS" : filtroValor;
+    filtrarStatusReembolso(filtroValor === "REEMBOLSO_PENDENTE" ? "PENDENTE" : "");
   }
 }
 
@@ -1474,14 +1544,39 @@ function renderizarReembolsosHome(obra, m) {
 // --------------------------------------------------------------------------
 // 5. TABELA DE LANÇAMENTOS E FILTROS (Cards Mobile / Tabela Desktop)
 // --------------------------------------------------------------------------
+const PAGINA_LANCAMENTOS_MOBILE = 20;
+let limiteLancamentosMobile = PAGINA_LANCAMENTOS_MOBILE;
+let filtrosLancamentosAnteriores = "";
+let filtroStatusReembolso = "";
+
+function filtrarStatusReembolso(status) {
+  const responsavel = document.getElementById("filtroTitular");
+  if (responsavel.value === "REEMBOLSO_PENDENTE") responsavel.value = "TODOS";
+  filtroStatusReembolso = status;
+  document.querySelectorAll("[data-filtro-reembolso]").forEach(botao => {
+    botao.setAttribute("aria-pressed", String(botao.dataset.filtroReembolso === status));
+  });
+  renderizarTabelaLancamentos();
+}
+
+function mostrarMaisLancamentos() {
+  limiteLancamentosMobile += PAGINA_LANCAMENTOS_MOBILE;
+  renderizarTabelaLancamentos();
+}
+
 function renderizarTabelaLancamentos() {
   const obra = getObraAtual();
+  if (!obra) return;
   const busca = (document.getElementById("filtroBusca")?.value || "").toLowerCase().trim();
   const cat = document.getElementById("filtroCategoria")?.value || "TODOS";
   const tit = document.getElementById("filtroTitular")?.value || "TODOS";
 
-  let filtrados = (obra.lancamentos || []).filter(item => {
+  const filtros = JSON.stringify([obra.id, busca, cat, tit, filtroStatusReembolso]);
+  if (filtros !== filtrosLancamentosAnteriores) limiteLancamentosMobile = PAGINA_LANCAMENTOS_MOBILE;
+  filtrosLancamentosAnteriores = filtros;
+  const filtrados = (obra.lancamentos || []).filter(item => {
     if (item.deletado) return false;
+    if (filtroStatusReembolso && (item.movimento === "ENTRADA_CAIXA" || item.reembolsoStatus !== filtroStatusReembolso)) return false;
     if (busca) {
       const descMatch = (item.descricao || "").toLowerCase().includes(busca);
       const pagMatch = (item.pagamento || "").toLowerCase().includes(busca);
@@ -1522,6 +1617,8 @@ function renderizarTabelaLancamentos() {
   const containerMob = document.getElementById("cardsLancamentosMobile");
   const tbody = document.getElementById("tbodyLancamentos");
 
+  document.getElementById("maisLancamentosMobile").classList.toggle("hidden", filtrados.length <= limiteLancamentosMobile);
+
   if (filtrados.length === 0) {
     const emptyHtml = `
       <div class="py-8 text-center text-xs text-[#64748B] bg-slate-50 rounded-2xl border border-slate-100">
@@ -1535,7 +1632,7 @@ function renderizarTabelaLancamentos() {
 
   // 1. Renderização Exclusiva para Mobile (Cards Nativos com Zero Overflow)
   if (containerMob) {
-    containerMob.innerHTML = filtrados.map(item => {
+    containerMob.innerHTML = filtrados.slice(0, limiteLancamentosMobile).map(item => {
       const isEntrada = item.movimento === "ENTRADA_CAIXA";
       const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
 
@@ -1706,6 +1803,7 @@ function obterRotuloSubtipo(sub) {
   if (sub === "MAT") return "Material (MAT)";
   if (sub === "MO") return "Mão de Obra Direta (MO)";
   if (sub === "EQUIP") return "Equipamento (EQUIP)";
+  if (sub === "ADM") return "Administração (ADM)";
   if (sub === "OUTROS") return "Outros / Taxas (OUTROS)";
   return sub || "Padrão";
 }
@@ -1736,6 +1834,7 @@ function atualizarPreviewSubtipoRapido() {
 function abrirModalLancamentoRapido() {
   const modal = document.getElementById("modalLancamentoRapido");
   if (!modal) return;
+  document.getElementById("obraLancRapido").textContent = getObraAtual()?.nome || "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
@@ -1752,7 +1851,7 @@ function abrirModalLancamentoRapido() {
   const aviso = document.getElementById("avisoDuplicidadeRapido");
   if (aviso) aviso.classList.add("hidden");
 
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = dataLocalHoje();
   const inputData = document.getElementById("lancRapidoData");
   if (inputData) inputData.value = hoje;
 
@@ -1769,7 +1868,7 @@ function abrirModalLancamentoRapido() {
   // Categoria é sugerida pela descrição (ou escolhida em 1 toque); começa sem escolha
   categoriaRapidaAtiva = "";
   categoriaRapidaManual = false;
-  ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
+  ["MO", "MAT", "EQUIP", "OUTROS", "ADM", "ALIM"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (btn) btn.className = "py-2 px-1 rounded-xl text-center text-xs font-bold uppercase transition border border-[#CBD5E1] bg-white text-[#23396B] hover:border-[#4395D8]";
   });
@@ -1800,6 +1899,7 @@ function abrirEdicaoRapida(id) {
   const modal = document.getElementById("modalLancamentoRapido");
   if (!modal) return;
 
+  document.getElementById("obraLancRapido").textContent = getObraAtual()?.nome || "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
@@ -1824,6 +1924,10 @@ function abrirEdicaoRapida(id) {
   // Preserva quem pagou e status de reembolso reais do lançamento
   selecionarTitularRapido(item.titular || "EMTEC", true);
   selecionarStatusReembolsoRapido(item.reembolsoStatus || "NAO_REEMBOLSAVEL");
+  if (item.reembolsoStatus === "REEMBOLSADO") {
+    document.getElementById("lancRapidoDataReembolso").value = item.reembolsadoEm || "";
+    document.getElementById("lancRapidoDataReembolso").required = Boolean(item.reembolsadoEm);
+  }
 
   const selPag = document.getElementById("lancRapidoPagamento");
   if (selPag) selPag.value = item.pagamento || "PIX";
@@ -1908,6 +2012,7 @@ function selecionarStatusReembolsoRapido(status) {
   statusReembolsoRapidoAtivo = status;
   const inputReemb = document.getElementById("lancRapidoReembolsoStatus");
   if (inputReemb) inputReemb.value = status;
+  configurarDataReembolso("lancRapidoDataReembolso", status);
 
   const opcoes = [
     { id: "NAO_REEMBOLSAVEL", activeCls: "py-1.5 px-1.5 rounded-xl text-xs font-extrabold border-2 border-[#23396B] bg-[#23396B] text-white transition" },
@@ -1938,7 +2043,7 @@ function sugerirCategoriaRapida() {
 function selecionarCategoriaRapida(tipo, manual = true) {
   categoriaRapidaAtiva = tipo;
   if (manual) categoriaRapidaManual = true;
-  ["MO", "MAT", "EQUIP", "OUTROS"].forEach(cat => {
+  ["MO", "MAT", "EQUIP", "OUTROS", "ADM", "ALIM"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
     if (!btn) return;
     if (cat === tipo) {
@@ -1993,7 +2098,7 @@ function salvarLancamentoRapido(e) {
   const rawVal = String(valorInput?.value || "").replace(",", ".");
   const valor = parseFloat(rawVal);
   const descricao = (descInput?.value || "").trim();
-  const data = dataInput?.value || new Date().toISOString().split("T")[0];
+  const data = dataInput?.value || dataLocalHoje();
   const titular = (titSelect?.value || titularRapidoAtivo || "EMTEC").toUpperCase();
   const movimento = movSelect?.value === "ENTRADA_CAIXA" ? "ENTRADA_CAIXA" : "SAIDA";
   const isEntrada = movimento === "ENTRADA_CAIXA";
@@ -2022,7 +2127,7 @@ function salvarLancamentoRapido(e) {
   }
 
   const subtipo = isEntrada ? "ENTRADA_CAIXA" : detectarSubtipo(descricao, categoriaRapidaAtiva, subtipoManual);
-  const hoje = new Date().toISOString().split("T")[0];
+  const dataReembolso = document.getElementById("lancRapidoDataReembolso").value;
 
   if (idEdicao) {
     const idx = obra.lancamentos.findIndex(l => l.id === idEdicao);
@@ -2037,7 +2142,7 @@ function salvarLancamentoRapido(e) {
       obra.lancamentos[idx] = {
         ...anterior,
         descricao,
-        tipo: categoriaRapidaAtiva,
+        tipo: normalizarTipoOficial(categoriaRapidaAtiva),
         subtipo,
         subtipoManual: (!isEntrada && subtipoManual !== "AUTO") ? subtipoManual : undefined,
         valor,
@@ -2045,7 +2150,7 @@ function salvarLancamentoRapido(e) {
         pagamento,
         titular,
         reembolsoStatus,
-        reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? (anterior.reembolsadoEm || hoje) : undefined,
+        reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? dataReembolso || undefined : undefined,
         movimento,
         empreitaId: empreitaId || undefined,
         atualizadoEm: new Date().toISOString()
@@ -2054,9 +2159,9 @@ function salvarLancamentoRapido(e) {
     mostrarNotificacaoToast(`Despesa atualizada com sucesso!`);
   } else {
     const novo = {
-      id: "lanc-" + Date.now(),
+      id: novoId("lanc"),
       descricao,
-      tipo: categoriaRapidaAtiva,
+      tipo: normalizarTipoOficial(categoriaRapidaAtiva),
       subtipo,
       subtipoManual: (!isEntrada && subtipoManual !== "AUTO") ? subtipoManual : undefined,
       valor,
@@ -2065,7 +2170,7 @@ function salvarLancamentoRapido(e) {
       pagamento,
       titular,
       reembolsoStatus,
-      reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? hoje : undefined,
+      reembolsadoEm: reembolsoStatus === "REEMBOLSADO" ? dataReembolso || undefined : undefined,
       movimento,
       empreitaId: empreitaId || undefined,
       atualizadoEm: new Date().toISOString()
@@ -2111,6 +2216,19 @@ function mostrarNotificacaoToast(msg) {
 // --------------------------------------------------------------------------
 // 7. FORMULÁRIO DE LANÇAMENTO COMPLETO (DESKTOP)
 // --------------------------------------------------------------------------
+function configurarDataReembolso(id, status, valor) {
+  const campo = document.getElementById(id);
+  const pago = status === "REEMBOLSADO";
+  campo.closest("div").classList.toggle("hidden", !pago);
+  campo.required = pago;
+  campo.max = dataLocalHoje();
+  campo.value = pago ? (valor ?? campo.value) || campo.max : "";
+}
+
+function atualizarDataReembolsoDesktop() {
+  configurarDataReembolso("lancDataReembolso", document.getElementById("lancReembolsoStatus").value);
+}
+
 function aoMudarQuemPagouDesktop() {
   const tit = document.getElementById("lancTitular")?.value || "EMTEC";
   const selReemb = document.getElementById("lancReembolsoStatus");
@@ -2120,6 +2238,7 @@ function aoMudarQuemPagouDesktop() {
   } else {
     selReemb.value = "NAO_REEMBOLSAVEL";
   }
+  atualizarDataReembolsoDesktop();
 }
 
 function atualizarPreviewSubtipoDesktop() {
@@ -2155,7 +2274,7 @@ function salvarLancamentoDesktop(e) {
   const idEdicao = document.getElementById("lancIdEdicao")?.value;
   const desc = document.getElementById("lancDescricao")?.value.trim();
   const valor = parseFloat(document.getElementById("lancValor")?.value || 0);
-  const data = document.getElementById("lancData")?.value || new Date().toISOString().split("T")[0];
+  const data = document.getElementById("lancData")?.value || dataLocalHoje();
   const tipoEscolhido = document.getElementById("lancTipo")?.value || "MO";
   const subtipoManual = document.getElementById("lancSubtipoManual")?.value || "AUTO";
   const titular = (document.getElementById("lancTitular")?.value || "EMTEC").toUpperCase();
@@ -2171,7 +2290,7 @@ function salvarLancamentoDesktop(e) {
   const isEntrada = tipoEscolhido === "ENTRADA_CAIXA";
   const tipoOficial = isEntrada ? "MAT" : normalizarTipoOficial(tipoEscolhido);
   const subtipo = detectarSubtipo(desc, tipoEscolhido, subtipoManual);
-  const hoje = new Date().toISOString().split("T")[0];
+  const dataReembolso = document.getElementById("lancDataReembolso").value;
   const reembFinal = isEntrada ? "NAO_REEMBOLSAVEL" : reembolsoStatus;
 
   if (idEdicao) {
@@ -2195,7 +2314,7 @@ function salvarLancamentoDesktop(e) {
         pagamento,
         titular,
         reembolsoStatus: reembFinal,
-        reembolsadoEm: reembFinal === "REEMBOLSADO" ? (anterior.reembolsadoEm || hoje) : undefined,
+        reembolsadoEm: reembFinal === "REEMBOLSADO" ? dataReembolso || undefined : undefined,
         movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
         empreitaId: empreitaId || undefined,
         atualizadoEm: new Date().toISOString()
@@ -2203,7 +2322,7 @@ function salvarLancamentoDesktop(e) {
     }
   } else {
     const novo = {
-      id: "lanc-" + Date.now(),
+      id: novoId("lanc"),
       descricao: desc,
       tipo: tipoOficial,
       subtipo,
@@ -2214,7 +2333,7 @@ function salvarLancamentoDesktop(e) {
       pagamento,
       titular,
       reembolsoStatus: reembFinal,
-      reembolsadoEm: reembFinal === "REEMBOLSADO" ? hoje : undefined,
+      reembolsadoEm: reembFinal === "REEMBOLSADO" ? dataReembolso || undefined : undefined,
       movimento: isEntrada ? "ENTRADA_CAIXA" : "SAIDA",
       empreitaId: empreitaId || undefined,
       atualizadoEm: new Date().toISOString()
@@ -2255,13 +2374,14 @@ function limparFormLancamento() {
   if (tit) tit.textContent = "Registrar Nova Despesa";
   const btnCanc = document.getElementById("btnCancelarEdicao");
   if (btnCanc) btnCanc.classList.add("hidden");
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = dataLocalHoje();
   const d = document.getElementById("lancData");
   if (d) d.value = hoje;
   const selTit = document.getElementById("lancTitular");
   if (selTit) selTit.value = "EMTEC";
   const selReemb = document.getElementById("lancReembolsoStatus");
   if (selReemb) selReemb.value = "NAO_REEMBOLSAVEL";
+  atualizarDataReembolsoDesktop();
   const selSub = document.getElementById("lancSubtipoManual");
   if (selSub) selSub.value = "AUTO";
   atualizarPreviewSubtipoDesktop();
@@ -2343,6 +2463,7 @@ function renderizarAbaMedicoes(obra, m) {
             </div>
           </div>
 
+          <p class="text-xs text-[#64748B]">Medição: ${formatDataBR(med.data)} • Recebimento: ${formatDataBR(med.recebidoEm)}</p>
           ${med.observacao ? `<div class="text-xs text-[#64748B] italic">${med.observacao}</div>` : ""}
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
@@ -2366,7 +2487,7 @@ function renderizarAbaMedicoes(obra, m) {
     return `
       <tr class="hover:bg-[#F8F9FA] border-b border-[#DEE2E6]">
         <td class="py-3.5 px-4 font-bold text-[#23396B]">
-          ${med.titulo}
+          ${med.titulo}<div class="text-xs text-[#64748B]">Medição: ${formatDataBR(med.data)} • Recebimento: ${formatDataBR(med.recebidoEm)}</div>
           <span class="block text-xs text-[#6C757D] font-normal">${med.observacao || ""}</span>
         </td>
         <td class="py-3.5 px-4">
@@ -2392,13 +2513,17 @@ function salvarMedicao(e) {
   const valorBruto = parseFloat(document.getElementById("medValorBruto")?.value || 0);
   const descontoNotaPerc = parseFloat(document.getElementById("medDescPerc")?.value || 7.5);
   const status = document.getElementById("medStatus")?.value || "Pendente";
+  const dataMedicao = document.getElementById("medData").value;
+  const dataRecebimento = document.getElementById("medDataRecebimento").value;
+  if (!dataMedicao || (status === "Recebida" && (!dataRecebimento || dataRecebimento > dataLocalHoje()))) return;
   const valorLiquido = Math.round(valorBruto * (1 - descontoNotaPerc / 100) * 100) / 100;
 
   if (!obra.medicoes) obra.medicoes = [];
   obra.medicoes.push({
-    id: "med-" + Date.now(),
+    id: novoId("med"),
     titulo,
-    data: new Date().toISOString().split("T")[0],
+    data: dataMedicao,
+    recebidoEm: status === "Recebida" ? dataRecebimento : undefined,
     valorBruto,
     descontoNotaPerc,
     valorLiquido,
@@ -2420,12 +2545,24 @@ function salvarMedicao(e) {
   mostrarNotificacaoToast("Medição cadastrada com sucesso.");
 }
 
+function atualizarDataRecebimento() {
+  const recebido = document.getElementById("medStatus").value === "Recebida";
+  const campo = document.getElementById("medDataRecebimento");
+  campo.closest("div").classList.toggle("hidden", !recebido);
+  campo.required = recebido;
+}
+
 function toggleFormNovaMedicao() {
   const container = document.getElementById("containerFormMedicao");
   const btnTxt = document.getElementById("btnToggleMedicaoTexto");
   if (!container) return;
   const isHidden = container.classList.contains("hidden");
   if (isHidden) {
+    document.getElementById("medData").value = dataLocalHoje();
+    const recebidoEm = document.getElementById("medDataRecebimento");
+    recebidoEm.value = dataLocalHoje();
+    recebidoEm.max = recebidoEm.value;
+    atualizarDataRecebimento();
     container.classList.remove("hidden");
     if (btnTxt) btnTxt.textContent = "✕ Fechar";
     document.getElementById("medTitulo")?.focus();
@@ -2435,15 +2572,20 @@ function toggleFormNovaMedicao() {
   }
 }
 
-function alternarStatusMedicao(id) {
+async function alternarStatusMedicao(id) {
   const obra = getObraAtual();
-  const med = (obra.medicoes || []).find(m => m.id === id);
-  if (med) {
-    med.status = med.status === "Recebida" ? "Pendente" : "Recebida";
-    med.atualizadoEm = new Date().toISOString();
-    salvarEstado();
-    atualizarTudo();
-  }
+  const anterior = obra?.medicoes?.find(m => m.id === id && !m.deletado);
+  if (!anterior) return;
+  const receber = anterior.status !== "Recebida";
+  const data = receber ? await pedirDataPagamento("Data do recebimento") : "";
+  if (receber && !data) return;
+  const med = estado.obras.find(o => o.id === obra.id)?.medicoes?.find(m => m.id === id && !m.deletado);
+  if (!med || med.status !== anterior.status) return;
+  med.status = receber ? "Recebida" : "Pendente";
+  med.recebidoEm = data || undefined;
+  tocar(med);
+  salvarEstado();
+  atualizarTudo();
 }
 
 function excluirMedicao(id) {
@@ -2469,43 +2611,14 @@ function renderizarAbaResumo(obra, m) {
   const container = document.getElementById("orcamentoComparativoLista");
   if (!container) return;
 
-  const orc = obra.orcamentoPrevisto || {};
-  // Se houver tetos antigos com ALIM/TRANSP separados, consolida nos pilares oficiais sem sobreposição
-  const tetoMO = Number(orc.MO || 0) + Number(orc.ALIM || 0);
-  const tetoMAT = Number(orc.MAT || 0);
-  const tetoEQUIP = Number(orc.EQUIP || 0);
-  const tetoOUTROS = Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0);
-
-  const categorias = [
-    {
-      key: "MAT",
-      nome: "Material (MAT)",
-      gasto: m.porTipoOficial.MAT,
-      teto: tetoMAT,
-      nota: "Insumos e materiais de construção"
-    },
-    {
-      key: "MO",
-      nome: "Mão de Obra Geral (MO)",
-      gasto: m.porTipoOficial.MO,
-      teto: tetoMO,
-      nota: `Inclui R$ ${Number(m.porSubtipoReal.ALIM || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2})} em refeições de equipe`
-    },
-    {
-      key: "EQUIP",
-      nome: "Equipamento (EQUIP)",
-      gasto: m.porTipoOficial.EQUIP,
-      teto: tetoEQUIP,
-      nota: "Locação de ferramentas, caçambas e andaimes"
-    },
-    {
-      key: "OUTROS",
-      nome: "Outros & Taxas (OUTROS)",
-      gasto: m.porTipoOficial.OUTROS,
-      teto: tetoOUTROS,
-      nota: `Taxas, ART e R$ ${Number(m.porSubtipoReal.TRANSP || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2})} em combustível/transporte`
-    }
-  ];
+  const categorias = GRUPOS_CUSTO.map(({ codigo, nome }) => ({
+    key: codigo,
+    nome,
+    gasto: m.porTipoOficial[codigo],
+    teto: m.orcamentoPrevisto[codigo],
+    nota: codigo === "MO" ? "Inclui o orçamento legado de alimentação" :
+      codigo === "OUTROS" ? "Inclui o orçamento legado de transporte" : ""
+  }));
 
   container.innerHTML = categorias.map(c => {
     const teto = c.teto;
@@ -2525,7 +2638,7 @@ function renderizarAbaResumo(obra, m) {
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs font-semibold uppercase text-[#6C757D]">Teto R$:</span>
-            <input type="number" step="100" data-orc-key="${c.key}" value="${teto}"
+            <input type="number" step="0.01" min="0" data-orc-key="${c.key}" value="${teto}"
               class="w-28 rounded-xl border border-[#CBD5E1] px-2.5 py-1 text-xs font-bold text-right bg-white text-[#23396B]" />
           </div>
         </div>
@@ -2548,7 +2661,7 @@ function renderizarAbaResumo(obra, m) {
       <div class="flex justify-between text-[#343A40]"><span>Total Mão de Obra (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MO)}</strong></div>
       <div class="flex justify-between text-[#343A40]"><span>Total Material (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.MAT)}</strong></div>
       <div class="flex justify-between text-[#343A40]"><span>Total Equipamento (Auditado):</span><strong class="text-[#FF8C00] font-bold">${formatBRL(m.porTipoOficial.EQUIP)}</strong></div>
-      <div class="flex justify-between text-[#343A40]"><span>Total Outros (Classificação Planilha):</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
+      <div class="flex justify-between text-[#343A40]"><span>Total Outros:</span><strong>${formatBRL(m.porTipoOficial.OUTROS)}</strong></div>
       <div class="flex justify-between pt-2.5 border-t border-[#DEE2E6] font-display text-sm font-extrabold text-[#23396B]">
         <span>CUSTO TOTAL AUDITADO:</span><span>${formatBRL(m.custoTotal)}</span>
       </div>
@@ -2561,7 +2674,7 @@ function renderizarAbaResumo(obra, m) {
     chartInstance = new Chart(ctx, {
       type: "doughnut",
       data: {
-        labels: ["Material", "Mão de Obra Direta", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Taxas"],
+        labels: ["Material", "Mão de Obra Direta", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Taxas", "Administração"],
         datasets: [{
           data: [
             m.porSubtipoReal.MAT,
@@ -2569,9 +2682,10 @@ function renderizarAbaResumo(obra, m) {
             m.porSubtipoReal.EQUIP,
             m.porSubtipoReal.ALIM,
             m.porSubtipoReal.TRANSP,
-            m.porSubtipoReal.OUTROS
+            m.porSubtipoReal.OUTROS,
+            m.porSubtipoReal.ADM
           ],
-          backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#16A34A", "#002E6E", "#64748B"],
+          backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#16A34A", "#002E6E", "#64748B", "#7C3AED"],
           borderWidth: 2,
           borderColor: "#ffffff"
         }]
@@ -2742,7 +2856,7 @@ function salvarEmpreita(e) {
 
   if (!obra.empreitas) obra.empreitas = [];
   obra.empreitas.push({
-    id: "emp-" + Date.now(),
+    id: novoId("emp"),
     fornecedor,
     servico,
     valorContratado,
@@ -2782,7 +2896,7 @@ function renderizarSeletorObras() {
   const options = estado.obras.map(o =>
     `<option value="${o.id}" ${o.id === obraAtualId ? "selected" : ""}>${o.nome}</option>`
   ).join("");
-  sel.innerHTML = options + `<option value="__NOVA_OBRA__">+ Cadastrar Nova Obra...</option>`;
+  sel.innerHTML = (options || '<option value="">Selecione uma obra</option>') + `<option value="__NOVA_OBRA__">+ Cadastrar Nova Obra...</option>`;
 }
 
 function trocarObra(id) {
@@ -2792,7 +2906,9 @@ function trocarObra(id) {
     abrirModalNovaObra();
     return;
   }
+  if (!estado.obras.some(obra => obra.id === id)) return;
   obraAtualId = id;
+  renderizarSeletorObras();
   limparFormLancamento();
   atualizarTudo();
 }
@@ -2827,12 +2943,13 @@ function alternarStatusObra() {
 
 function mudarAba(abaId) {
   // Abas disponíveis
-  const abas = ["resumo", "lancamentos", "medicoes", "empreitas", "auditoria", "mais"];
+  const abas = ["resumo", "lancamentos", "medicoes", "empreitas", "auditoria", "mais", "geral", "reembolsos"];
 
   if (abaId === "relatorios_menu") {
     abaId = "mais";
   }
 
+  document.body.dataset.aba = abaId;
   abas.forEach(id => {
     const sec = document.getElementById(`aba-${id}`);
     const btn = document.getElementById(`tabBtn_${id}`);
@@ -2861,8 +2978,9 @@ function mudarAba(abaId) {
   if (navMobResumo) navMobResumo.className = abaId === "resumo" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
   if (navMobLanc) navMobLanc.className = abaId === "lancamentos" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
   if (navMobMed) navMobMed.className = abaId === "medicoes" ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
-  if (navMobMais) navMobMais.className = (abaId === "mais" || abaId === "empreitas" || abaId === "auditoria") ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
+  if (navMobMais) navMobMais.className = (abaId === "mais" || abaId === "empreitas" || abaId === "auditoria" || abaId === "geral" || abaId === "reembolsos") ? "flex flex-col items-center gap-1 text-[#FF8C00] font-bold" : "flex flex-col items-center gap-1 text-white/70 hover:text-white";
 
+  renderizarRelatoriosGerenciais();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -3012,30 +3130,8 @@ function criarNovaObra(e) {
         });
       }
 
-      // Se o teto total foi alterado, recalcula proporcionalmente os 4 tetos de categoria
-      if (Math.abs(tetoCusto - tetoAntigo) > 0.01) {
-        const orc = obra.orcamentoPrevisto || {};
-        if (tetoAntigo > 0) {
-          const fator = tetoCusto / tetoAntigo;
-          const novoMAT = Math.round((Number(orc.MAT || 0)) * fator);
-          const novoMO = Math.round((Number(orc.MO || 0) + Number(orc.ALIM || 0)) * fator);
-          const novoEQUIP = Math.round((Number(orc.EQUIP || 0)) * fator);
-          const novoOUTROS = Math.round((Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0)) * fator);
-          const diff = Math.round(tetoCusto) - (novoMAT + novoMO + novoEQUIP + novoOUTROS);
-          obra.orcamentoPrevisto = {
-            MAT: Math.max(0, novoMAT + diff),
-            MO: Math.max(0, novoMO),
-            EQUIP: Math.max(0, novoEQUIP),
-            OUTROS: Math.max(0, novoOUTROS)
-          };
-        } else {
-          obra.orcamentoPrevisto = {
-            MAT: Math.round(tetoCusto * 0.50),
-            MO: Math.round(tetoCusto * 0.38),
-            EQUIP: Math.round(tetoCusto * 0.05),
-            OUTROS: Math.round(tetoCusto * 0.07)
-          };
-        }
+      if (Math.abs(tetoCusto - tetoAntigo) >= 0.005) {
+        obra.orcamentoPrevisto = distribuirOrcamento(tetoCusto, tetoAntigo > 0 ? metAntiga.orcamentoPrevisto : undefined);
       }
 
       tocar(obra);
@@ -3049,20 +3145,15 @@ function criarNovaObra(e) {
   }
 
   const nova = {
-    id: "obra-" + Date.now(),
+    id: novoId("obra"),
     atualizadoEm: new Date().toISOString(),
     nome,
     cliente,
     status: "Em Andamento",
-    dataInicio: new Date().toISOString().split("T")[0],
+    dataInicio: dataLocalHoje(),
     aliquotaImposto,
     valorContratoBruto: valorContrato > 0 ? arredondarMoeda(valorContrato) : 0,
-    orcamentoPrevisto: {
-      MAT: Math.round(tetoCusto * 0.50),
-      MO: Math.round(tetoCusto * 0.38),
-      EQUIP: Math.round(tetoCusto * 0.05),
-      OUTROS: Math.round(tetoCusto * 0.07)
-    },
+    orcamentoPrevisto: distribuirOrcamento(tetoCusto),
     medicoes: [],
     empreitas: [],
     enviosCaixa: [],
@@ -3075,6 +3166,7 @@ function criarNovaObra(e) {
   renderizarSeletorObras();
   fecharModalNovaObra();
   atualizarTudo();
+  mudarAba("resumo");
   mostrarNotificacaoToast(`Nova obra "${nome}" cadastrada.`);
 }
 
@@ -3098,7 +3190,7 @@ function exportarBackupJSON() {
   const blob = new Blob([JSON.stringify(estado, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `backup-custos-emtec-${new Date().toISOString().split("T")[0]}.json`;
+  a.download = `backup-custos-emtec-${dataLocalHoje()}.json`;
   a.click();
 }
 
@@ -3126,6 +3218,145 @@ function importarBackupJSON(e) {
   reader.readAsText(file);
 }
 
+
+function escaparCelula(valor) {
+  return String(valor ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
+function linhasGeralObras() {
+  const linhas = estado.obras.map(obra => {
+    const m = calcularMetricasObra(obra);
+    const contratado = Number(obra.valorContratoBruto || 0);
+    const liquidoContratado = arredondarMoeda(contratado * (1 - Number(obra.aliquotaImposto ?? 7.5) / 100));
+    return {
+      "Obra": obra.nome,
+      "Situação": obra.status || "Em Andamento",
+      "Contrato bruto (R$)": contratado,
+      "Contrato líquido (R$)": liquidoContratado,
+      "Estimado (R$)": m.tetoTotal,
+      "Gasto (R$)": m.custoTotal,
+      "Consumo (%)": m.tetoTotal > 0 ? Number(m.percOrcamentoConsumido.toFixed(2)) : null,
+      "Recebido (R$)": m.medLiquidaRecebida,
+      "A reembolsar (R$)": m.totalReembolsosPendentes,
+      "Alerta": m.alertaCusto ? (m.percOrcamentoConsumido > 100 ? "Acima do estimado" : "A partir de 70%") : "—"
+    };
+  });
+  if (!linhas.length) return linhas;
+
+  const total = { "Obra": "Total", "Situação": linhas.length + " obra(s)" };
+  Object.keys(linhas[0]).filter(chave => chave.endsWith("(R$)")).forEach(chave => {
+    total[chave] = arredondarMoeda(linhas.reduce((soma, linha) => soma + linha[chave], 0));
+  });
+  total["Consumo (%)"] = total["Estimado (R$)"] > 0
+    ? Number((100 * total["Gasto (R$)"] / total["Estimado (R$)"]).toFixed(2)) : null;
+  total["Alerta"] = linhas.filter(linha => linha.Alerta !== "—").length + " obra(s) em alerta";
+  return [...linhas, total];
+}
+
+function linhasRelatorioReembolsos() {
+  const obraId = document.getElementById("relReembObra").value;
+  const pessoa = document.getElementById("relReembPessoa").value;
+  const status = document.getElementById("relReembStatus").value;
+  const inicio = document.getElementById("relReembInicio").value;
+  const fim = document.getElementById("relReembFim").value;
+
+  return estado.obras
+    .filter(obra => !obraId || obra.id === obraId)
+    .flatMap(obra => (obra.lancamentos || []).filter(item => {
+      if (item.deletado || item.movimento === "ENTRADA_CAIXA") return false;
+      if (!["PENDENTE", "REEMBOLSADO"].includes(item.reembolsoStatus)) return false;
+      if (status && item.reembolsoStatus !== status) return false;
+      if (pessoa && (item.titular || "EMTEC").toUpperCase() !== pessoa) return false;
+      const data = item.reembolsoStatus === "REEMBOLSADO" ? item.reembolsadoEm : item.data;
+      return (!inicio || (data && data >= inicio)) && (!fim || (data && data <= fim));
+    }).map(item => ({
+      "Obra": obra.nome,
+      "Responsável": getNomeResponsavel(item.titular),
+      "Descrição": item.descricao,
+      "Data da despesa": item.data || "",
+      "Data da baixa": item.reembolsadoEm || "",
+      "Situação": item.reembolsoStatus === "REEMBOLSADO" ? "Pago" : "Pendente",
+      "Valor (R$)": Number(item.valor || 0)
+    })))
+    .sort((a, b) => (b["Data da baixa"] || b["Data da despesa"]).localeCompare(a["Data da baixa"] || a["Data da despesa"]));
+}
+
+function tabelaGerencial(linhas, consolidado = false, linksObras = false) {
+  if (!linhas.length) return '<p class="text-sm py-4">Nenhum registro encontrado.</p>';
+  const colunas = Object.keys(linhas[0]);
+  const titulo = colunas.map(coluna => '<th scope="col">' + escaparCelula(coluna) + '</th>').join("");
+  const dados = linhas.map((linha, i) => {
+    const celulas = colunas.map(coluna => {
+      let valor = linha[coluna];
+      if (coluna.endsWith("(R$)")) valor = formatBRL(valor);
+      if (coluna === "Consumo (%)") valor = valor === null ? "—" : valor.toLocaleString("pt-BR") + "%";
+      if (coluna.startsWith("Data ")) valor = formatDataBR(valor);
+      const obra = linksObras && coluna === "Obra" ? estado.obras[i] : null;
+      const conteudo = obra
+        ? '<button type="button" data-abrir-obra="' + escaparCelula(obra.id) + '" class="link-obra">' + escaparCelula(valor) + '</button>'
+        : escaparCelula(valor);
+      return '<td data-coluna="' + escaparCelula(coluna) + '">' + conteudo + '</td>';
+    }).join("");
+    return '<tr' + (consolidado && i === linhas.length - 1 ? ' class="linha-total"' : '') + '>' + celulas + '</tr>';
+  }).join("");
+  return '<table class="tabela-gerencial"><thead><tr>' + titulo + '</tr></thead><tbody>' + dados + '</tbody></table>';
+}
+
+function resumoRelatorioReembolsos(linhas) {
+  const soma = status => formatBRL(linhas.reduce((total, linha) => total + (linha.Situação === status ? linha["Valor (R$)"] : 0), 0));
+  return "Pendentes: " + soma("Pendente") + " • Pagos: " + soma("Pago") + " • " + linhas.length + " registro(s)";
+}
+
+function renderizarRelatoriosGerenciais() {
+  const aba = document.body.dataset.aba;
+  if (aba === "geral") {
+    document.getElementById("tabelaGeralObras").innerHTML = tabelaGerencial(linhasGeralObras(), true, true);
+    return;
+  }
+  if (aba !== "reembolsos") return;
+  const filtros = [
+    ["relReembObra", "Todas as obras", estado.obras.map(obra => [obra.id, obra.nome])],
+    ["relReembPessoa", "Todos os responsáveis", getResponsaveis().map(pessoa => [pessoa.id, pessoa.nome])]
+  ];
+  filtros.forEach(([id, rotulo, opcoes]) => {
+    const campo = document.getElementById(id);
+    const anterior = campo.value;
+    campo.replaceChildren(new Option(rotulo, ""), ...opcoes.map(([valor, nome]) => new Option(nome, valor)));
+    if (opcoes.some(([valor]) => valor === anterior)) campo.value = anterior;
+  });
+  atualizarRelatorioReembolsos();
+}
+
+function atualizarRelatorioReembolsos() {
+  const linhas = linhasRelatorioReembolsos();
+  document.getElementById("tabelaRelReembolsos").innerHTML = tabelaGerencial(linhas);
+  document.getElementById("totaisRelReembolsos").textContent = resumoRelatorioReembolsos(linhas);
+}
+
+function baixarRelatorioGerencial(tipo, imprimir = false) {
+  const geral = tipo === "geral";
+  const titulo = geral ? "Geral de Obras" : "Relatório de Reembolsos";
+  const linhas = geral ? linhasGeralObras() : linhasRelatorioReembolsos();
+  const aba = geral ? "Geral de Obras" : "Reembolsos";
+  if (imprimir) {
+    const container = document.getElementById("relatorioImpressaoA4");
+    const resumo = geral ? "" : "<p>" + escaparCelula(resumoRelatorioReembolsos(linhas)) + "</p>";
+    container.innerHTML = '<h1 class="font-display font-bold text-lg">' + titulo + '</h1><p>Emitido em ' +
+      formatDataBR(dataLocalHoje()) + '</p>' + resumo + tabelaGerencial(linhas, geral);
+    window.print();
+    return;
+  }
+  if (typeof XLSX === "undefined") return mostrarNotificacaoToast("Exportação Excel indisponível.");
+  if (!linhas.length) return mostrarNotificacaoToast("Nenhum registro para exportar.");
+  const livro = XLSX.utils.book_new();
+  const planilha = XLSX.utils.json_to_sheet(linhas);
+  planilha["!cols"] = Object.keys(linhas[0]).map(coluna => ({ wch: Math.max(16, coluna.length + 3, ["Obra", "Descrição"].includes(coluna) ? 38 : 0) }));
+  XLSX.utils.book_append_sheet(livro, planilha, aba);
+  XLSX.writeFile(livro, "EMTEC_" + tipo + "_" + dataLocalHoje() + ".xlsx");
+}
+
 function gerarRelatorioImpressaoA4(obraParam, mParam) {
   const container = document.getElementById("relatorioImpressaoA4");
   if (!container) return;
@@ -3133,15 +3364,12 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
   if (!obra) return;
   const m = mParam || calcularMetricasObra(obra);
   const sit = m.situacao || avaliarSituacaoFinanceira(obra, m);
-  const dataEmissao = formatDataBR(new Date().toISOString().split("T")[0]);
+  const dataEmissao = formatDataBR(dataLocalHoje());
   const horaEmissao = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-  const categorias = [
-    { codigo: "MAT", nome: "Material e Insumos", teto: m.orcamentoPrevisto.MAT, real: m.porTipoOficial.MAT },
-    { codigo: "MO", nome: "Mão de Obra Geral (Inclui Alimentação/Transp.)", teto: m.orcamentoPrevisto.MO, real: m.porTipoOficial.MO },
-    { codigo: "EQUIP", nome: "Locação de Equipamentos e Maquinário", teto: m.orcamentoPrevisto.EQUIP, real: m.porTipoOficial.EQUIP },
-    { codigo: "OUTROS", nome: "Outros Custos, Taxas e Imprevistos", teto: m.orcamentoPrevisto.OUTROS, real: m.porTipoOficial.OUTROS }
-  ];
+  const categorias = GRUPOS_CUSTO.map(({ codigo, nome }) => ({
+    codigo, nome, teto: m.orcamentoPrevisto[codigo], real: m.porTipoOficial[codigo]
+  }));
 
   const rowsCatHtml = categorias.map(c => {
     const saldo = c.teto - c.real;
@@ -3167,7 +3395,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
         return `
           <tr>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:600;">${med.titulo}</td>
-            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${formatDataBR(med.data)}</td>
+            <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;">${formatDataBR(med.data)}${med.recebidoEm ? "<br>Recebido em " + formatDataBR(med.recebidoEm) : ""}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:center;font-weight:700;color:${med.status === "Recebida" ? "#15803D" : "#B45309"};">${med.status === "Recebida" ? "Recebida" : "Pendente"}</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(bruto)} (-${desc}%)</td>
             <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(liq)}</td>
@@ -3216,7 +3444,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam) {
         const reembTxt = l.reembolsoStatus === "PENDENTE"
           ? "Reemb. Pendente"
           : l.reembolsoStatus === "REEMBOLSADO"
-            ? "Reembolsado"
+            ? "Reembolsado" + (l.reembolsadoEm ? " em " + formatDataBR(l.reembolsadoEm) : "")
             : "Empresa / Direto";
         return `
           <tr>
@@ -3393,7 +3621,7 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Cliente / Contrato", "VALOR / INFORMAÇÃO": obra.cliente || "Contrato" },
     { "INDICADOR DA OBRA": "Status Operacional", "VALOR / INFORMAÇÃO": obra.status || "Em Andamento" },
     { "INDICADOR DA OBRA": "Situação Financeira", "VALOR / INFORMAÇÃO": sit.rotulo },
-    { "INDICADOR DA OBRA": "Data de Emissão do Relatório", "VALOR / INFORMAÇÃO": formatDataBR(new Date().toISOString().split("T")[0]) },
+    { "INDICADOR DA OBRA": "Data de Emissão do Relatório", "VALOR / INFORMAÇÃO": formatDataBR(dataLocalHoje()) },
     { "INDICADOR DA OBRA": "--- RECEITAS E MEDIÇÕES ---", "VALOR / INFORMAÇÃO": "" },
     { "INDICADOR DA OBRA": "Valor Bruto Total do Contrato (R$)", "VALOR / INFORMAÇÃO": m.medBrutaTotal },
     { "INDICADOR DA OBRA": "Receita Líquida do Contrato após NF (R$)", "VALOR / INFORMAÇÃO": m.medLiquidaTotal },
@@ -3406,6 +3634,7 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Mão de Obra Geral (MO) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.MO },
     { "INDICADOR DA OBRA": "Equipamentos (EQUIP) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.EQUIP },
     { "INDICADOR DA OBRA": "Outros e Taxas (OUTROS) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.OUTROS },
+    { "INDICADOR DA OBRA": "Administração (ADM) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.ADM },
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Alimentação (ALIM) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.ALIM },
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Combustível / Transporte (TRANSP) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.TRANSP },
     { "INDICADOR DA OBRA": "TOTAL DE DESPESAS REALIZADAS (R$)", "VALOR / INFORMAÇÃO": m.custoTotal },
@@ -3421,43 +3650,24 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Margem Final Estimada (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
   ];
 
-  const rowsOrcadoVsRealizado = [
-    {
-      "CATEGORIA": "MAT — Material e Insumos",
-      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.MAT,
-      "REALIZADO (R$)": m.porTipoOficial.MAT,
-      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.MAT - m.porTipoOficial.MAT),
-      "% CONSUMIDO": m.orcamentoPrevisto.MAT > 0 ? Number(((m.porTipoOficial.MAT / m.orcamentoPrevisto.MAT) * 100).toFixed(2)) : 0
-    },
-    {
-      "CATEGORIA": "MO — Mão de Obra Geral",
-      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.MO,
-      "REALIZADO (R$)": m.porTipoOficial.MO,
-      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.MO - m.porTipoOficial.MO),
-      "% CONSUMIDO": m.orcamentoPrevisto.MO > 0 ? Number(((m.porTipoOficial.MO / m.orcamentoPrevisto.MO) * 100).toFixed(2)) : 0
-    },
-    {
-      "CATEGORIA": "EQUIP — Equipamentos e Locação",
-      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.EQUIP,
-      "REALIZADO (R$)": m.porTipoOficial.EQUIP,
-      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.EQUIP - m.porTipoOficial.EQUIP),
-      "% CONSUMIDO": m.orcamentoPrevisto.EQUIP > 0 ? Number(((m.porTipoOficial.EQUIP / m.orcamentoPrevisto.EQUIP) * 100).toFixed(2)) : 0
-    },
-    {
-      "CATEGORIA": "OUTROS — Outros e Imprevistos",
-      "TETO PLANEJADO (R$)": m.orcamentoPrevisto.OUTROS,
-      "REALIZADO (R$)": m.porTipoOficial.OUTROS,
-      "SALDO DO TETO (R$)": arredondarMoeda(m.orcamentoPrevisto.OUTROS - m.porTipoOficial.OUTROS),
-      "% CONSUMIDO": m.orcamentoPrevisto.OUTROS > 0 ? Number(((m.porTipoOficial.OUTROS / m.orcamentoPrevisto.OUTROS) * 100).toFixed(2)) : 0
-    },
-    {
-      "CATEGORIA": "TOTAL CONSOLIDADO",
-      "TETO PLANEJADO (R$)": m.tetoTotal,
-      "REALIZADO (R$)": m.custoTotal,
-      "SALDO DO TETO (R$)": arredondarMoeda(m.tetoTotal - m.custoTotal),
-      "% CONSUMIDO": Number(m.percOrcamentoConsumido.toFixed(2))
-    }
-  ];
+  const rowsOrcadoVsRealizado = GRUPOS_CUSTO.map(({ codigo, nome }) => {
+    const teto = m.orcamentoPrevisto[codigo];
+    const realizado = m.porTipoOficial[codigo];
+    return {
+      "CATEGORIA": nome,
+      "TETO PLANEJADO (R$)": teto,
+      "REALIZADO (R$)": realizado,
+      "SALDO DO TETO (R$)": arredondarMoeda(teto - realizado),
+      "% CONSUMIDO": teto > 0 ? Number((realizado / teto * 100).toFixed(2)) : 0
+    };
+  });
+  rowsOrcadoVsRealizado.push({
+    "CATEGORIA": "TOTAL CONSOLIDADO",
+    "TETO PLANEJADO (R$)": m.tetoTotal,
+    "REALIZADO (R$)": m.custoTotal,
+    "SALDO DO TETO (R$)": arredondarMoeda(m.tetoTotal - m.custoTotal),
+    "% CONSUMIDO": Number(m.percOrcamentoConsumido.toFixed(2))
+  });
 
   const rowsLanc = (obra.lancamentos || [])
     .filter(l => !l.deletado)
@@ -3499,7 +3709,8 @@ function exportarExcelObra() {
       const liq = med.valorLiquido ? Number(med.valorLiquido) : Math.round(bruto * (1 - desc / 100) * 100) / 100;
       return {
         "PARCELA / MEDIÇÃO": med.titulo,
-        "DATA": formatDataBR(med.data),
+        "DATA DA MEDIÇÃO": formatDataBR(med.data),
+        "DATA DO RECEBIMENTO": med.recebidoEm ? formatDataBR(med.recebidoEm) : "",
         "STATUS": med.status === "Recebida" ? "Recebida na Conta" : "A Receber (Pendente)",
         "VALOR BRUTO (R$)": bruto,
         "IMPOSTO NF (%)": desc,
@@ -3510,7 +3721,8 @@ function exportarExcelObra() {
 
   rowsMedicoes.push({
     "PARCELA / MEDIÇÃO": "TOTAL MEDIÇÕES CADASTRADAS",
-    "DATA": "",
+    "DATA DA MEDIÇÃO": "",
+    "DATA DO RECEBIMENTO": "",
     "STATUS": `Contrato Bruto: ${formatBRL(m.medBrutaTotal)}`,
     "VALOR BRUTO (R$)": m.somaMedicoesBruta,
     "IMPOSTO NF (%)": "",
@@ -3556,7 +3768,7 @@ function exportarExcelObra() {
     wsLanc["!cols"] = [{ wch: 12 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 15 }, { wch: 24 }, { wch: 24 }, { wch: 18 }];
 
     const wsMed = XLSX.utils.json_to_sheet(rowsMedicoes);
-    wsMed["!cols"] = [{ wch: 32 }, { wch: 12 }, { wch: 24 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 44 }];
+    wsMed["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 23 }, { wch: 24 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 44 }];
 
     const wsEmp = XLSX.utils.json_to_sheet(rowsEmpreitasEReemb);
     wsEmp["!cols"] = [{ wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 32 }, { wch: 24 }, { wch: 22 }];
@@ -3579,13 +3791,25 @@ function exportarExcelObra() {
 // 12. INICIALIZAÇÃO DA APLICAÇÃO
 // --------------------------------------------------------------------------
 function inicializarApp() {
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = dataLocalHoje();
   const inputData = document.getElementById("lancData");
   if (inputData) inputData.value = hoje;
 
   carregarPerfilUsuario();
   renderizarSeletorObras();
   atualizarTudo();
+
+  if (innerWidth >= 768 || !getObraAtual()) mudarAba("geral");
+  document.getElementById("tabelaGeralObras").addEventListener("click", evento => {
+    const botao = evento.target.closest("[data-abrir-obra]");
+    if (!botao) return;
+    trocarObra(botao.dataset.abrirObra);
+    mudarAba("resumo");
+  });
+  const header = document.querySelector(".ed-header");
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--altura-cabecalho", header.offsetHeight + "px");
+  }).observe(header);
 
   // Re-renderizar listas (cards/tabela) ao girar ou redimensionar a tela
   let ultimoMobile = window.innerWidth < 768;

@@ -1,11 +1,10 @@
 // Service worker: deixa o app abrir sem internet (canteiro de obra).
 // Estratégia: rede primeiro, cópia guardada como reserva. /api/* nunca é guardado.
-const VERSAO = "emtec-v11";
+const VERSAO = "emtec-v12";
 const ARQUIVOS = [
   "/",
   "/index.html",
   "/app.js",
-  "/data.js",
   "/styles.css",
   "/logo-emtec.png",
   "/favicon-emtec.png",
@@ -32,7 +31,7 @@ self.addEventListener("fetch", (ev) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // fontes externas: navegador decide
-  if (url.pathname.startsWith("/api/")) return; // dados nunca passam pelo cache
+  if (url.pathname.startsWith("/api/") || url.pathname === "/data.js") return; // dados nunca passam pelo cache
 
   ev.respondWith(
     fetch(req)
