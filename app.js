@@ -1058,6 +1058,11 @@ function atualizarTudo() {
   const kpiDescNotaTag = document.getElementById("kpiDescNotaTag");
   if (kpiDescNotaTag) kpiDescNotaTag.textContent = `-${obra.aliquotaImposto ?? 7.5}% NF`;
 
+  const medDescPercInput = document.getElementById("medDescPerc");
+  if (medDescPercInput && document.activeElement !== medDescPercInput) {
+    medDescPercInput.value = String(obra.aliquotaImposto ?? 7.5);
+  }
+
   const kpiMedLiq = document.getElementById("kpiMedicaoLiquida");
   if (kpiMedLiq) kpiMedLiq.textContent = formatBRL(m.medLiquidaRecebida);
 
@@ -1087,7 +1092,12 @@ function atualizarTudo() {
   const kpiSaldoSub = document.getElementById("kpiSaldoSub");
 
   if (cardSaldoBox) cardSaldoBox.className = `${sit.corCardDesktop} overflow-hidden flex flex-col justify-between`;
-  if (cardSaldoLabel) cardSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Final";
+  if (cardSaldoLabel) {
+    cardSaldoLabel.textContent = isEmAndamento ? "Resultado Acumulado" : "Resultado Final";
+    cardSaldoLabel.className = m.saldoAtual >= 0
+      ? "text-xs font-bold uppercase tracking-wider text-[#86EFAC] leading-tight"
+      : "text-xs font-bold uppercase tracking-wider text-rose-200 leading-tight";
+  }
   if (kpiSaldoFinal) kpiSaldoFinal.textContent = formatBRL(m.saldoAtual);
 
   if (kpiMargemPerc) {
@@ -1096,9 +1106,15 @@ function atualizarTudo() {
     } else {
       kpiMargemPerc.textContent = "0%";
     }
+    kpiMargemPerc.className = m.saldoAtual >= 0
+      ? "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] whitespace-nowrap shrink-0"
+      : "text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#991B1B] whitespace-nowrap shrink-0";
   }
   if (kpiSaldoSub) {
     kpiSaldoSub.textContent = `Recebido (${formatBRL(m.medLiquidaRecebida)}) − Despesas pagas (${formatBRL(m.custoTotal)})`;
+    kpiSaldoSub.className = m.saldoAtual >= 0
+      ? "text-xs text-emerald-100/90 mt-1.5 leading-snug"
+      : "text-xs text-rose-100/90 mt-1.5 leading-snug";
   }
 
   // KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado
@@ -2443,29 +2459,7 @@ function excluirMedicao(id) {
 }
 
 function editarValorContratoPrompt() {
-  const obra = getObraAtual();
-  if (!obra) return;
-  const atual = Number(obra.valorContratoBruto || 0);
-  const entrada = prompt("Informe o valor bruto total contratado com o cliente (R$):", atual > 0 ? String(atual) : "");
-  if (entrada === null) return;
-  const num = parseFloat(String(entrada).replace(/\./g, "").replace(",", "."));
-  if (isNaN(num) || num < 0) {
-    alert("Informe um valor numérico válido.");
-    return;
-  }
-  const impAtual = Number(obra.aliquotaImposto ?? 7.5);
-  const entradaImp = prompt("Alíquota de imposto/retenção NF sobre o contrato (%):", String(impAtual));
-  if (entradaImp !== null) {
-    const impNum = parseFloat(String(entradaImp).replace(",", "."));
-    if (!isNaN(impNum) && impNum >= 0 && impNum < 100) {
-      obra.aliquotaImposto = impNum;
-    }
-  }
-  obra.valorContratoBruto = arredondarMoeda(num);
-  tocar(obra);
-  salvarEstado();
-  atualizarTudo();
-  mostrarNotificacaoToast("Valor contratado da obra atualizado.");
+  abrirModalEditarObra();
 }
 
 // --------------------------------------------------------------------------
@@ -2901,6 +2895,62 @@ function toggleCamposAvancados() {
 
 // Modais de Obra e Nuvem
 function abrirModalNovaObra() {
+  const idEdicao = document.getElementById("novaObraIdEdicao");
+  const nome = document.getElementById("novaObraNome");
+  const cliente = document.getElementById("novaObraCliente");
+  const imp = document.getElementById("novaObraImposto");
+  const valContrato = document.getElementById("novaObraValorContrato");
+  const teto = document.getElementById("novaObraTetoCusto");
+  const eyebrow = document.getElementById("modalObraEyebrow");
+  const titulo = document.getElementById("modalObraTitulo");
+  const btnSalvar = document.getElementById("btnSalvarModalObra");
+
+  if (idEdicao) idEdicao.value = "";
+  if (nome) nome.value = "";
+  if (cliente) cliente.value = "";
+  if (imp) imp.value = "7.5";
+  if (valContrato) valContrato.value = "";
+  if (teto) teto.value = "";
+  if (eyebrow) eyebrow.textContent = "CENTRO DE CUSTO";
+  if (titulo) titulo.textContent = "Cadastrar Nova Obra";
+  if (btnSalvar) btnSalvar.textContent = "Criar Centro de Custo";
+
+  const m = document.getElementById("modalNovaObra");
+  if (m) {
+    m.classList.remove("hidden");
+    m.classList.add("flex");
+  }
+}
+
+function abrirModalEditarObra() {
+  const obra = getObraAtual();
+  if (!obra) return;
+  const met = calcularMetricasObra(obra);
+
+  const idEdicao = document.getElementById("novaObraIdEdicao");
+  const nome = document.getElementById("novaObraNome");
+  const cliente = document.getElementById("novaObraCliente");
+  const imp = document.getElementById("novaObraImposto");
+  const valContrato = document.getElementById("novaObraValorContrato");
+  const teto = document.getElementById("novaObraTetoCusto");
+  const eyebrow = document.getElementById("modalObraEyebrow");
+  const titulo = document.getElementById("modalObraTitulo");
+  const btnSalvar = document.getElementById("btnSalvarModalObra");
+
+  const contratoBruto = Number(obra.valorContratoBruto || 0) > 0
+    ? Number(obra.valorContratoBruto)
+    : Number(met.medBrutaTotal || 0);
+
+  if (idEdicao) idEdicao.value = obra.id;
+  if (nome) nome.value = obra.nome || "";
+  if (cliente) cliente.value = obra.cliente || "";
+  if (imp) imp.value = String(obra.aliquotaImposto ?? 7.5);
+  if (valContrato) valContrato.value = contratoBruto > 0 ? String(contratoBruto) : "";
+  if (teto) teto.value = met.tetoTotal > 0 ? String(met.tetoTotal) : "";
+  if (eyebrow) eyebrow.textContent = "CONFIGURAÇÃO DA OBRA";
+  if (titulo) titulo.textContent = "Editar Dados da Obra";
+  if (btnSalvar) btnSalvar.textContent = "Salvar Alterações";
+
   const m = document.getElementById("modalNovaObra");
   if (m) {
     m.classList.remove("hidden");
@@ -2918,9 +2968,11 @@ function fecharModalNovaObra() {
 
 function criarNovaObra(e) {
   if (e) e.preventDefault();
+  const idEdicao = document.getElementById("novaObraIdEdicao")?.value?.trim() || "";
   const nome = document.getElementById("novaObraNome")?.value.trim();
   const cliente = document.getElementById("novaObraCliente")?.value.trim() || "Contrato";
-  const aliquotaImposto = parseFloat(document.getElementById("novaObraImposto")?.value || 7.5);
+  const impRaw = parseFloat(document.getElementById("novaObraImposto")?.value);
+  const aliquotaImposto = !isNaN(impRaw) && impRaw >= 0 && impRaw < 100 ? impRaw : 7.5;
   const valorContrato = parseFloat(document.getElementById("novaObraValorContrato")?.value || 0);
   const tetoCusto = parseFloat(document.getElementById("novaObraTetoCusto")?.value || 0);
 
@@ -2932,6 +2984,68 @@ function criarNovaObra(e) {
     alert("Informe o teto de custo da obra (quanto você pretende gastar no máximo). Ele é obrigatório para o cálculo de lucro.");
     document.getElementById("novaObraTetoCusto")?.focus();
     return;
+  }
+
+  // Modo Edição de Obra Existente
+  if (idEdicao) {
+    const obra = estado.obras.find(o => o.id === idEdicao) || getObraAtual();
+    if (obra) {
+      const aliquotaAntiga = Number(obra.aliquotaImposto ?? 7.5);
+      const metAntiga = calcularMetricasObra(obra);
+      const tetoAntigo = Number(metAntiga.tetoTotal || 0);
+
+      obra.nome = nome;
+      obra.cliente = cliente;
+      obra.aliquotaImposto = aliquotaImposto;
+      obra.valorContratoBruto = valorContrato > 0 ? arredondarMoeda(valorContrato) : 0;
+
+      // Se a alíquota de NF mudou, atualiza as medições que usavam a alíquota padrão anterior
+      if (Math.abs(aliquotaAntiga - aliquotaImposto) > 0.001 && Array.isArray(obra.medicoes)) {
+        obra.medicoes.forEach(med => {
+          if (med.deletado) return;
+          const descMed = Number(med.descontoNotaPerc ?? aliquotaAntiga);
+          if (Math.abs(descMed - aliquotaAntiga) < 0.01) {
+            med.descontoNotaPerc = aliquotaImposto;
+            med.valorLiquido = arredondarMoeda(Number(med.valorBruto || 0) * (1 - aliquotaImposto / 100));
+            tocar(med);
+          }
+        });
+      }
+
+      // Se o teto total foi alterado, recalcula proporcionalmente os 4 tetos de categoria
+      if (Math.abs(tetoCusto - tetoAntigo) > 0.01) {
+        const orc = obra.orcamentoPrevisto || {};
+        if (tetoAntigo > 0) {
+          const fator = tetoCusto / tetoAntigo;
+          const novoMAT = Math.round((Number(orc.MAT || 0)) * fator);
+          const novoMO = Math.round((Number(orc.MO || 0) + Number(orc.ALIM || 0)) * fator);
+          const novoEQUIP = Math.round((Number(orc.EQUIP || 0)) * fator);
+          const novoOUTROS = Math.round((Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0)) * fator);
+          const diff = Math.round(tetoCusto) - (novoMAT + novoMO + novoEQUIP + novoOUTROS);
+          obra.orcamentoPrevisto = {
+            MAT: Math.max(0, novoMAT + diff),
+            MO: Math.max(0, novoMO),
+            EQUIP: Math.max(0, novoEQUIP),
+            OUTROS: Math.max(0, novoOUTROS)
+          };
+        } else {
+          obra.orcamentoPrevisto = {
+            MAT: Math.round(tetoCusto * 0.50),
+            MO: Math.round(tetoCusto * 0.38),
+            EQUIP: Math.round(tetoCusto * 0.05),
+            OUTROS: Math.round(tetoCusto * 0.07)
+          };
+        }
+      }
+
+      tocar(obra);
+      salvarEstado();
+      renderizarSeletorObras();
+      fecharModalNovaObra();
+      atualizarTudo();
+      mostrarNotificacaoToast(`Dados da obra "${nome}" atualizados.`);
+      return;
+    }
   }
 
   const nova = {

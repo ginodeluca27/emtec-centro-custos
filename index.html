@@ -135,15 +135,12 @@
       border-radius: 2px;
     }
 
-    /* Garante que classes utilitárias .hidden nunca sejam sobrescritas por componentes */
-    .hidden {
-      display: none !important;
+    /* Display padrão com especificidade zero (:where) para respeitar classes responsivas do Tailwind (hidden, sm:inline-flex, md:flex, etc.) */
+    :where(.ed-btn, .ed-btn--navy, .ed-btn--transparent, .tab-btn) {
+      display: inline-flex;
     }
 
     /* Botão Primário Laranja com ALTO CONTRASTE WCAG AAA */
-    .ed-btn:not(.hidden) {
-      display: inline-flex;
-    }
     .ed-btn {
       background: #FF8C00;
       color: #0F172A; /* Escuro navy de alto contraste (ratio > 6.5:1) */
@@ -169,9 +166,6 @@
       transform: scale(0.98);
     }
 
-    .ed-btn--navy:not(.hidden) {
-      display: inline-flex;
-    }
     .ed-btn--navy {
       background: #23396B;
       color: #FFFFFF;
@@ -192,9 +186,6 @@
       border-color: #0F172A;
     }
 
-    .ed-btn--transparent:not(.hidden) {
-      display: inline-flex;
-    }
     .ed-btn--transparent {
       background: transparent;
       color: #23396B;
@@ -214,9 +205,6 @@
     }
 
     /* Abas Desktop */
-    .tab-btn:not(.hidden) {
-      display: inline-flex;
-    }
     .tab-btn {
       padding: 10px 20px;
       border-radius: 35px;
@@ -437,6 +425,11 @@
                 <option value="Concluída" class="text-[#0F172A]">Concluída</option>
               </select>
             </div>
+            <!-- Botão Editar Obra (Altera Nome, Contrato, Imposto NF % e Teto) -->
+            <button type="button" onclick="abrirModalEditarObra()" class="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-[#4395D8]/40 rounded-full px-3 py-1 text-xs font-bold text-white transition no-print" title="Editar nome, valor do contrato, imposto NF (%) ou teto da obra">
+              <svg class="w-3.5 h-3.5 text-[#93C5FD]" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              <span>Editar Obra</span>
+            </button>
           </div>
         </div>
 
@@ -458,7 +451,7 @@
           <div>
             <div class="flex items-start justify-between gap-2 text-white/80">
               <span class="text-xs font-bold uppercase tracking-wider leading-tight">Recebido do Cliente</span>
-              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 text-[#93C5FD] whitespace-nowrap shrink-0" id="kpiDescNotaTag">-7.5% NF</span>
+              <button type="button" onclick="abrirModalEditarObra()" title="Clique para alterar a alíquota de NF (%) ou editar a obra" class="text-xs font-bold px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-[#93C5FD] whitespace-nowrap shrink-0 cursor-pointer transition" id="kpiDescNotaTag">-7.5% NF</button>
             </div>
             <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiMedicaoLiquida">R$ 0,00</div>
           </div>
@@ -559,6 +552,9 @@
                 <span id="mobViabilidadeBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#DCFCE7] text-[#14532D] border border-[#86EFAC] select-none">
                   Obra Viável
                 </span>
+                <button type="button" onclick="abrirModalEditarObra()" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/15 hover:bg-white/25 text-[#93C5FD] border border-white/25 transition">
+                  Editar Obra
+                </button>
               </div>
             </div>
             <button type="button" onclick="sincronizarComNuvem(true)" id="cloudBadgeMobile" class="inline-flex flex-col items-end gap-0.5 text-right shrink-0 bg-white/95 px-2.5 py-1 rounded-xl border border-white/40 shadow-xs active:scale-95 transition" title="Toque para sincronizar agora">
@@ -907,8 +903,8 @@
             <p class="text-xs text-[#64748B]">O valor do contrato fica separado das medições faturadas para evitar duplicidade.</p>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="editarValorContratoPrompt()" class="ed-btn--transparent py-2 px-3 text-xs font-bold">
-              <span>Ajustar Contrato</span>
+            <button type="button" onclick="abrirModalEditarObra()" class="ed-btn--transparent py-2 px-3 text-xs font-bold">
+              <span>Editar Obra / NF (%)</span>
             </button>
             <button type="button" onclick="toggleFormNovaMedicao()" class="ed-btn py-2 px-3.5 text-xs font-extrabold shadow-sm">
               <span id="btnToggleMedicaoTexto">+ Novo Recebimento</span>
@@ -1199,17 +1195,31 @@
           </div>
         </button>
 
-        <!-- Opção 3: Cadastrar Obra -->
+        <!-- Opção 3: Editar Obra Atual -->
+        <button onclick="abrirModalEditarObra()" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#4395D8] transition group">
+          <div class="w-12 h-12 rounded-2xl bg-[#4395D8]/15 text-[#23396B] group-hover:bg-[#23396B] group-hover:text-white flex items-center justify-center shrink-0 transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Editar obra atual</h4>
+              <span class="text-xs text-[#4395D8] font-bold">&rarr;</span>
+            </div>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Alterar nome, contrato, imposto NF (%) ou teto de custos</p>
+          </div>
+        </button>
+
+        <!-- Opção 4: Cadastrar Nova Obra -->
         <button onclick="abrirModalNovaObra()" class="ed-card p-4 sm:p-5 text-left flex items-start gap-3.5 hover:border-[#16A34A] transition group">
           <div class="w-12 h-12 rounded-2xl bg-[#16A34A]/15 text-[#16A34A] group-hover:bg-[#16A34A] group-hover:text-white flex items-center justify-center shrink-0 transition">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between">
-              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Cadastrar obra</h4>
+              <h4 class="font-display font-bold text-sm sm:text-base text-[#23396B]">Cadastrar nova obra</h4>
               <span class="text-xs text-[#16A34A] font-bold">+</span>
             </div>
-            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Adicionar uma nova obra</p>
+            <p class="text-xs text-[#64748B] mt-1 leading-relaxed">Adicionar um novo centro de custo</p>
           </div>
         </button>
 
@@ -1489,19 +1499,20 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAL NOVA OBRA -->
+  <!-- MODAL NOVA OBRA / EDITAR OBRA -->
   <!-- ===================================================================== -->
   <div id="modalNovaObra" class="fixed inset-0 bg-[#0F172A]/70 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#CBD5E1] shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
         <div>
-          <span class="ed-eyebrow">CENTRO DE CUSTO</span>
-          <h3 class="font-display text-lg font-bold text-[#23396B] mt-0.5">Cadastrar Nova Obra</h3>
+          <span id="modalObraEyebrow" class="ed-eyebrow">CENTRO DE CUSTO</span>
+          <h3 id="modalObraTitulo" class="font-display text-lg font-bold text-[#23396B] mt-0.5">Cadastrar Nova Obra</h3>
         </div>
         <button onclick="fecharModalNovaObra()" class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-[#64748B] hover:text-[#23396B] font-bold text-base transition">✕</button>
       </div>
 
       <form onsubmit="criarNovaObra(event)" class="space-y-3.5">
+        <input type="hidden" id="novaObraIdEdicao" value="" />
         <div>
           <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Nome da Obra *</label>
           <input type="text" id="novaObraNome" required placeholder="Ex: Reforma Comercial / Fachada..." class="ed-input" />
@@ -1513,22 +1524,25 @@
           </div>
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Imposto NF (%)</label>
-            <input type="number" step="0.1" id="novaObraImposto" value="7.5" inputmode="decimal" class="ed-input" />
+            <input type="number" step="0.1" min="0" max="99.9" id="novaObraImposto" value="7.5" inputmode="decimal" class="ed-input" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Valor Contrato Bruto R$</label>
-            <input type="number" step="100" id="novaObraValorContrato" placeholder="Ex: 50000" inputmode="decimal" class="ed-input" />
+            <input type="number" step="0.01" id="novaObraValorContrato" placeholder="Ex: 50000" inputmode="decimal" class="ed-input" />
           </div>
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Teto de custo R$ * (obrigatório)</label>
-            <input type="number" step="100" id="novaObraTetoCusto" required min="1" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
+            <input type="number" step="0.01" id="novaObraTetoCusto" required min="1" placeholder="Ex: 35000" inputmode="decimal" class="ed-input" />
           </div>
         </div>
+        <p class="text-xs text-[#64748B] leading-relaxed">
+          O percentual de <strong>Imposto NF (%)</strong> desconta automaticamente o imposto sobre o contrato e sobre as medições da obra.
+        </p>
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
           <button type="button" onclick="fecharModalNovaObra()" class="ed-btn--transparent text-xs py-2">Cancelar</button>
-          <button type="submit" class="ed-btn text-xs font-bold py-2">Criar Centro de Custo</button>
+          <button type="submit" id="btnSalvarModalObra" class="ed-btn text-xs font-bold py-2">Criar Centro de Custo</button>
         </div>
       </form>
     </div>
