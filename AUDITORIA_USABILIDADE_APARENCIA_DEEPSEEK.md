@@ -1,413 +1,389 @@
 # LAUDO DE AUDITORIA INDEPENDENTE - DEEPSEEK
 
-- **Data/Hora:** 2026-11-10 09:49:47
-- **Request ID (Oficial):** `1113a182-b0e8-46a3-bb7e-5ff621bc013a`
+- **Data/Hora:** 2026-11-10 11:01:53
+- **Request ID (Oficial):** `1758396a-e3ec-47b7-9f0c-473178db9ba7`
 - **Modelo Utilizado:** `deepseek-flash`
-- **Tokens Consumidos:** 38846 (Prompt: 23756, Resposta: 15090)
+- **Tokens Consumidos:** 44035 (Prompt: 32647, Resposta: 11388)
 
 ---
 
 ### Cadeia de Raciocínio (DeepSeek R1):
 
 ```
-The user wants an independent technical audit of a usability and visual identity implementation for a construction cost management system (EMTEC Engenharia). I need to evaluate what was requested vs what was delivered, verifying the actual code provided.
-
-Let me carefully analyze each requirement against the provided code snippets:
-
-**REQUIREMENTS TO CHECK:**
-
-1. **APPEARANCE & VISUAL IDENTITY:**
-   - Replace old logo with new "EMTEC | OBRAS" (/logo-emtec.png), working on mobile and desktop, no squashing/cutting/overflow at 360px+
-   - Fix background: was "white" (#F8FAFC nearly white behind white #FFFFFF cards), should follow soft purple logic but with soft blue EMTEC palette tone
-   - Maintain clean identity: navy #23396B, steel blue #4395D8, vibrant orange #FF8C00 with dark text #0F172A for WCAG AAA, green #16A34A, Plus Jakarta Sans + Sora, zero generic emojis
-
-2. **USABILITY FOR MELO & PILAR:**
-   - Fix financial indicators: replace "Saldo em Caixa Hoje" with "Resultado Acumulado" (desktop + mobile #heroMobile); differentiate Contracted Net, Effectively Received, Paid Expenses, Pending Payments (contractors + reimbursements), and "Profit if spending entire budget" (mandatory cap, show warning "Defina o Teto de Custos" if no cap)
-   - Separate Operational Status (own selector: Em Andamento, Pausada, Concluída) from informative Financial Situation badge ("Obra Viável" / "Risco de Prejuízo" / "Acima do Teto"), which cannot be accidentally clickable
-   - Quick entry (#modalLancamentoRapido): open without excess of fields before Save button; show "Quem pagou?" (Who paid?) directly visible without opening advanced options (standard options: EMTEC (obra account), Melo, Pilar, Elon, Iago, Outro + "+ Novo responsável" to register without code); automatically suggest category while typing description (e.g., almoço -> Outros/Alimentação, gasolina -> Outros/Transporte, cimento -> Material, diária -> Mão de Obra) without overwriting manual choice; allow manual subcategory correction
-   - Simple refund control: don't consider all Melo or Pilar expenses automatically as refund if not marked; allow mark refundable and give "baixa" in 1 click ("✓ Dar baixa" / "Desfazer") without duplicating expense in obra
-   - In Client Receipts tab (Medições), show existing measurements list BEFORE registration form
-   - In Reports tab, separate technical audit from original spreadsheet in a collapsed block (<details>) at end, leaving daily reports (chart, budgeted vs actual, extract by responsible) at top
-   - Mobile legibility and ergonomics: viewport zoom released, zero fonts smaller than 12px (eliminate text-[9px], text-[10px], text-[11px]), bottom bar with safe-area-inset-bottom, offline functionality with local CSS/JS and Service Worker
-
-Now let me evaluate each based on the code:
-
-**1. Logo:**
-- Header: `<img src="/logo-emtec.png" ... class="h-6 sm:h-8 md:h-9 w-auto max-w-[130px] sm:max-w-[180px] md:max-w-[205px] object-contain select-none" />`
-- This looks well done - height scales (h-6 on mobile, h-8 sm, h-9 md), width auto, object-contain (no squashing), max-width constraints to prevent overflow. Good.
-- However, I should note: **the logo is referenced from the root path `/logo-emtec.png`**, which works if served from root. Panel says "verificar o código real abaixo" - the logo reference is correct but I can't verify the actual image exists. Assuming it does.
-- At 360px width, header has `gap-2 sm:gap-4` and the logo container is `min-w-0 shrink-0`. The controls on the right include obra selector `min-w-[105px] max-w-[155px]`, profile button, sync button. At 360px this might be tight but manageable since Nova Obra and Backup buttons are hidden on mobile (`hidden sm:inline-flex`). Logo max-width 130px on mobile. Let's check: 360 - padding 3 (12px each side = 24) = 336. Logo up to 130 + gap 8 + obra select up to 155 + gap + profile + sync... this could overflow. Actually obra selector is max-w-[155px] but `w-full` inside, and it's in a flex with min-w. Profile button has hidden text on mobile (only avatar circle). Sync button ~32px. So: 130 + 8 + 155 + 8 + 32 + 8 + 32 = ~373px > 336px. **Potential overflow issue at 360px.** This is a real concern for "sem estourar o cabeçalho em telas pequenas (360px+)". Worth flagging as a point of attention.
-
-Actually let me re-check. The obra select container: `min-w-[105px] max-w-[155px]`. The flex container is `justify-between gap-2 sm:gap-4`. Left item is `shrink-0` (logo + badge). Badge is hidden on mobile (`hidden md:flex`), so left is just logo (max 130px). Right container: obra select + profile + sync = min could be 105 + ~40 + 40 + gaps. At minimum: 105+40+40+16 = ~201 + logo 130 = 331 + outer gaps 16 = ~347 > 336. Hmm, close. But logo also shrinks. Actually logo has max-w but the img itself with h-6 w-auto — the natural aspect ratio determines width. If logo is wide, it could be up to 130px. So at 360px this is borderline/tight. **Flag as attention point** - could overflow or be cramped.
-
-Actually, the parent is `flex items-center justify-between gap-2 sm:gap-4` and left is `min-w-0 shrink-0`. If left is shrink-0 it won't shrink, so at 360px with 130px logo + right side minimum ~201px + gaps... it's genuinely tight. But `min-w-0` allows shrinking of children? No, shrink-0 prevents the container from shrinking. Hmm. This is borderline. Let me just flag it as "verify at exactly 360px" — it's plausible it works because actual logo aspect ratio may yield narrower width, and obra select can narrow to 105px.
-
-**2. Background:**
-- `--cr-bg: #DCE8F6;` with radial gradients in blue tones (`rgba(67, 149, 216, 0.22)` = steel blue, `rgba(35, 57, 107, 0.14)` = navy) and linear gradient `#D8E6F6 → #E3EEF9 → #DAE7F6`. This is a soft blue tone, not white. ✅ Good. Cards are white (#FFFFFF) with border #C8D9EE and shadow. The contrast between white cards and soft blue background is established. ✅
-- Also `.bg-\[\#F8FAFC\]` overridden to `#EDF4FC` (soft blue tint) - good, so internal bg-slate-50 areas also become blue tinted.
-
-**3. Identity colors:** Navy, steel blue, orange, dark — all present. Fonts Plus Jakarta Sans + Sora — present. WCAG: `.ed-btn` orange #FF8C00 with #0F172A text, comment says ratio > 6.5:1. Let me verify: Orange #FF8C00 relative luminance... Actually let me estimate. #FF8C00 = rgb(255,140,0). Luminance calc: R=1.0→1.0, G=140/255=0.549→linearized ~0.258, B=0. L = 0.2126*1.0 + 0.7152*0.258 + 0.0722*0 = 0.2126 + 0.1845 = 0.397. #0F172A = rgb(15,23,42). Linearized: 15/255=0.0588→0.0048, 23/255=0.0902→0.0086, 42/255=0.1647→0.0232. L = 0.2126*0.0048 + 0.7152*0.0086 + 0.0722*0.0232 = 0.00102 + 0.00615 + 0.00167 = 0.00884. Contrast = (0.397+0.05)/(0.00884+0.05) = 0.447/0.0588 = 7.6:1. ✅ Good, exceeds WCAG AAA (7:1 for normal text). Comment says >6.5, actual ~7.6. ✅ Accurate.
-
-But wait — body text color is `#334155` (slate-700-ish). On the blue background `#DCE8F6` that's fine. But many labels use `text-[#64748B]` (slate-500). On white cards #FFFFFF: #64748B luminance ~ rgb(100,116,139). Let me check contrast for small text. #64748B vs white: this is slate-500. Contrast ratio ~ 4.6:1? Let me estimate. #64748B = rgb(100,116,139). Linearize: 100/255=0.392→0.129, 116/255=0.455→0.176, 139/255=0.545→0.257. L = 0.2126*0.129+0.7152*0.176+0.0722*0.257 = 0.0274+0.1259+0.0186 = 0.172. White L=1.0. Contrast = (1.0+0.05)/(0.172+0.05) = 1.05/0.222 = 4.73:1. That's AA for normal text (4.5:1) but NOT AAA (7:1). The requirement mentioned "texto escuro #0F172A para alto contraste WCAG AAA". So the body/labels using #64748B do NOT meet AAA. But the primary button text #0F172A on orange does. Actually many labels use text-[#64748B]. Hmm. The requirement specifically claimed #0F172A for high contrast WCAG AAA — that's met for buttons. But secondary text at #64748B is only AA. Worth noting as a minor deviation from "WCAG AAA" claim, but body copy is typically not held to AAA. I'll flag as minor.
-
-Also "zero emojis genéricos" — but I see emojis in the code:
-- `📋` in the `<details>` summary "Histórico de Saneamento da Planilha Antiga"
-- `⚠️` in "Possível despesa duplicada" alert
-- `✓` mentioned for "Dar baixa" (checkmark, not exactly emoji, more a symbol)
-- `✕` for close button
-
-So the requirement "zero emojis genéricos" is **VIOLATED** — there are emojis `📋` and `⚠️`. This is a real divergence. Flag it.
-
-**4. Financial indicators:**
-- Desktop KPI 3: "Resultado Acumulado" ✅ (id cardSaldoLabel)
-- Mobile #heroMobile: "Resultado Acumulado" ✅ (mobSaldoLabel)
-- "Saldo em Caixa Hoje" replaced ✅ (label is "Resultado Acumulado")
-- Contracted Net, Effectively Received, Paid Expenses, Pending Payments, Profit if spending entire budget — all present in mobile card grid (mobReceitaContratada = Contratado Líq., mobReceitaLiq = Efetiv. Recebido, mobCustoReal = Despesas Pagas, mobPagamentosPendentes = Pagam. Pendentes, mobLucroPrevistoValor = Lucro se gastar todo o orçamento). ✅
-- Desktop: KPI 1 "Recebido do Cliente" with kpiMedicaoLiquida and Sub "Contratado Líq.", KPI 2 "Despesas Realizadas" with Pendentes sub, KPI 3 Resultado Acumulado, KPI 4 "Lucro se gastar todo o orçamento". ✅
-- "Defina o Teto de Custos" warning: In `avaliarSituacaoFinanceira`, if `!(m.tetoTotal > 0)` returns "Atenção • Defina o Teto de Custos". ✅ Good, present.
-- However: the KPI 4 shows "Lucro se gastar todo o orçamento" but if teto is 0/undefined, does it show meaningful data? The computation `saldoProjetadoFinal = receitaContratoTotal - custoTotalProjetado`. If teto=0, custoTotalProjetado = custoTotal (from `tetoRestante = max(0, 0 - custoTotal) = 0`, so custoRestanteEstimado = max(0, 0 - saldoEmpreitasPendente)... hmm `custoRestanteEstimado = Math.max(0, tetoRestante - saldoEmpreitasPendente)` = max(0, 0 - pendente) = 0. custoTotalProjetado = custoTotal + saldoEmpreitasPendente + 0. So projected = custoTotal + pendente. OK. The KPI 4 still shows a number. But the viabilidade badge would show "Defina o Teto de Custos". Consistent enough.
-
-**Potential issue**: "deixando o teto obrigatório" — the requirement says leaving the cap mandatory. Is there validation that forces the user to set a cap? I don't see explicit validation forcing teto. The system shows a warning badge "Defina o Teto de Custos" but doesn't force it. Requirement says "deixando o teto obrigatório" (leaving the cap mandatory). This may be a divergence — the cap isn't enforced as mandatory input; only a warning badge is shown. But "deixando o teto obrigatório" could be interpreted as "leave the ceiling as the basis". Ambiguous. I'll note that there's no hard validation forcing teto to be set — depends on interpretation.
-
-**5. Operational Status vs Financial badge:**
-- Desktop: `selectStatusObraDesktop` with options Em Andamento, Pausada, Concluída — separate selector ✅. `viabilidadeBadge` is a `<span>` (not a button) with `select-none` — not clickable ✅.
-- Mobile: `mobStatusOperacionalBadge` is a span showing status (not editable? it's a span, so read-only display on mobile), `mobViabilidadeBadge` is a span with `select-none`. On mobile the status is just a badge, not a selector. The requirement says "seletor próprio" (own selector) for operational status. On desktop it's a select; on mobile it appears to be just a read-only badge `mobStatusOperacionalBadge`. Is there a mobile selector elsewhere? Possibly in the "mais" hub or obra settings. From provided code, mobile hero shows status as static badge. This could be a usability gap on mobile — can't change status from mobile home. But might exist elsewhere. Flag as "verify mobile status editing exists".
-
-Actually the requirement is about separating the two concepts, which is done. The mobile status being read-only display might be acceptable if edit is elsewhere. I'll note it.
-
-**6. Quick entry modal (#modalLancamentoRapido):**
-- "abrir sem excesso de campos antes do botão Salvar" — Let me check the order in the provided modal code:
-  - Value field (lancRapidoValor) — appears first
-  - Duplicate warning
-  - Description (lancRapidoDescricao)
-  - Category pills + subcategory
-  - "Quem pagou?" (gridQuemPagouRapido) — visible directly ✅
-  - Refund control (boxReembolsoRapido)
-  - "Mais opções" collapsed (opcoesAvancadasRapidas hidden) — Data, forma, movimento, empreiteiro ✅ collapsed
-  - Save button
-  
-  So "Quem pagou?" IS visible directly without advanced options ✅. Advanced options are collapsed ✅. Good.
-  
-- "Quem pagou?" standard options: EMTEC, Melo, Pilar, Elon, Iago, Outro ✅ all present + "+ Novo responsável" (adicionarNovoResponsavelPrompt) ✅.
-- Auto-suggest category while typing: `oninput="checarDuplicidadeAoDigitar(); atualizarPreviewSubtipoRapido();"` on description. And `sugerirCategoriaPorDescricao` function exists. There's `badgeSubtipoDetectadoRapido` showing "Classificação automática". ✅
-  - "sem sobrescrever escolha manual" — need to verify that manual category selection isn't overwritten by auto-detection. There's `selecionarCategoriaRapida` and the suggestion logic. Can't fully verify without more code, but `atualizarPreviewSubtipoRapido` suggests preview only. The subcategory select has "AUTO" as default and manual options. Likely OK but need to check that auto-suggest doesn't override a manual pill click. The requirement says "sem sobrescrever escolha manual" (without overwriting manual choice). I can't verify this from provided code — flag as "needs verification".
-  - "cimento -> Material, diária -> Mão de Obra, almoço -> Outros/Alimentação, gasolina -> Outros/Transporte" — from `sugerirCategoriaPorDescricao`:
-    - Alimentação → returns "OUTROS" ✅ (with subcategory ALIM via detectarSubtipo presumably)
-    - Transporte → returns "OUTROS" ✅ (subcategory TRANSP)
-    - DIARIA/pedreiro/servente → "MO" ✅
-    - CIMENTO/areia/brita → "MAT" ✅
-  - Looks aligned. ✅
-- "permitir corrigir subcategoria manualmente" — select `lancRapidoSubtipo` with manual options ✅.
-
-**7. Refund control:**
-- "não considerar todo gasto de Melo ou Pilar automaticamente como reembolso se não marcado" — default refund status: `btnReembRapido_NAO_REEMBOLSAVEL` is active by default (border-2 border-[#23396B] bg-[#23396B] text-white), and in calcularMetricas the default `item.reembolsoStatus || "NAO_REEMBOLSAVEL"`. ✅ So expenses default to non-refundable.
-  - BUT: The refund box legend shows "Pago direto pela conta da obra" as default. However, if the user selects Melo/Pilar, should it default to "Sem reembolso"? The requirement is that it's not automatic. Default is NAO_REEMBOLSAVEL regardless of titular — that's consistent with "not automatic". ✅ Actually wait — is that ideal? If Pilar pays, arguably she'd want refund option. But the requirement explicitly says don't auto-consider as refund. Defaulting to non-refundable satisfies that. ✅
-- "dar baixa em 1 clique (✓ Dar baixa / Desfazer) sem duplicar a despesa" — I don't see the actual "Dar baixa" button code in provided snippets, but there's `listaReembolsosHome` rendering. The requirement mentions it. Can't fully verify the 1-click baixa and no duplication from provided code (calcularMetricas shows refunds don't add to custoTotal separately — refund total is tracked separately, so no duplication in cost). ✅ structurally sound — refunds are status flags on existing lancamentos, not separate expenses, so no duplication.
-- Need to verify "Dar baixa" / "Desfazer" button exists — not in snippets. Flag as unverified.
-
-**8. Medições tab - list before form:**
-- The form `containerFormMedicao` is `hidden` by default and toggled by button "Novo Recebimento". The list `cardsMedicoesMobile` and table `tbodyMedicoes` appear after the form in DOM but since form is hidden, the list appears first visually. ✅ 
-  - Wait, the form is BEFORE the list in DOM order but hidden. When toggled open, form appears before list. But requirement: "mostrar a lista de medições existentes ANTES do formulário de cadastro." Since form is collapsed/hidden by default, the list is what's shown first. When opened, form appears above list. This satisfies "list before form" in the default state. ✅ Acceptable. Minor: when form opens it pushes list down; arguably fine.
-- ✅ Good.
-
-**9. Relatórios tab - audit in collapsed block at end:**
-- `blocoAnalitico` (chart, orçado vs realizado) appears at top ✅
-- `<details>` block "Histórico de Saneamento da Planilha Antiga (Memória Técnica)" at the end, collapsed ✅ with `no-print` ✅
-- ✅ Good. But it uses 📋 emoji inside summary — contradicts "zero emojis".
+The user is asking for an audit. They want me to audit usability and appearance of a system, comparing requirements vs delivered code. I need to be a rigorous, independent technical auditor. Let me structure my analysis according to the requested format.
+
+Let me carefully analyze each requirement against the code provided.
+
+**REQUIREMENTS:**
+
+1. **APARÊNCIA E IDENTIDADE VISUAL:**
+   - Trocar logo antiga pela nova "EMTEC | OBRAS" (/logo-emtec.png), funcional no mobile e desktop, sem achatar/cortar/estourar em telas pequenas (360px+)
+   - Corrigir fundo geral: usuário reclamou de "brancão atrás" (#F8FAFC quase branco puro atrás de cards brancos #FFFFFF), pediu tom de azul suave da paleta EMTEC
+   - Manter identidade visual limpa: azul marinho #23396B, azul aço #4395D8, laranja vibrante #FF8C00 com texto escuro #0F172A para alto contraste WCAG AAA, verde #16A34A, tipografia Plus Jakarta Sans + Sora, zero emojis genéricos
+
+2. **USABILIDADE PARA MELO E PILAR:**
+   - Corrigir indicadores: substituir "Saldo em Caixa Hoje" por "Resultado Acumulado" (desktop + card mobile #heroMobile); diferenciar Contratado Líquido, Efetivamente Recebido, Despesas Pagas, Pagamentos Pendentes, Lucro se gastar todo o orçamento (teto obrigatório + aviso "Defina o Teto de Custos")
+   - Separar Status Operacional da Obra (seletor próprio: Em Andamento, Pausada, Concluída) do selo informativo de Situação Financeira (não clicável)
+   - Lançamento rápido enxuto (#modalLancamentoRapido): abrir sem excesso de campos antes do botão Salvar; "Quem pagou?" visível; opções padronizadas EMTEC, Melo, Pilar, Elon, Iago, Outro + "+ Novo responsável"; sugerir categoria automática sem sobrescrever escolha manual; permitir corrigir subcategoria manualmente
+   - Controle de reembolsos simples: não considerar automaticamente como reembolso se não marcado; marcar reembolsável e dar baixa em 1 clique; sem duplicar despesa
+   - Na aba de Recebimentos do Cliente (Medições), mostrar lista ANTES do formulário
+   - Na aba de Relatórios, separar auditoria técnica em bloco recolhido (<details>) no final; relatórios diários no topo
+   - Legibilidade e ergonomia mobile: zoom liberado no viewport, zero fontes < 12px (eliminados text-[9px], text-[10px], text-[11px]), barra inferior com safe-area-inset-bottom, funcionamento offline com CSS/JS locais e Service Worker
+
+Now let me verify each:
+
+**APARÊNCIA:**
+
+1. **Logo:** 
+   - Header: `<img src="/logo-emtec.png" alt="EMTEC | OBRAS" class="h-7 sm:h-8 md:h-9 w-auto max-w-[136px] sm:max-w-[180px] md:max-w-[205px] object-contain select-none" />`
+   - Uses object-contain (não achata), max-w constraint (não estoura), h-7 (28px) no mobile. ✅
+   - No mobile 360px: header tem padding px-3 (24px total), logo max 136px + obra select (max 175px) + perfil pill + botão sync. Vamos checar: 360 - 24 = 336px. Logo 136px max + gap + obra select up to 175px... Isso pode ficar apertado. Na verdade, o select tem `flex-1 max-w-[175px]` e logo tem `shrink-0`. Hmm, 136 + 175 = 311px só nos dois principais. Sobram 25px para o botão perfil (que tem avatar w-5 = 20px + px-2) e sync button (p-2 = 16+icon). Isso vai estourar em 360px! Vamos calcular melhor.
+   
+   Header container: `px-3` = 12px cada lado = 24px. Disponível = 336px.
+   - Logo div: `gap-2 sm:gap-3 min-w-0 shrink-0`. O logo em si: `h-7 w-auto max-w-[136px]`. Largura real depende da proporção da imagem. Se for landscape (tipo 3:1), h-7=28px, width = 84px. Se for 4:1, width=112px. Não sabemos. Mas max-w=136px limita.
+   - Obra selector: `flex-1 max-w-[175px]`. Mas tem `min-w-0 flex-1`. 
+   - Perfil button: avatar w-5 (20px) + px-2 (16px) + border = ~40px mín. `shrink-0`.
+   - Sync button: p-2 (16px) + icon w-4 (16px) = ~36px. `shrink-0`.
+   - Gap entre: sm:gap-2 = 8px (mas é mobile, então gap-1.5 sm:gap-2... na verdade o container tem `gap-1.5 sm:gap-2`. Em mobile (sm não aplica, então <640px é gap-1.5 = 6px).
+   
+   Total mínimo dos fixos: logo (até 136) + perfil (40) + sync (36) + 3 gaps (18) = 230px só fixos. Restam ~106px para o obra select que tem max 175px mas flex-1. O select dentro tem texto truncado. Então obra select fica com ~106px. Ok, não estoura necessariamente. Mas é apertado. O select tem `min-w-0` permitindo encolher. Aceitável, mas apertado.
+   
+   Actually the logo div also has `gap-2 sm:gap-3` internal, and cloudBadge is `hidden md:flex` so not present on mobile.
+
+   Let me recompute: logo container `gap-2 sm:gap-3 min-w-0 shrink-0`. Logo max 136 + gap. If logo actual image is ~100px wide and cloud badge hidden mobile, that's fine.
+
+   Regarding "sem cortar" - object-contain garante que não corta. ✅
+   Regarding "estourar cabeçalho" - max-w e object-contain mitigam. Há risco de aperto em 360px mas flex permite encolher. Aceitável com ressalva.
+
+   Modal login logo: `h-10 sm:h-11 w-auto object-contain` ✅
+
+2. **Fundo geral:**
+   - `--cr-bg: #DCE8F6` (azul suave) ✅
+   - body background-color: var(--cr-bg) com radial gradients azuis e linear-gradient #D8E6F6 -> #E3EEF9 -> #DAE7F6 ✅
+   - Cards .ed-card: background #FFFFFF ✅ contraste com fundo azul.
+   - Corrigido o "brancão". ✅
+
+3. **Identidade visual:**
+   - Paleta: --cr-navy #23396B, --cr-blue #4395D8, --cr-orange #FF8C00, --cr-green #16A34A, --cr-dark #0F172A ✅
+   - Fontes: Plus Jakarta Sans + Sora ✅
+   - Botão primário: background #FF8C00, color #0F172A. Contraste: vou estimar. #FF8C00 (laranja) vs #0F172A (navy quase preto). Luminância relativa aproximada:
+     - #FF8C00: R=255,G=140,B=0. Luminância ≈ 0.2126*0.9558 + 0.7152*0.25 + 0.0722*0 = 0.203 + 0.179 + 0 = ~0.382. (need gamma correction). Let me compute properly.
+     - Actually #FF8C00 sRGB: R=1.0, G=0.549, B=0.
+       R lin: ((1+0.055)/1.055)^2.4 = 1.0
+       G lin: ((0.549+0.055)/1.055)^2.4 = (0.5725)^2.4 ≈ 0.2589
+       B lin: 0
+       L = 0.2126*1.0 + 0.7152*0.2589 + 0.0722*0 = 0.2126 + 0.1852 = 0.3978
+     - #0F172A: R=15,G=23,B=42 → r=0.0588,g=0.0902,b=0.1647
+       R lin: (0.0588/12.92)=0.00455 (below 0.03928 so linear)
+       G lin: 0.0902/12.92 = 0.00698
+       B lin: 0.1647 → ((0.1647+0.055)/1.055)^2.4 = (0.2083)^2.4 ≈ 0.0243
+       L = 0.2126*0.00455 + 0.7152*0.00698 + 0.0722*0.0243 = 0.000967 + 0.00499 + 0.001755 = 0.00771
+     - Contrast ratio = (0.3978+0.05)/(0.00771+0.05) = 0.4478/0.0577 = 7.76:1 ✅ WCAG AAA (needs 7:1 for normal text)
+   - ✅ Contraste AAA confirmado para botão laranja com texto escuro.
+   - "zero emojis genéricos" - vi o "✕ Fechar" e "✓" mas isso é símbolo, não emoji. Aceitável.
 
-**10. Mobile legibility:**
-- "zoom liberado no viewport": meta viewport is `width=device-width, initial-scale=1.0` — **no `user-scalable=no`, no `maximum-scale=1`**. So zoom IS allowed. ✅ Good. (Some might argue initial-scale only; but zoom is not blocked.)
-- "zero fontes menores que 12px (eliminados text-[9px], text-[10px], text-[11px])": Scanning the code:
-  - `text-xs` = 12px minimum mostly. I see `text-xs` everywhere. Are there any text-[9px]/[10px]/[11px]? In provided snippets I don't see explicit text-[9px] etc. But there might be in other parts. The eyebrows use `font-size: 12px`. Let me scan: all font-size references use text-xs (12px) or larger. The `.ed-eyebrow` is 12px. Good. But I should scan carefully... In modal: `text-[0.3em]`? No. `tracking-[0.3em]` on PIN input is letter-spacing not font-size. I don't see sub-12px. But the provided snippets are partial (not the full CSS/HTML). Can't fully confirm "eliminated" across entire file. There might be remaining text-[10px] elsewhere not shown. Flag as "sample appears compliant but full file not provided."
-  - Actually wait: does the code show any `text-[10px]`? Searching the provided text... I see `text-xs` used heavily, header logo etc. No explicit 9/10/11px in shown snippets. ✅ for shown portions.
-- "barra inferior com safe-area-inset-bottom": `@supports (padding-bottom: env(safe-area-inset-bottom))` → `.pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }`. ✅ Defined. And `body { padding-bottom: 72px }` on mobile for bottom nav. Bottom nav bar itself not shown (cut off at "=== 5. SERVICE WORKER"), so can't confirm `.pb-safe` is applied to the nav. Flag: safe-area class defined, application to bottom bar unverified.
-- "funcionamento offline com CSS/JS locais e Service Worker": 
-  - CSS/JS local: `<link rel="stylesheet" href="/styles.css" />`, `<script src="/vendor/chart.umd.js">`, `<script src="/vendor/xlsx.full.min.js">`. ✅ Local.
-  - BUT: Google Fonts loaded from `fonts.googleapis.com` — external. Offline, fonts won't load, falls back to system sans-serif. Service worker comment says "fontes externas: navegador decide" (not cached). So offline the fonts degrade to fallback. Acceptable for offline app open, but the Sora/Jakarta identity is lost offline. Minor note.
-  - Service Worker: present (sw.js), caches app shell, network-first with cache fallback, `/api/*` excluded. ✅ Good strategy. Version emtec-v5. 
-  - **Potential issue**: The SW caches `"/"` and `"/index.html"` but font files from Google aren't cached (by design). Also if the SW install `c.addAll(ARQUIVOS)` fails because any file 404s (e.g., /data.js or /vendor/...), the whole install fails and offline breaks. That's a fragility risk. Flag.
-  - Also: the fetch handler for navigation fallback: `.catch(() => caches.match(req).then(r => r || caches.match("/index.html")))`. Good for offline navigation. ✅
-  - But is the SW registered? Not shown (app.js not shown fully). Flag: registration unverified.
+**USABILIDADE:**
 
-**Additional checks - math/logic:**
+1. **Indicadores financeiros:**
+   - "Resultado Acumulado" aparece: desktop cardSaldoLabel "Resultado Acumulado" quando em andamento ✅
+   - Mobile #mobSaldoLabel "Resultado Acumulado" ✅
+   - Contratado Líq (mobReceitaContratada), Efetiv Recebido (mobReceitaLiq), Despesas Pagas (mobCustoReal), Pagam Pendentes (mobPagamentosPendentes) - todos diferenciados ✅
+   - Lucro se gastar todo o orçamento (mobLucroPrevistoLabel) ✅
+   - Teto obrigatório + aviso: `avaliarSituacaoFinanceira` retorna "SEM_TETO" com "Atenção • Defina o Teto de Custos" quando tetoTotal <= 0 ✅
+   - Mas espera - o requisito diz "deixando o teto obrigatório". Aqui o teto NÃO é obrigatório no cadastro, apenas alerta. Vamos ver se há validação. Pela função `salvarTetosOrcamento()` não foi mostrada completa. Mas a lógica de situação avisa quando não há teto. Se "obrigatório" for literal, deveria bloquear. Aqui apenas avisa. Ressalva possível. Porém o requisito também diz "exibindo aviso 'Defina o Teto de Custos' se não houver teto" — então o comportamento está exatamente como descrito. Interpretação ambígua mas o aviso existe ✅.
 
-Let me audit `calcularMetricasObra` for correctness (this is core to financial reliability):
+2. **Separar Status Operacional do selo financeiro:**
+   - `selectStatusObraDesktop` e `selectStatusObraMobile` - seletores próprios ✅
+   - `viabilidadeBadge` (desktop) e `mobViabilidadeBadge` (mobile) - são `<span>` com `select-none`, não clicáveis ✅
+   - Status operacional select separado ✅
 
-- `custoTotal` = sum of saidas (excludes ENTRADA_CAIXA). ✅
-- `saldoAtual = medLiquidaRecebida - custoTotal` ✅ (Resultado Acumulado = received net - paid expenses). Correct definition.
-- `margemRealizadaPerc = saldoAtual / medLiquidaRecebida * 100` ✅.
-- `saldoEmpreitasPendente` = sum of max(0, contratado - pago) ✅.
-- `reembolsosPendentesTotal` accumulated from PENDENTE refunds ✅.
-- `pagamentosPendentesTotal = saldoEmpreitasPendente + reembolsosPendentesTotal` ✅.
-- `tetoRestante = max(0, tetoTotal - custoTotal)` ✅.
-- `custoRestanteEstimado = max(0, tetoRestante - saldoEmpreitasPendente)`.
-  - Bug consideration: `tetoRestante` is what's left of the budget. `saldoEmpreitasPendente` is contractor commitments not yet paid. But is `saldoEmpreitasPendente` already INFLATED within custoTotal? Empreitas `valorPago` might already be counted as lancamentos or not. This is a **double-counting risk**: 
-    - `custoTotal` comes from `lancamentos` (despesas). 
-    - `saldoEmpreitasPendente` = contrato - pago for each empreita.
-    - If empreita payments are ALSO recorded as lancamentos, and the empreita is a separate contract ledger, then `custoTotalProjetado = custoTotal + saldoEmpreitasPendente + custoRestanteEstimado` might double count empreita payments if lancamentos include them, OR the saldo represents future payments not yet in lancamentos.
-    - This requires domain knowledge: are empreita "valorPago" tracked separately from lancamentos? The formula `custoRestanteEstimado = max(0, tetoRestante - saldoEmpreitasPendente)` subtracts empreita pending from tetoRestante to avoid double counting contractors in the "rest to spend" — good intent. Then `custoTotalProjetado = custoTotal + saldoEmpreitasPendente + custoRestanteEstimado`. 
-    - Expand: = custoTotal + saldoEmpreitasPendente + max(0, (tetoTotal - custoTotal) - saldoEmpreitasPendente). If tetoTotal - custoTotal >= saldoEmpreitasPendente, custoRestante = tetoTotal - custoTotal - saldoEmpreitasPendente, and custoTotalProjetado = custoTotal + saldoEmpreitasPendente + tetoTotal - custoTotal - saldoEmpreitasPendente = tetoTotal. So projected = teto (makes sense: "if you spend the whole budget"). ✅ Good — the formula reduces to tetoTotal when budget is sufficient. Clever.
-    - If tetoTotal - custoTotal < saldoEmpreitasPendente (i.e., committed contractors exceed remaining budget), custoRestante = 0, custoTotalProjetado = custoTotal + saldoEmpreitasPendente > tetoTotal. This correctly flags over-budget. ✅
-    - So the "Lucro se gastar todo o orçamento" = receita - projected, which under normal conditions = receita - teto. That matches "if you spend the entire budget". ✅ Logically sound.
-  - HOWEVER: This assumes `saldoEmpreitasPendente` is NOT already in custoTotal. If empreita payments ARE in lancamentos (custoTotal), then valorPago would be double... Actually saldoEmpreitasPendente uses (contratado - pago), which is the UNPAID portion, so paid portion isn't double counted IF the paid part is in lancamentos. If paid part is NOT in lancamentos and only in empreita ledger, then custoTotal undercounts. This is a data-model ambiguity. Given `mobCustoReal` = "Despesas Pagas" = R$68.704,19 and separately empreitas exist, the system likely treats empreita payments as lancamentos too. But I cannot confirm. **Flag as a data-consistency risk requiring verification** — the interaction between empreitas.valorPago and lancamentos is a potential double count or omission depending on data entry discipline.
+3. **Lançamento rápido:**
+   - `#modalLancamentoRapido` - abre com campos ordenados: Valor, Descrição, Categoria (pills), Subcategoria, Quem pagou, Opções avançadas (colapsadas), Salvar ✅
+   - "Quem pagou?" visível diretamente: `gridQuemPagouRapido` com botões EMTEC, Melo, Pilar, Elon, Iago, Outro ✅
+   - "+ Novo responsável": `adicionarNovoResponsavelPrompt()` ✅
+   - Sugerir categoria automática: `badgeSubtipoDetectadoRapido` e `atualizarPreviewSubtipoRapido()`; datalist de sugestões ✅
+   - Sem sobrescrever escolha manual: Subcategoria select tem "AUTO" mas permite manual. Precisa verificar a lógica JS. No código mostrado há `selecionarCategoriaRapida` e `atualizarPreviewSubtipoRapido` mas não a implementação completa. Premissa: se `subtipoManual` existe deveria respeitar. Não totalmente verificável — ressalva.
+   - Corrigir subcategoria manualmente: select `lancRapidoSubtipo` permite ✅
 
-- `excessoTetoProjetado = tetoTotal > 0 ? max(0, custoTotalProjetado - tetoTotal) : 0` ✅.
-- `receitaContratoTotal = medLiquidaTotalContrato > 0 ? medLiquidaTotalContrato : medLiquidaRecebida` ✅ reasonable fallback.
-- `saldoProjetadoFinal = receitaContratoTotal - custoTotalProjetado` ✅.
-- `margemProjetadaFinalPerc = saldoProjetadoFinal / receitaContratoTotal * 100` ✅.
+4. **Controle de reembolsos:**
+   - Não considerar todo gasto de Melo/Pilar automaticamente como reembolso: default `lancRapidoReembolsoStatus value="NAO_REEMBOLSAVEL"` ✅
+   - Quando quem pagou não é EMTEC, aparece `boxReembolsoRapido` com opções Sem reembolso / A reembolsar / Já reembolsado ✅
+   - Dar baixa em 1 clique "✓ Dar baixa"/"Desfazer": não visto no código mostrado explicitamente. A função não é mostrada mas o requisito menciona. Não é verificável — ressalva.
+   - Sem duplicar: `reembolsosPendentesTotal` é calculado separadamente de `custoTotal` — despesa está em `saidas` (custoTotal) e reembolso é apenas status do mesmo item. Não duplica ✅ na lógica de cálculo.
 
-Viabilidade logic ordering:
-1. Concluída → based on saldoAtual sign.
-2. sem receita e custo>0 → warning.
-3. !teto → "Defina o Teto de Custos".
-4. saldoProjetadoFinal < 0 → "Risco de Prejuízo".
-5. saldoAtual < 0 → "Desembolso Maior que Recebido" (warning) — note: this branch only reached if saldoProjetadoFinal >= 0 but saldoAtual < 0. Plausible (projeção positiva mas caixa realizado negativo).
-6. custoTotalProjetado > tetoTotal → "Viável • Acima do Teto".
-   - Wait — but earlier branch 4 checks saldoProjetadoFinal < 0. If custoTotalProjetado > tetoTotal but receita still covers it (receita > custoTotalProjetado), then saldoProjetadoFinal >= 0, so we reach branch 6 → "Acima do Teto". But if custoTotalProjetado > tetoTotal AND saldoProjetadoFinal < 0, branch 4 catches first as "Risco de Prejuízo". Reasonable.
-7. margemProjetadaFinalPerc < 10 → "Margem Apertada".
-8. else "Obra Saudável".
+5. **Medições: lista ANTES do formulário:**
+   - Formulário em `#containerFormMedicao` está `hidden` por padrão ✅
+   - Cards mobile `#cardsMedicoesMobile` e tabela vêm DEPOIS no HTML, mas o form está hidden. Quando aberto, aparece... wait. A ordem no DOM: resumo contrato → form (hidden) → cards mobile → tabela. Quando o form é visível, ele aparece ANTES da lista no DOM. O requisito diz "mostrar a lista de medições existentes ANTES do formulário". Aqui o form (quando aberto) fica acima da lista. Isso viola o requisito quando o form está aberto? Bem, o requisito é que a lista apareça antes do formulário na tela. Se o form está hidden por padrão, a lista aparece primeiro (ok). Mas quando abre o form, ele fica acima. Interpretação: a intenção é que ao entrar na aba, você veja a lista primeiro (não seja forçado a preencher form). Isso está atendido — o form está colapsado. Mas literalmente o form está posicionado acima da lista no DOM. Ressalva menor.
 
-Logic seems coherent. ✅ But note: the requirement lists badges as "Obra Viável / Risco de Prejuízo / Acima do Teto". The implementation has more nuanced states (CONCLUIDA_LUCRO, SEM_RECEITA, SEM_TETO, RISCO_PREJUIZO, RESULTADO_ACUMULADO_NEGATIVO, VIAVEL_ACIMA_TETO, MARGEM_APERTADA, OBRA_SAUDAVEL). More detailed than requested — that's enhancement, not divergence. ✅
+   Actually let me re-read: "Na aba de Recebimentos do Cliente (Medições), mostrar a lista de medições existentes ANTES do formulário de cadastro." O formulário está hidden e a lista aparece. Quando abre, o form fica em cima. A intenção foi cumprida (lista visível primeiro, form recolhido). Mas estruturalmente o form está acima. Vou apontar como ressalva de interpretação, mas funcionalmente atende a intenção (não forçar cadastro).
 
-**Rounding**: `arredondarMoeda` to 2 decimals throughout. Good practice. But accumulating rounded values per item then summing can introduce small rounding drift vs summing raw then rounding. Minor. For financial it's acceptable (rounds each line item to cent).
+6. **Relatórios: detalhes recolhidos:**
+   - `<details class="ed-card ... group no-print">` para "Histórico de Conferência Forense do Excel Original" ✅
+   - Relatórios diários (gráfico, orçado vs realizado) no topo ✅
+   - Auditoria técnica em details colapsado ✅
 
-**Potential bug**: In `avaliarSituacaoFinanceira`, for non-concluded obras, branch "VIAVEL_ACIMA_TETO" uses `m.margemProjetadaFinalPerc.toFixed(1)` in rotulo "Acima do Teto (+X% no custo projetado)". The margin is saldo/receita (profit margin), but labeled "no custo projetado" (on projected cost). Mislabel: margemProjetadaFinalPerc is profit/receita, not cost overrun %. Minor labeling inconsistency. Flag as minor.
+7. **Legibilidade mobile:**
+   - Zoom liberado: `<meta name="viewport" content="width=device-width, initial-scale=1.0" />` — NÃO tem `maximum-scale` ou `user-scalable=no`, então zoom liberado ✅
+   - Fontes < 12px: o código usa muito `text-xs`. Tailwind `text-xs` = 0.75rem = 12px ✅. Mas há `text-[11px]`? Não vi. Vou checar... Usam `text-xs` extensivamente (=12px). Não vi text-[9px], text-[10px], text-[11px] nos trechos. Mas não posso garantir 100% sem todo o código. `text-xs` = 12px é o mínimo. Há alguma exceção? O eyebrow é 12px. OK. Ressalva: não posso confirmar ausência total sem varrer todos os arquivos, mas nos trechos fornecidos está OK.
+   - Barra inferior safe-area: `pb-safe` com `@supports (padding-bottom: env(safe-area-inset-bottom))` ✅
+   - Offline: Service Worker com cache de CSS/JS locais ✅, vendor local ✅, app.js/data.js locais ✅
 
-**mobReceitaLiq "Efetiv. Recebido" = R$89.540 while mobReceitaContratada "Contratado (Líq.)" = R$89.540 and mobContratoBrutoSub "Bruto: R$96.800".** Check: 96.800 * (1 - 0.075) = 96.800 * 0.925 = 89.540. ✅ Correct math (7.5% NF retention). Good, consistent.
+**DIVERGÊNCIAS / PONTOS DE ATENÇÃO:**
 
-**mobCustoReal R$68.704,19, mobTetoSub "Teto: R$77.000". mobSaldoAtual R$20.835,81.** Check: 89.540 - 68.704,19 = 20.835,81. ✅ Correct.
+1. **Header em 360px:** risco de aperto. Logo até 136px + obra select + perfil + sync. Pode truncar o nome da obra a ponto de ficar ilegível. Não estoura necessariamente por causa de min-w-0/shrink-0, mas aperta. Melhor validar em dispositivo real. Ponto de atenção.
 
-**mobMargemRealizadaBadge "+23.3% realizada":** 20.835,81 / 89.540 = 0.2327 = 23.3%. ✅ Correct.
+2. **Google Fonts externas:** o requisito pede funcionamento offline. As fontes Plus Jakarta Sans e Sora são carregadas via `<link href="https://fonts.googleapis.com...">`. Isso NÃO funciona offline. O Service Worker ignora origens externas (`if (url.origin !== location.origin) return;`). Portanto offline as fontes caem para fallback sans-serif. Isso é uma divergência parcial de identidade visual offline, mas o texto permanece legível (fallback). Ponto de atenção: para USP offline completa de identidade visual, as fontes deveriam ser self-hosted. Aparência offline degrada (mas funcional). Ressalva importante.
 
-**mobLucroPrevistoValor R$11.335,81, "Lucro se gastar todo o orçamento":** = receita - teto = 89.540 - 77.000 = 12.540. But shown 11.335,81! **DISCREPANCY!** Let me recompute. Hmm. 89.540 - 77.000 = 12.540, not 11.335,81. 
+3. **Teto "obrigatório":** o requisito diz "deixando o teto obrigatório". Na lógica, apenas avisa quando ausente. Não bloqueia salvamento de despesa. Se "obrigatório" for literal (bloquear), não foi implementado. Interpretação ambígua — aponto.
 
-Wait, but "Lucro se gastar todo o orçamento" uses custoTotalProjetado, which may include excess over teto from empreitas or differ. Let me check: if custoTotalProjetado = teto = 77.000, then lucro = 89.540 - 77.000 = 12.540. But the card says 11.335,81. Difference = 12.540 - 11.335,81 = 1.204,19. 
+4. **Botão "dar baixa em 1 clique":** não verificável no código fornecido. A função de baixa de reembolso não aparece. Premissa não confirmada.
 
-Hmm. So custoTotalProjetado = 89.540 - 11.335,81 = 78.204,19. That's 77.000 + 1.204,19. So there's an excess of 1.204,19 over teto, meaning `saldoEmpreitasPendente` exceeded `tetoRestante`. Let's check: tetoRestante = 77.000 - 68.704,19 = 8.295,81. saldoEmpreitasPendente = ? If salary pending + custoRestante=0... custoTotalProjetado = 68.704,19 + saldoEmpreitasPendente + custoRestanteEstimado. If custoRestanteEstimado = max(0, 8.295,81 - saldoEmpreitasPendente). If saldoEmpreitasPendente >= 8.295,81, custoRestante=0, then custoTotalProjetado = 68.704,19 + saldoEmpreitasPendente = 78.204,19 → saldoEmpreitasPendente = 9.500. 
+5. **Detecção automática de categoria:** lógica de `detectarSubtipo` existe mas a parte que "não sobrescreve escolha manual" e "sugere enquanto digita" precisa de validação de `subtipoManual`/flag de override. Não totalmente verificável nos trechos. O select tem opção "AUTO".
 
-And indeed mobPagamentosPendentes = R$9.500,00 = "Empreiteiros + Reemb." So if all 9.500 is empreita pending (reembolsos pendentes = 0), then saldoEmpreitasPendente = 9.500 > tetoRestante 8.295,81. So custoRestante = 0, custoTotalProjetado = 68.704,19 + 9.500 = 78.204,19. Lucro = 89.540 - 78.204,19 = 11.335,81. ✅ MATCHES!
+6. **`avaliarSituacaoFinanceira` — ordem de prioridade das condições:** verifica `sem receita` antes de `sem teto`. Se não há receita E não há teto, mostra "Sem Receita". Aceitável. Mas há um caso: se `saldoProjetadoFinal < 0` mostra "Risco de Prejuízo" mesmo que haja teto — ok.
 
-So the numbers are internally consistent GIVEN that pagamentosPendentes (9.500) exceeds the remaining teto (8.295,81), causing overrun of 1.204,19. And "Lucro se gastar todo o orçamento" becomes 11.335,81 (less than 12.540 because committed pending payments push projected cost above teto). OK so the math is correct. Good — my initial alarm was wrong; it's consistent. This is actually a subtle but correct behavior. I should note this demonstrates internal consistency.
+   Um lado crítico: condição `if (m.saldoProjetadoFinal < 0)` vem ANTES de verificar `m.tetoTotal > 0`. Já verificou teto acima (`if (!(m.tetoTotal > 0))`), então ok.
 
-But "mobMargemProj +12.7% se gastar o teto": 11.335,81 / 89.540 = 12.66% ≈ +12.7%. ✅ Consistent.
+   Outro: `if (m.tetoTotal > 0 && m.custoTotalProjetado > m.tetoTotal)` retorna "Viável • Acima do Teto" — mas só chega aqui se `saldoProjetadoFinal >= 0`. OK.
 
-So the numbers ARE consistent. Good. I'll note the sample figures are mathematically coherent.
+7. **Cálculo de medições — possível bug sutil:** 
+   - `medLiquidaTotalContrato` quando há contrato informado e medido < contrato: soma medições líquidas + saldo não medido líquido. Isso projeta a receita líquida total do contrato. Mas `medLiquidaRecebida` só conta medições com status "Recebida". Então "Recebido" pode ser menor que "Contratado Líq." corretamente. ✅
+   - `receitaContratoTotal = medLiquidaTotalContrato` (contratado líquido total). 
+   - `saldoAtual = medLiquidaRecebida - custoTotal`. OK, "Resultado Acumulado".
+   - `saldoProjetadoFinal = receitaContratoTotal - custoTotalProjetado`. OK.
+   - Potencial problema: `custoTotalProjetado = custoTotal + saldoEmpreitasPendente + custoRestanteEstimado` onde `custoRestanteEstimado = max(0, tetoRestante - saldoEmpreitasPendente)`. Isso "gasta todo o teto". Então `custoTotalProjetado` = custoTotal + saldoEmpreitas + max(0, (teto-custoTotal) - saldoEmpreitas). Se saldoEmpreitas <= tetoRestante: custoTotalProjetado = custoTotal + saldoEmpreitas + (teto - custoTotal - saldoEmpreitas) = teto. Então saldoProjetadoFinal = receita - teto = lucroNoTetoPuro quando dentro. ✅ Consistente.
+   - Se saldoEmpreitas > tetoRestante: custoTotalProjetado = custoTotal + saldoEmpreitas + 0 = custoTotal + saldoEmpreitas > teto. Logo excessoTetoProjetado > 0. ✅
+   
+   A lógica parece coerente.
 
-**KPI 4 label "Lucro se gastar todo o orçamento" shows 11.335,81 but note it's actually "if you spend teto + committed overage".** The label says "se gastar todo o orçamento" (if you spend the entire budget), implying = receita - teto = 12.540. But it shows 11.335,81 which reflects the overrun scenario. This is a subtle labeling nuance: the displayed value already accounts for commitments exceeding the budget. Could be confusing but it's actually more conservative/accurate. Minor labeling nuance to note. Actually the sub-label says "Descontando empreitas e custos previstos" (discounting contractors and predicted costs), which explains it. ✅ So it's explained.
+8. **`arredondarMoeda` em cada operação acumulada** — boa prática para evitar erro de floating point. ✅ Mas arredondar a cada soma acumulada pode introduzir pequenos desvios vs somar tudo e arredondar no final. Para valores monetários em reais, arredondar centavo a centavo é aceitável e reproduz o que um humano/planilha faria (planilha arredonda por célula). Não é erro, mas tecnicamente arredondamento incremental pode divergir marginalmente de soma-depois-arredonda. Ponto de nota técnica de baixíssima relevância.
 
-Now let me also check the `heroMobile` values might be hardcoded sample data in HTML (R$20.835,81 etc.) that get overwritten by JS on load. The ids suggest JS populates them. The hardcoded values are likely defaults/placeholders. Fine.
+9. **Duplicidade:** `checarDuplicidadeAoDigitar()` e aviso de duplicidade — bom ✅.
 
-**Empreitas table**: The section shows botão voltar to 'mais'. Fine.
+10. **WCAG AAA:** o texto secundário `#64748B` sobre fundo `#F8FAFC`/`#EDF4FC`. #64748B (slate-500) sobre branco: contraste ~4.6:1 — atende AA para texto normal mas NÃO AAA (7:1). O requisito diz "texto escuro #0F172A para alto contraste WCAG AAA". O texto escuro principal é #0F172A (AAA), mas há muitos textos em #64748B que são AA apenas. Para AAA pleno de todo texto, #64748B é insuficiente. Ponto de atenção real.
 
-Let me reconsider the logo overflow issue. Actually, re-reading: header right container `flex items-center gap-1.5 sm:gap-2 min-w-0`. It has `min-w-0` so it CAN shrink. The obra select container has `min-w-[105px] max-w-[155px]`. Children can shrink due to min-w-0 on parent but the obra div has fixed min-w-105. Hmm. At 360px:
-- Padding: px-3 = 12px each = 24px
-- gap-2 = 8px between the two main groups
-- Left (logo): max 130px, shrink-0 → can't shrink below content. Logo h-6 (24px tall), w-auto. If logo aspect ratio is say 3:1, width = 72px. If 5:1, 120px. Depends on actual image. max-w-[130px] caps it.
-- Right: obra(105-155) + gap1.5(6) + profile(~40) + gap1.5(6) + sync(32) = min ~189, max ~239.
-- Total min: 130 + 8 + 189 = 327 < 336. OK fits if logo ~130 and obra shrinks to 105.
-- But if logo is wide and takes 130, obra at min 105, total = 130+8+105+6+40+6+32 = 327. Plus we're using 336 available. Fits with 9px slack. Tight but **fits**. ✅ OK so not overflow, just tight. I'll note "tight but appears to fit; test at 360px."
+    Também `text-emerald-100/90` sobre verde — pode ser baixo contraste. `#86EFAC` sobre fundo verde escuro ok.
 
-Actually profile button on mobile: `<span id="nomeUsuarioPill" class="hidden sm:inline">` so only avatar shows (~20px + padding). And button padding px-2 = 8px each = 16 + avatar 20 = 36px. Sync p-2 = 16 + icon 16 = 32px. So right = 105 + 6 + 36 + 6 + 32 = 185 min. Left logo 130 + gap 8 = 138. Total 323 < 336. ✅ Fits.
+11. **`bg-slate-50` override:** `.bg-slate-50 { background-color: #EDF4FC !important; }` — globalmente sobrescreve. Pode afetar componentes que usam bg-slate-50 para outros fins, mas é consistente com identidade. OK.
 
-OK so logo fits at 360px. Good. But it's tight; recommend visual test.
+12. **Header obra select em mobile** — mostra apenas select sem label ("Obra:" é hidden sm:inline). Em 360px o usuário vê apenas o dropdown. Pode ser OK.
 
-Actually wait, I realize the `obraSelect` inside its container has `w-full` and container `max-w-[155px] min-w-[105px]`. On 360px the select will size to content up to 155. If obra names are long they truncate. Fine.
+13. **`maximum-scale` ausente** — zoom liberado ✅ (bom para acessibilidade).
 
-**Now, WCAG emojis and other issues to flag:**
+14. **Modal lançamento rápido:** `max-h-[92vh] overflow-y-auto` com botão salvar `sticky bottom-0`. Boa ergonomia mobile. ✅
 
-Divergences (Reprovado/ressalvas):
-1. **Emojis present** contrary to "zero emojis genéricos": 📋 (Histórico summary), ⚠️ (duplicate warning). These violate the stated requirement.
-2. **WCAG AAA claim**: primary button text #0F172A on #FF8C00 ≈ 7.6:1 (passes AAA). But secondary/label text #64748B (~4.7:1) only AA, and body #334155 on #DCE8F6 — let me check. #334155 = rgb(51,65,85). L: 51/255=0.2→0.033, 65/255=0.255→0.0512, 85/255=0.333→0.0937. L=0.2126*0.033+0.7152*0.0512+0.0722*0.0937=0.00702+0.03662+0.00677=0.0504. Background #DCE8F6 = rgb(220,232,246). L: 220/255=0.863→0.712, 232/255=0.910→0.807, 246/255=0.965→0.925. L=0.2126*0.712+0.7152*0.807+0.0722*0.925=0.1514+0.5772+0.0668=0.7954. Contrast = (0.7954+0.05)/(0.0504+0.05)=0.8454/0.1004=8.42:1. ✅ Body on bg passes AAA. But labels #64748B on white cards=4.73:1 (AA only). The requirement's AAA target was specifically for #0F172A text; met for that color. But many secondary labels use #64748B. Flag: secondary text is AA, not AAA — if strict AAA is required for all text, need darker. I'll note as minor since requirement focused on #0F172A.
+15. **Botão "Salvar Despesa Agora"** fixo na base — bom ✅.
 
-3. **Google Fonts external** — offline fallback loses Sora/Jakarta identity (fonts not cached). Contradicts "tipografia Plus Jakarta Sans + Sora" durability offline. Minor.
+16. **`inputmode="decimal"` e `numeric`** — bom para mobile ✅.
 
-4. **`sugerirCategoriaPorDescricao` edge case**: `REGEX_ALIMENTACAO` returns "OUTROS" but the check `!d.includes("MISTURADOR")` — this seems oddly specific; "almoço" contains... does "almoco" (sem acento) contain "MISTURADOR"? No. But why exclude MISTURADOR from alimentação? Probably because "misturador" (a mixer/equipment) might match some food regex? Odd. Also note: the check `if (REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR"))` — if the description contains "MISTURADOR" and also food words, it won't be flagged as alimentação, then falls through to equipment check (LOCACAO|...|MISTURADOR) → EQUIP. Reasonable. Minor quirk.
+17. **Service Worker versão v8** — precisa bump ao atualizar. OK.
 
-   Also `sugerirCategoriaPorDescricao` returns only the OFFICIAL category (OUTROS/MO/EQUIP/MAT), NOT the subtype (ALIM/TRANSP). The subtype is set via `detectarSubtipo` presumably and shown in the select. The requirement says suggest "Outros/Alimentação", "Outros/Transporte" — i.e., category OUTROS + subtype ALIM/TRANSP. The function returns "OUTROS" for both, and the subtype preview (badgeSubtipoDetectadoRapido / atualizarPreviewSubtipoRapido) presumably shows ALIM or TRANSP. This is consistent with the design where ALIM/TRANSP are subtypes of OUTROS (normalizarTipoOficial maps ALIM/TRANSP → OUTROS). ✅ Adequate, though relies on separate subtype detection not shown. Flag: verify detectarSubtipo sets ALIM for alimentação and TRANSP for transporte.
+18. **SW fetch fallback:** em falha de rede, retorna cache ou `/index.html`. Para `/api/*` ignora. Mas se offline e o recurso não está em cache (ex: uma imagem nova), retorna index.html para qualquer GET não cacheado — isso pode servir HTML no lugar de imagem/js quebrado. `caches.match(req).then(r => r || caches.match("/index.html"))`. Se req é um JS não cacheado, retorna index.html como resposta JS → erro de parse. Mas os ARQUIVOS listados cobrem os essenciais. Aceitável com ressalva: qualquer asset não pré-cacheado e não visitado online cairá em fallback index.html inadequadamente. Ponto menor.
 
-5. **"Teto obrigatório"** — no hard validation forcing teto input; only warning badge. If requirement strictly means mandatory input enforcement, it's not implemented (soft warning only). Depending on interpretation — flag as "soft enforcement, not hard-mandatory."
+19. **Fontes externas e SW:** confirmado que offline perde fontes. Ressalva de aparência.
 
-6. **Remaining mobile status editing** — mobile hero shows status as read-only badge; the "seletor próprio" for operational status appears to be desktop-only (`selectStatusObraDesktop`). Mobile users may lack a direct selector (unless in "mais" hub). Flag: verify mobile status change path.
+20. **`background-attachment: fixed`** no body — em iOS Safari pode causar problemas de performance/renderização. Ponto de atenção menor para mobile.
 
-7. **Service worker registration** and `.pb-safe` application to bottom nav — not shown; verify.
+21. **Dois modais de perfil:** `modalPerfilUsuario` (visível) e `pinGateModal` (hidden). Há sobreposição/duplicação de conceito de login? `pinGateModal` parece legado. Possível código morto. Ponto menor.
 
-8. **Double-counting risk** between empreitas.valorPago and lancamentos — data model discipline. Flag as risk to validate (not a code bug per se, but an accounting consistency concern).
+22. **Requisito "Contratado Líquido, Efetivamente Recebido..."** — no desktop KPI 1 mostra "Recebido do Cliente" com sub "Contratado Líq.". No mobile mostra Contratado Líq. e Efetiv. Recebido separados. Desktop não tem card separado de "Contratado Líquido" como valor principal, mas está no subtítulo. Aceitável.
 
-9. **Rounding**: per-item rounding acceptable.
+Let me also verify the quick launch modal — requirement says "abrir sem excesso de campos antes do botão Salvar". The modal has: Valor, Descrição, Categoria, Subcategoria, Quem pagou, Reembolso box, "Mais opções" colapsado, Salvar. That's a reasonable amount. "Quem pagou" is directly visible ✅. But there are still quite a few fields (valor, descrição, categoria, subcategoria, quem pagou, reembolso). Not excessive — reasonable. ✅
 
-10. **`medBrutaAReceber`/`medLiquidaAReceber` computed but note** `Math.max(0, ...)` — if over-received, clamps to 0 (won't show negative). Fine.
+Now, let me also note: the requirement "sugerir automaticamente a categoria enquanto digita a descrição (ex.: almoço -> Outros/Alimentação...)". The classify function `detectarSubtipo` maps ALIM/TRANSP then `normalizarTipoOficial` maps ALIM->OUTROS, TRANSP->OUTROS. And the datalist suggestions. The badge shows auto classification. Seems implemented. But "sem sobrescrever escolha manual" — need the manual flag. Not fully verifiable but there's a `subtipoManual` concept in `calcularMetricasObra`. Ressalva de verificação.
 
-11. **`mobReceitaLiq "Efetiv. Recebido"` uses medLiquidaRecebida.** But what if only bruto is received? It uses liq (net). Consistent with "recebido líquido". Fine.
+Let me score:
 
-Let me also examine: **`saldoProjetadoFinal` uses `receitaContratoTotal` (total contracted, including a receber) minus project cost.** So "Risco de Prejuízo" triggers when even the FULL contracted revenue can't cover projected cost. That's a proper viability check. ✅ Good.
+**USABILIDADE:**
+- Most requirements met: Resultado Acumulado ✅, indicação separada ✅, lançamento rápido enxuto ✅, reembolso explícito ✅, medições lista-antes (com ressalva estrutural) ✅, relatórios details ✅, legibilidade/offline ✅.
+- Ressalvas: teto "obrigatório" apenas alerta; dar baixa 1 clique não verificável; arredondamento incremental; medições form posicionado acima.
+- Nota: 8.0 a 8.5. Eu diria 8.5, com ressalvas.
 
-**However**, for a work in progress where only part is received, `saldoProjetadoFinal >= 0` doesn't mean cash-positive today; that's why `saldoAtual < 0` branch exists ("Desembolso Maior que Recebido"). Good separation of realized vs projected. ✅
+Actually let me be rigorous. The core usability improvements are all present and well-executed. The minor gaps are: teto not strictly blocking, some JS functions not verifiable. I'll give 8.5.
 
-**Conclusion grading:**
+**APARÊNCIA:**
+- Fundo azul suave ✅
+- Logo responsivo com contain ✅
+- Paleta EMTEC ✅
+- Contraste AAA do botão principal ✅, mas textos secundários #64748B são AA (não AAA) — divergência do "alto contraste WCAG AAA" reivindicado.
+- Fontes self-hosted? Não → offline degrada. 
+- Zero emojis ✅
+- Nota: 8.5. Contraste de textos secundários e fontes offline puxam para baixo. Digo 8.5.
 
-Appearance: Strong. Logo responsive with object-contain, blue background implemented, color palette correct, fonts correct, gradient engineering decoration. Minus: emojis present (📋, ⚠️), minor WCAG secondary text not AAA, Google Fonts external for offline identity. Score ~8.5/10.
+Hmm, let me reconsider scores. The delivery is quite good. I'll give Usabilidade 8.5 and Aparência 8.5, or maybe 9 and 8.5. Let me be rigorous and give concrete justification.
 
-Usability: Very strong. Resultado Acumulado replacement done, financial differentiation thorough, viabilidade badges separated from status selector (desktop), quick entry with visible "Quem pagou?" and collapsed advanced, auto-suggest + manual subcategory, refund default non-refundable with no duplication, medições list before form, reports with details at end, viewport zoom allowed, safe-area class, offline SW. Minus: mobile operational status selector unclear (read-only badge), "teto obrigatório" soft-only, some behaviors unverified (dar baixa button, SW registration, auto-suggest not overwriting manual). Score ~8.5-9/10.
+Actually, for a rigorous auditor, I'd score:
+- Usabilidade: 8.5/10 (excelente execução, ressalvas em teto obrigatório, funcionalidade de baixa não verificável, e posição do form de medição).
+- Aparência: 8.5/10 (fundo e identidade excelentes, mas contraste de textos secundários não é AAA e fontes não são offline).
 
-Overall verdict: **Aprovado com Ressalvas** (Approved with reservations).
+Let me write the audit report in the requested structure. I should be thorough but focused. Write in Portuguese (matching the context).
 
-Let me structure the response in the required format:
-1. RESUMO DA AUDITORIA
+Let me structure:
+1. RESUMO DA AUDITORIA (Com Ressalvas)
 2. ANÁLISE DOS CÁLCULOS E PREMISSAS
 3. DIVERGÊNCIAS ENCONTRADAS
 4. PARECER CONCLUSIVO E RECOMENDAÇÕES
 
-Include the two grades (usability and appearance) as requested.
+I'll include the scores and address each requirement explicitly. Let me be detailed but not absurdly long. Given the depth, I'll produce a comprehensive report.
 
-I should be rigorous and point out the emoji contradiction clearly (it's a literal requirement violation). Also the WCAG AAA partial. Also the math consistency check I did — praise it as internally consistent but note the subtle label.
+Let me finalize the contrast calcs to be accurate:
+- Botão laranja #FF8C00 com texto #0F172A: ratio ~7.7:1 → AAA ✅
+- #64748B (slate-500) sobre #FFFFFF: 
+  #64748B: R=100,G=116,B=139 → r=0.3922,g=0.4549,b=0.5451
+  R lin: ((0.3922+0.055)/1.055)^2.4 = (0.4239)^2.4 ≈ 0.1274
+  G lin: ((0.4549+0.055)/1.055)^2.4 = (0.4833)^2.4 ≈ 0.1738
+  B lin: ((0.5451+0.055)/1.055)^2.4 = (0.5688)^2.4 ≈ 0.2545
+  L = 0.2126*0.1274 + 0.7152*0.1738 + 0.0722*0.2545 = 0.02708 + 0.1243 + 0.01837 = 0.1698
+  White L = 1.0
+  Ratio = (1.0+0.05)/(0.1698+0.05) = 1.05/0.2198 = 4.78:1 → AA para texto normal (≥4.5), NÃO AAA (≥7). Para texto grande ≥3 ok.
+  Sobre #EDF4FC (fundo levemente azul, L ~0.88): ratio um pouco menor ainda. Ainda AA mas não AAA.
 
-Let me also double check: "substituir 'Saldo em Caixa Hoje' por 'Resultado Acumulado' (tanto no desktop quanto no card mobile #heroMobile)". Desktop: cardSaldoLabel default text "Resultado Acumulado" ✅. Mobile: mobSaldoLabel "Resultado Acumulado" ✅. Done.
+So secondary text is AA, not AAA. The requirement text says "texto escuro #0F172A para alto contraste WCAG AAA" — that specifically refers to text on orange buttons being dark #0F172A. That IS AAA. The broader AAA claim for all text isn't strictly met, but the specific requirement (orange button with dark text) is met. I'll note the nuance: primary button meets AAA, but many labels use #64748B which is AA only. Fair to mention as observation, not a hard failure of the stated requirement (which was about the orange button).
 
-"diferenciar claramente Contratado Líquido, Efetivamente Recebido, Despesas Pagas, Pagamentos Pendentes (empreiteiros + reembolsos) e Lucro se gastar todo o orçamento":
-- Mobile: Contratado (Líq.), Efetiv. Recebido, Despesas Pagas, Pagam. Pendentes (Empreiteiros + Reemb.), Lucro se gastar todo o orçamento ✅ all differentiated.
-- Desktop KPIs: Recebido do Cliente (with Contratado Líq. sub), Despesas Realizadas (Pendentes sub), Resultado Acumulado, Lucro se gastar todo o orçamento. Slightly less explicit on desktop for "Efetivamente Recebido" vs "Contratado" (merged into KPI1), but present. Acceptable.
+I'll frame it carefully: the explicit requirement (botão laranja com texto #0F172A AAA) is met; however, extensive use of #64748B for labels is AA (4.78:1), not AAA, so "alto contraste AAA" is not universal.
 
-Now "Manter a identidade visual limpa... zero emojis genéricos" — the Sora/Jakarta and colors are kept. Emojis violate.
+Good. Now write.
 
-Let me also note: `<meta name="theme-color" content="#23396B" />` ✅ good.
-
-Alright, also check the "linhas 1185-1370" modal: the form element opening `<form ...>` is not visible in the snippet (starts mid-form with label Valor da Despesa). Presumably `<form id=... onsubmit="...">`. Can't verify submit handler. The save button `type="submit"`. Fine.
-
-One more: The description field has `oninput="checarDuplicidadeAoDigitar(); atualizarPreviewSubtipoRapido();"` — so category/subtype preview updates on typing. But does it change the actual selected category pill? The requirement "sugerir automaticamente a categoria enquanto digita a descrição ... sem sobrescrever escolha manual". The function `atualizarPreviewSubtipoRapido` suggests only preview, and there's a flag needed to not override manual. Can't confirm from code that manual pill selection isn't reset. Flag.
-
-Also "badgeSubtipoDetectadoRapido" default text "Classificação automática" — dynamic. Good.
-
-I think I've covered enough. Let me write the audit.
-
-I'll present grades: Usabilidade 9/10, Aparência 8.5/10 (or 8). Let me be decisive. Given emojis violate explicit requirement (appearance), and secondary WCAG not AAA, appearance ~8.5. Usability strong but some unverified items and mobile status selector question → 9.0. Overall Aprovado com Ressalvas.
-
-Let me write in Portuguese (the context is Portuguese). Keep it structured and rigorous.
+I'll keep it well-organized and reasonably comprehensive.
 ```
 
 ---
 
 ### Parecer Conclusivo:
 
-# AUDITORIA TÉCNICA INDEPENDENTE — EMTEC ENGENHARIA (Usabilidade & Aparência)
+# RELATÓRIO DE AUDITORIA TÉCNICA INDEPENDENTE
+## Sistema EMTEC Engenharia — Usabilidade & Aparência (Mobile/Desktop)
 
 ---
 
 ## 1. RESUMO DA AUDITORIA
 
-**VEREDITO: APROVADO COM RESSALVAS**
+**STATUS: APROVADO COM RESSALVAS**
 
-**NOTAS:**
-- **USABILIDADE: 9,0 / 10**
-- **APARÊNCIA: 8,5 / 10**
+**Nota USABILIDADE: 8,5 / 10**
+**Nota APARÊNCIA: 8,5 / 10**
 
-A entrega é de alto nível: resolveu praticamente todos os pontos de dor do Melo e da Pilar, com destaque para o novo bloco **"Resultado Acumulado"** (desktop e `#heroMobile`), a **separação conceitual** entre Status Operacional e Situação Financeira, o **lançamento rápido enxuto** com "Quem pagou?" visível e opções avançadas recolhidas, o **controle de reembolso com default "não reembolsável"** (sem duplicidade) e a reorganização de Medições e Relatórios. Os cálculos amostrados na tela são **internamente consistentes entre si** (verifiquei a matemática).
+A entrega é de bom nível técnico. A grande maioria dos requisitos foi implementada de forma correta e verificável no código: o fundo azulado suave substituiu o "brancão", os KPIs foram reorganizados com "Resultado Acumulado", há separação real entre Status Operacional e Situação Financeira, o lançamento rápido está enxuto com "Quem pagou?" exposto, o reembolso é explícito (não automático) e a auditoria técnica está corretamente encapsulada em `<details>`.
 
-As ressalvas concentram-se em **fidelidade a requisitos literais** (presença de **emojis** contrariando "zero emojis"; **WCAG AAA** atendido no botão mas não em todos os textos secundários) e em **pontos que o trecho fornecido não permite validar** (registro do Service Worker, botão "Dar baixa", seletor de status no mobile).
+Entretanto, **não aprovo sem ressalvas**. Identifiquei divergências objetivas: (a) carregamento de fontes via Google Fonts externas **quebra a promessa de offline** e de identidade visual offline; (b) o "teto obrigatório" é, na prática, apenas **alertado**, não bloqueante; (c) a função de "dar baixa em 1 clique" nos reembolsos **não é verificável** no código fornecido; (d) textos secundários em `#64748B` são **AA, não AAA**; (e) risco de compressão do header em 360px.
 
 ---
 
 ## 2. ANÁLISE DOS CÁLCULOS E PREMISSAS
 
-### 2.1 Consistência matemática dos indicadores (verificação linha a linha)
+### 2.1 Aparência — fundo e identidade visual ✅ (com ressalva de contraste)
 
-Testei os números exibidos no card `#heroMobile` e eles **fecham entre si**:
-
-| Indicador | Valor exibido | Verificação |
+| Item | Verificação | Veredito |
 |---|---|---|
-| Contratado Bruto | R$ 96.800,00 | base |
-| Contratado Líq. | R$ 89.540,00 | 96.800 × (1 − 7,5%) = 96.800 × 0,925 = **89.540** ✅ |
-| Efetiv. Recebido | R$ 89.540,00 | coerente com líquido recebido ✅ |
-| Despesas Pagas | R$ 68.704,19 | base realizada ✅ |
-| Resultado Acumulado | R$ 20.835,81 | 89.540 − 68.704,19 = **20.835,81** ✅ |
-| Margem realizada | +23,3% | 20.835,81 ÷ 89.540 = **23,27%** ✅ |
-| Pagam. Pendentes | R$ 9.500,00 | Empreiteiros + Reembolsos ✅ |
-| Lucro se gastar todo o orçamento | R$ 11.335,81 | ver 2.2 👇 |
-| Margem no teto | +12,7% | 11.335,81 ÷ 89.540 = **12,66%** ✅ |
+| Fundo geral azulado suave | `--cr-bg: #DCE8F6` + `linear-gradient(#D8E6F6→#E3EEF9→#DAE7F6)` no `body` | **Atende** — eliminou o "brancão"; cards brancos `#FFFFFF` agora destacam |
+| Paleta EMTEC | navy `#23396B`, azul aço `#4395D8`, laranja `#FF8C00`, verde `#16A34A`, escuro `#0F172A` — todos presentes em `:root` | **Atende** |
+| Tipografia Sora + Plus Jakarta Sans | Carregadas via `<link href="https://fonts.googleapis.com...">` | **Atende online / Falha offline** (ver §3) |
+| Botão primário AAA | `#FF8C00` com texto `#0F172A` → contraste calculado **≈7,7:1** | **Atende AAA** ✅ |
+| Zero emojis genéricos | Uso de SVG inline e glifos `✕`/`→`; sem emoji Unicode pictográfico | **Atende** |
 
-**Ponto de atenção aparente (que se confirmou CORRETO após checagem):** o "Lucro se gastar todo o orçamento" mostra **R$ 11.335,81**, e não `89.540 − 77.000 = 12.540` que se esperaria do rótulo. **Isso está certo**, porque os pagamentos pendentes (R$ 9.500) **excedem** o que restava do teto (77.000 − 68.704,19 = **8.295,81**), gerando estouro de **R$ 1.204,19** já comprometido. Logo, o custo projetado vira 68.704,19 + 9.500 = 78.204,19 → 89.540 − 78.204,19 = **11.335,81**. ✅ A conta está tecnicamente correta e conservadora. O sub-rótulo "Descontando empreitas e custos previstos" explica a diferença — **bom**.
+**Cálculo de contraste (auditado):**
+- Botão: `#FF8C00` (L≈0,398) × `#0F172A` (L≈0,0077) → `(0,448)/(0,0577) = **7,7:1**` → **AAA** ✅
+- **Porém:** rótulos secundários usam `#64748B` (L≈0,170) sobre branco → `1,05/0,220 = **4,78:1**` → **somente AA**, não AAA. A exigência literal ("texto escuro #0F172A para AAA") foi cumprida no botão; **não é AAA universal**.
 
-### 2.2 Lógica de projeção (EAC / teto) — ponto forte
+### 2.2 Aparência — logo responsiva
 
-A fórmula de `calcularMetricasObra` é elegantemente consistente:
+- Header: `object-contain`, `h-7 sm:h-8 md:h-9`, `max-w-[136px] sm:max-w-[180px] md:max-w-[205px]` → **não achata, não corta** ✅
+- Modal de perfil: `object-contain` ✅
+- **Ponto de atenção real:** em 360px, a soma de logo (até 136px, `shrink-0`) + seletor de obra (`flex-1 max-w-[175px]`) + pill de perfil (~40px) + botão sync (~36px) + gaps **comprime o seletor de obra ao limite**, podendo truncar o nome da obra a ponto de ficar ilegível. Não "estoura" (há `min-w-0`), mas aperta. **Requer validação em device real.**
+
+### 2.3 Usabilidade — indicadores financeiros ✅
+
+- Card mobile `#mobSaldoLabel` = "Resultado Acumulado" (em andamento) / "Resultado Final" (concluída) — **correto**.
+- Desktop `cardSaldoLabel` idem — **correto**.
+- Diferenciação 2×2 no mobile: **Contratado (Líq.)**, **Efetiv. Recebido**, **Despesas Pagas**, **Pagam. Pendentes** (Empreiteiros + Reemb.) — todos com IDs próprios e subtítulos — **atende**.
+- "Lucro se gastar todo o orçamento" presente e alterna rótulo quando acima do teto — **atende**.
+- Aviso "Defina o Teto de Custos": `avaliarSituacaoFinanceira()` retorna `SEM_TETO` → `rotuloCurto: "Defina o Teto"` — **atende o aviso**.
+
+**Divergência:** o requisito diz "**deixando o teto obrigatório**". No código, a ausência de teto **apenas gera alerta** (não bloqueia salvar despesas). Se "obrigatório" for literal (bloqueio), **não foi implementado**.
+
+### 2.4 Cálculos — consistência matemática (auditoria de fórmula)
+
+Verifiquei a coerência de `custoTotalProjetado` e `saldoProjetadoFinal`:
 
 ```
-custoRestanteEstimado = max(0, (teto − custoTotal) − saldoEmpreitasPendente)
-custoTotalProjetado   = custoTotal + saldoEmpreitasPendente + custoRestanteEstimado
+custoTotalProjetado = custoTotal + saldoEmpreitasPendente + max(0, tetoRestante − saldoEmpreitasPendente)
+saldoProjetadoFinal = receitaContratoTotal − custoTotalProjetado
 ```
 
-Expandindo no caso "teto suficiente", reduz-se exatamente a `tetoTotal` (comportamento esperado de "se gastar todo o orçamento"); no caso de compromissos excederem o saldo do teto, projeta **acima** do teto e sinaliza estouro. **Premissa correta e sem double-counting embutido** — desde que o `valorPago` das empreitas **não** esteja simultaneamente contabilizado em `lancamentos` (ver Divergência 4).
+- Se `saldoEmpreitasPendente ≤ tetoRestante`: `custoTotalProjetado = tetoTotal` → `saldoProjetadoFinal = lucroNoTetoPuro`. **Consistente** ✅
+- Se `saldoEmpreitasPendente > tetoRestante`: `custoTotalProjetado = custoTotal + saldoEmpreitas > teto` → `excessoTetoProjetado > 0`. **Consistente** ✅
+- Separação contrato × medições: `medBrutaTotalContrato = max(contratoInformado, somaMedicoes)` evita duplicidade — **correto** ✅
+- Reembolso **não** entra em `custoTotal` (que só soma `saidas`); é apenas `reembolsoStatus` do mesmo item → **não duplica despesa** ✅
 
-### 2.3 Status de viabilidade (multicritério)
+**Observação técnica (baixa criticidade):** `arredondarMoeda()` é aplicado a **cada acumulação**. Isso reproduz o comportamento de planilha (arredondamento por célula), mas pode divergir marginalmente de "somar tudo e arredondar no fim". Não é erro, apenas padrão a documentar.
 
-A ordem de avaliação em `avaliarSituacaoFinanceira` é **coerente e defensável**:
-1. Concluída → lucro/prejuízo pelo saldo realizado;
-2. Sem receita cadastrada → alerta;
-3. Sem teto → **"Defina o Teto de Custos"** (requisito atendido — alerta presente);
-4. `saldoProjetadoFinal < 0` → Risco de Prejuízo;
-5. `saldoAtual < 0` → Desembolso maior que recebido (bom separar **realizado** de **projetado**);
-6. Acima do teto / margem apertada / saudável.
+### 2.5 Demais requisitos de usabilidade
 
-Isso é **mais granular** que o mínimo pedido ("Obra Viável / Risco de Prejuízo / Acima do Teto") — é melhoria, não desvio.
+| Requisito | Verificação | Veredito |
+|---|---|---|
+| Status Operacional separado do selo financeiro | `selectStatusObraDesktop/Mobile` separados + `viabilidadeBadge`/`mobViabilidadeBadge` são `<span select-none>` **não clicáveis** | **Atende** ✅ |
+| Lançamento rápido enxuto | Valor → Descrição → Categoria (pills) → Subcategoria → Quem pagou → avançadas colapsadas → Salvar sticky | **Atende** ✅ |
+| "Quem pagou?" visível | `gridQuemPagouRapido` com EMTEC/Melo/Pilar/Elon/Iago/Outro + "+ Novo responsável" | **Atende** ✅ |
+| Reembolso não automático | `lancRapidoReembolsoStatus` default `NAO_REEMBOLSAVEL`; box só aparece p/ não-EMTEC | **Atende** ✅ |
+| Baixa em 1 clique "✓ Dar baixa/Desfazer" | Função de toggle **não aparece no código fornecido** | **Não verificável — ressalva** |
+| Medições: lista antes do form | Form `#containerFormMedicao` começa `hidden`; lista visível por padrão | **Atende a intenção**; porém o form está **acima** da lista no DOM (ao abrir, fica em cima) — ressalva estrutural |
+| Relatórios: técnica recolhida | `<details>` no final + relatórios diários no topo | **Atende** ✅ |
+| Zoom liberado | `viewport` sem `maximum-scale`/`user-scalable=no` | **Atende** ✅ |
+| Fontes ≥12px | `text-xs` (=12px) predominante; sem `text-[9/10/11px]` nos trechos | **Atende** nos trechos ✅ |
+| Safe-area bottom | `.pb-safe` com `@supports(env(safe-area-inset-bottom))` | **Atende** ✅ |
+| Offline CSS/JS/SW | Vendor e app locais; SW cacheia assets locais | **Parcial** (fontes externas quebram) ⚠️ |
 
 ---
 
 ## 3. DIVERGÊNCIAS ENCONTRADAS
 
-### 🔴 D1 — PRESENÇA DE EMOJIS (viola requisito literal "zero emojis genéricos")
-O usuário pediu **explícitamente "zero emojis genéricos"**, mas o código os utiliza:
-- `<summary>` dos Relatórios: `<span class="text-base">📋</span>`
-- Alerta de duplicidade: `<span class="text-sm shrink-0">⚠️</span>`
-- Também `⚠️` em `avisoCategoriaObrigatoria` e `✕` no fechamento de medição.
+**D1 — CRÍTICA (Aparência offline): Fontes externas quebram o requisito de offline.**
+As fontes Plus Jakarta Sans/Sora são carregadas via Google Fonts. O Service Worker **ignora origens externas** (`if (url.origin !== location.origin) return;`) e não cacheia fontes. Resultado: **offline a identidade tipográfica degrada para fallback sans-serif**. O requisito pedia "funcionamento offline com CSS/JS locais" — tecnicamente cumprido para CSS/JS, mas a **identidade visual não sobrevive offline**. Recomenda-se self-host das fontes (`.woff2` em `/vendor/`) e inclusão no array `ARQUIVOS` do SW.
 
-**Isto é uma divergência objetiva de requisito.** Recomendo substituir por ícones SVG inline (o próprio sistema já usa SVGs de traço — basta manter o padrão).
+**D2 — MÉDIA (Usabilidade): "Teto obrigatório" é apenas alerta, não bloqueio.**
+`SEM_TETO` gera aviso, mas não impede lançar despesas nem concluir a obra. Se o requisito for bloqueante, há gap funcional.
 
-### 🟠 D2 — WCAG AAA atendido apenas parcialmente
-- Botão laranja `#FF8C00` com texto `#0F172A`: contraste calculado ≈ **7,6:1** → **passa AAA** ✅ (o comentário "ratio > 6,5:1" é conservador).
-- Corpo `#334155` sobre fundo `#DCE8F6`: ≈ **8,4:1** → passa AAA ✅.
-- **PORÉM** os rótulos secundários `text-[#64748B]` sobre branco `#FFFFFF` dão ≈ **4,7:1** → **apenas AA**, não AAA. O requisito citou #0F172A especificamente (atendido), mas se a intenção era "todo o texto em AAA", os textos slate-500 ficam de fora. Ação: escurecer rótulos para `#475569` ou similar se AAA total for exigido.
+**D3 — MÉDIA (Verificação): fluxo "✓ Dar baixa / Desfazer" em 1 clique não comprovado.**
+A UI de reembolso existe, mas a função de baixa/estorno não consta nos trechos de `app.js` fornecidos. Premissa **não confirmada** — solicitar o trecho da função para validação.
 
-### 🟠 D3 — Tipografia não sobrevive ao offline
-CSS/JS são locais (bom) e há Service Worker, **mas Plus Jakarta Sans e Sora vêm de `fonts.googleapis.com`** e o próprio SW diz "fontes externas: navegador decide" (não cacheia). Offline, a identidade tipográfica **degrada para fallback do sistema**. Não impede o uso, mas contraria a robustez offline prometida para a identidade visual. Considerar self-host das fontes (`woff2`) no array `ARQUIVOS`.
+**D4 — MÉDIA (Aparência/Contraste): AAA não é universal.**
+Textos secundários em `#64748B` atingem apenas **4,78:1 (AA)**. O AAA exigido foi cumprido no botão laranja, mas a expectativa de "alto contraste AAA" em toda a interface não se sustenta. Para AAA real, escurecer rótulos para algo como `#475569`/`#334155`.
 
-### 🟡 D4 — Risco de dupla contagem empreita × lançamento (premissa de dados)
-`saldoEmpreitasPendente = max(0, contratado − pago)` pressupõe que **o valor pago da empreita NÃO está também lançado como despesa em `lancamentos`**. Se a Pilar lançar o pagamento do empreiteiro como despesa E a empreita tiver o `valorPago` preenchido, o custo pode ser **subcontado** (se só na empreita) ou haver inconsistência entre "Despesas Pagas" e o controle de empreitas. **Não é bug de código — é disciplina de dados que precisa de regra clara.** Recomendo documentar/amarrar: ou o pagamento gera lançamento automaticamente, ou as empreitas são espelho.
+**D5 — BAIXA (Aparência/Mobile): risco de compressão do header em 360px.**
+Layout não "estoura" (há `min-w-0/shrink-0`), mas o seletor de obra pode truncar excessivamente. Validar em 360/375px.
 
-### 🟡 D5 — "Teto obrigatório" é apenas *soft* (alerta), não bloqueio
-O requisito diz "deixando o teto obrigatório". O código **exibe** o selo "Defina o Teto de Custos" quando `tetoTotal = 0`, mas **não há validação que force o preenchimento** do teto antes de operar. Se "obrigatório" significava **impedir** lançamentos/uso sem teto, não foi implementado (só avisa). Se significava "sempre exibir o cenário contra o teto", está OK. **Interpretação ambígua — validar com o cliente.**
+**D6 — BAIXA (Estrutura): form de Medição acima da lista no DOM.**
+A intenção (não forçar cadastro) foi cumprida via `hidden`, mas a ordem literal "lista ANTES do form" não é respeitada quando o form é aberto. Mover o bloco do form para depois da lista sanitiza o requisito.
 
-### 🟡 D6 — Seletor de Status Operacional parece ser só desktop
-No desktop há `selectStatusObraDesktop` (select real, separado do selo financeiro). **No mobile, `mobStatusOperacionalBadge` é apenas um `<span>` (somente leitura).** O requisito pede "seletor próprio" para status operacional. Se a edição no mobile existe na aba "Mais" (não enviada), OK; **se não existir, o mobile fica sem controle de status** — lacuna de usabilidade relevante para o Melo em campo.
+**D7 — BAIXA (Robustez SW): fallback indiscriminado para `/index.html`.**
+Em offline, qualquer GET não pré-cacheado retorna `index.html` — se for um asset (ex.: imagem/JS novo não visitado online), o navegador receberá HTML no lugar do recurso, gerando erro de parse. Os assets essenciais estão no `ARQUIVOS`, mas recursos novos ficam frágeis.
 
-### 🟡 D7 — Itens não verificáveis no trecho fornecido
-Não consigo confirmar no material recebido:
-- Registro do Service Worker (`navigator.serviceWorker.register`) em `app.js` (não enviado).
-- Botão **"✓ Dar baixa" / "Desfazer"** de reembolso em 1 clique (render de `listaReembolsosHome` não incluído).
-- Aplicação da classe `.pb-safe` na **bottom nav** (barra inferior cortada no trecho).
-- Se a **sugestão automática de categoria NÃO sobrescreve a escolha manual** (`atualizarPreviewSubtipoRapido` sugere ser "preview", mas não há garantia no código fornecido).
-- `detectarSubtipo` mapeando corretamente almoço→ALIM e gasolina→TRANSP (a função `sugerirCategoriaPorDescricao` só devolve a categoria oficial "OUTROS", não o subtipo).
+**D8 — OBSERVAÇÃO (Código morto): `pinGateModal` (`hidden`) coexiste com `modalPerfilUsuario`.**
+Possível legado de duplicidade de login — revisar/remover para reduzir ambiguidade.
 
-### 🟢 D8 — Observações menores
-- `sugerirCategoriaPorDescricao`: a condição `REGEX_ALIMENTACAO.test(d) && !d.includes("MISTURADOR")` é um remendo estranho (excluir "misturador" de alimentação por quê?). Funciona, mas é frágil/manutenção confusa.
-- Rótulo do badge `VIAVEL_ACIMA_TETO` diz "no custo projetado", mas usa `margemProjetadaFinalPerc`, que é **margem sobre receita**, não % de estouro de custo. Pequena imprecisão de rótulo.
-- Cabeçalho a 360px: o conjunto (logo até 130px + seletor de obra 105px + perfil + sync) fica **apertado, porém cabe** (≈323–327px dentro de ~336px úteis). **Recomendo teste visual em 360px** — margem pequena.
+**D9 — OBSERVAÇÃO (Mobile perf): `background-attachment: fixed` no `body`.**
+Em iOS Safari esse padrão costuma causar repaint/jank em rolagem. Testar; considerar `@media` para remover em mobile.
 
 ---
 
 ## 4. PARECER CONCLUSIVO E RECOMENDAÇÕES
 
-**Conclusão:** a entrega **cumpre a grande maioria dos requisitos** e demonstra cuidado real com o engenheiro e o financeiro. O motor de cálculo (Resultado Acumulado, diferenciação Contratado Líq./Recebido/Despesas Pagas/Pendentes/Lucro no teto, viabilidade multicritério, EAC) está **coerente e matematicamente sólido**, com boas práticas de arredondamento (`arredondarMoeda`) e *fallbacks* defensivos. A identidade visual azul-marinho/aço/laranja, o fundo azul suave (substituindo o "brancão") e a logo responsiva (`object-contain` + `max-w` + `h-*` responsivo) estão bem resolvidos.
+### Parecer
+A entrega **atende substancialmente** ao escopo de usabilidade e aparência solicitado, com execução madura: hierarquia de KPIs corrigida, separação de conceitos (status × viabilidade), lançamento rápido realmente enxuto com "Quem pagou?" exposto, reembolso explícito e auditoria técnica recolhida. A base de cálculo de viabilidade está **matematicamente consistente** e bem isolada (não duplica reembolso, separa contrato de medições).
 
-**Aprovado com ressalvas** porque há desvios de requisito literal e pontos de confirmação pendente.
+Contudo, **reprovo itens pontuais** que precisam de correção para a entrega ser considerada 100% aderente: a promessa de **offline com identidade visual preservada** (D1) e o **teto "obrigatório"** (D2) são as divergências mais relevantes; somam-se a **não verificação** do fluxo de baixa de reembolso (D3) e o **contraste não-AAA universal** (D4).
 
-### Recomendações priorizadas
-1. **Alta — Remover todos os emojis** (D1): trocar 📋, ⚠️, ✕ por SVGs coerentes com o restante da UI. É o desvio mais direto ao que foi pedido.
-2. **Alta — Garantir seletor de Status Operacional no mobile** (D6): se a edição só existe no desktop, replicar no card mobile ou na aba "Mais".
-3. **Alta — Fechar a regra empreita × lançamento** (D4): documentar/amarrar para eliminar risco de dupla contagem ou subcontagem no custo.
-4. **Média — Self-host das fontes** (D3) para preservar Sora/Jakarta offline; ou aceitar o fallback formalmente.
-5. **Média — Reforçar contraste AAA dos textos secundários** (D2) se "AAA total" for exigência contratual.
-6. **Média — Validar o significado de "teto obrigatório"** (D5): bloqueio real ou apenas alerta informativo.
-7. **Baixa — Confirmar itens D7** (registro do SW, botão Dar baixa/Desfazer, `.pb-safe` na bottom nav, não-sobrescrita da categoria manual) nos arquivos completos.
-8. **Baixa — Ajustar rótulo** "Acima do Teto (+X% no custo projetado)" para "% sobre receita" e revisar o remendo "MISTURADOR" (D8).
-9. **Baixa — Teste visual a 360px** no cabeçalho para confirmar folga.
+### Notas finais
+- **USABILIDADE: 8,5/10** — excelente organização e ergonomia; perde pontos por "teto obrigatório" não bloqueante, fluxo de baixa não verificável e ordem estrutural do form de medição.
+- **APARÊNCIA: 8,5/10** — fundo e identidade visual muito bem resolvidos; perde pontos por fontes off-line não preservadas, contraste secundário AA (não AAA) e risco de compressão do header em 360px.
 
-*Auditoria baseada exclusivamente nos trechos fornecidos; pontos marcados como "não verificáveis" (D7) devem ser reexaminados no código completo antes do aceite final.*
+### Recomendações (priorizadas)
+1. **[Alta]** Self-host das fontes Sora/Plus Jakarta Sans e inclusão no `ARQUIVOS` do Service Worker (corrige D1).
+2. **[Alta]** Tornar o teto de custos efetivamente **obrigatório** (bloquear salvar obra/despesa sem teto, com CTA "Definir Teto") OU confirmar por escrito que "obrigatório" significa "alertado" (corrige D2).
+3. **[Média]** Fornecer o trecho da função de baixa/estorno de reembolso para validar "1 clique / sem duplicar" (liquida D3).
+4. **[Média]** Escurecer textos secundários `#64748B` → `#475569`/`#334155` para AAA real (corrige D4).
+5. **[Média]** Testar header em 360/375px e, se necessário, ocultar o seletor de obra atrás de ícone no mobile (mitiga D5).
+6. **[Baixa]** Mover o formulário de Medição para **depois** da lista no DOM (fecha D6 literal).
+7. **[Baixa]** Refinar fallback do SW: para requisições de assets não cacheados, retornar 503/erro em vez de `index.html` (mitiga D7); remover `pinGateModal` morto (D8); avaliar remoção de `background-attachment: fixed` no mobile (D9).
+
+**Conclusão:** entrega **aprovada com ressalvas** — pronta para uso controlado com Melo e Pilar, desde que os itens de prioridade Alta (D1 e D2) sejam corrigidos e D3 seja comprovado.
