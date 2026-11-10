@@ -136,8 +136,6 @@ export async function sincronizarEstado(payload, opcoes, legado) {
     // A primeira gravação no armazenamento privado preserva a base pública anterior.
     const anterior = nuvem ?? (legado ? (await lerNuvem(legado)).dados : null);
     const data = mesclarEstados(payload, anterior);
-    if (nuvem && estavel(nuvem) === estavel(data)) return { data, gravou: false };
-    if (!anterior && !data.obras.length && !data.responsaveis?.length) return { data, gravou: false };
     let etagGravacao = etag;
     if (url) {
       const metadados = await head(url, { token: opcoes.token, abortSignal: opcoes.abortSignal });
@@ -145,12 +143,15 @@ export async function sincronizarEstado(payload, opcoes, legado) {
       if (!metadados.etag || semAspas(metadados.etag) !== semAspas(etag)) continue;
       etagGravacao = metadados.etag;
     }
+    if (nuvem && estavel(nuvem) === estavel(data)) return { data, gravou: false };
+    if (!anterior && !data.obras.length && !data.responsaveis?.length) return { data, gravou: false };
     try {
       await put(BLOB_NAME, Buffer.from(JSON.stringify(data)), {
         ...opcoes,
         addRandomSuffix: false,
         allowOverwrite: Boolean(etag),
         ...(etagGravacao ? { ifMatch: etagGravacao } : {}),
+        ...(opcoes.access === 'public' ? { cacheControlMaxAge: 60 } : {}),
         contentType: 'application/json'
       });
       return { data, gravou: true };

@@ -3551,7 +3551,11 @@ function baixarRelatorioGerencial(tipo, imprimir = false) {
   const escopo = escopoRelatorioGerencial(geral);
   if (imprimir) {
     const container = document.getElementById("relatorioImpressaoA4");
-    const resumo = geral ? "" : "<p>" + escaparCelula(resumoRelatorioReembolsos(linhas)) + "</p>";
+    const total = linhas.at(-1);
+    const resumo = geral
+      ? "<p>Pendências a pagar · " + formatBRL(total["Pendências a pagar (R$)"]) +
+        " | A reembolsar (incluído nas pendências) · " + formatBRL(total["A reembolsar (R$)"]) + "</p>"
+      : "<p>" + escaparCelula(resumoRelatorioReembolsos(linhas)) + "</p>";
     const contexto = escopo.map(([chave, valor]) => escaparCelula(chave + " · " + valor)).join(" | ");
     const observacao = geral && linhas.at(-1)["Consumo (%)"] === null
       ? "<p>Consumo consolidado indisponível porque há obras sem orçamento.</p>" : "";
