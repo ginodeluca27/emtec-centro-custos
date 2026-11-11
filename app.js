@@ -80,6 +80,14 @@ function selecionarPerfilCard(nome) {
   }
 }
 
+function animarEntradaApp() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const painel = document.querySelector("main");
+  if (painel.classList.contains("entrada-app")) return;
+  painel.classList.add("entrada-app");
+  painel.addEventListener("animationend", () => painel.classList.remove("entrada-app"), { once: true });
+}
+
 async function confirmarPerfilUsuario() {
   const pinInput = document.getElementById("inputPinPerfil");
   const pinVal = (pinInput?.value || "").trim();
@@ -128,6 +136,7 @@ async function confirmarPerfilUsuario() {
 
   carregarPerfilUsuario();
   fecharModalPerfil();
+  animarEntradaApp();
   mostrarNotificacaoToast(`Conectado como ${perfilAtivo}`);
   iniciarSincronizacaoPeriodica();
   sincronizarComNuvem();
@@ -1200,21 +1209,17 @@ function atualizarTudo() {
 
   const mobLucroPrevistoLabel = document.getElementById("mobLucroPrevistoLabel");
   if (mobLucroPrevistoLabel) {
-    mobLucroPrevistoLabel.textContent = m.estimativaManual || !isEmAndamento ? "Resultado estimado:" : m.excessoTetoProjetado > 0
-      ? "Resultado Estimado (Acima do Teto):"
-      : "Lucro se gastar todo o orçamento:";
+    mobLucroPrevistoLabel.textContent = "Resultado estimado";
   }
 
   const mobCriterioLucroSub = document.getElementById("mobCriterioLucroSub");
   if (mobCriterioLucroSub) {
-    mobCriterioLucroSub.textContent = m.estimativaManual || !isEmAndamento ? "Custo projetado: " + formatBRL(m.custoTotalProjetado) : m.excessoTetoProjetado > 0
-      ? `Se gastasse apenas o teto (${formatBRL(m.tetoTotal)}), o lucro seria ${formatBRL(m.lucroNoTetoPuro)}.`
-      : `Calculado sobre o teto planejado de ${formatBRL(m.tetoTotal)}.`;
+    mobCriterioLucroSub.textContent = "Receita prevista menos custo final";
   }
 
   const mobLucroPrevistoValor = document.getElementById("mobLucroPrevistoValor");
   if (mobLucroPrevistoValor) {
-    mobLucroPrevistoValor.textContent = formatBRL(m.saldoProjetadoFinal);
+    mobLucroPrevistoValor.textContent = m.receitaContratoTotal > 0 ? formatBRL(m.saldoProjetadoFinal) : "—";
     mobLucroPrevistoValor.className = m.saldoProjetadoFinal >= 0
       ? "font-display text-base font-extrabold text-[#16A34A] shrink-0 whitespace-nowrap"
       : "font-display text-base font-extrabold text-rose-600 shrink-0 whitespace-nowrap";
@@ -1222,14 +1227,9 @@ function atualizarTudo() {
 
   const mobMargemProj = document.getElementById("mobMargemProj");
   if (mobMargemProj) {
-    if (isEmAndamento) {
-      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : m.estimativaManual ? "" : " se gastar o teto";
-      mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% de margem estimada${notaTeto}`;
-      mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
-    } else {
-      mobMargemProj.textContent = `${m.margemRealizadaPerc >= 0 ? "+" : ""}${m.margemRealizadaPerc.toFixed(1)}% de margem final realizada`;
-      mobMargemProj.className = m.saldoAtual >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
-    }
+    mobMargemProj.hidden = m.receitaContratoTotal <= 0;
+    mobMargemProj.textContent = `${m.margemProjetadaFinalPerc.toFixed(1).replace(".", ",")}% de margem estimada`;
+    mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
   }
 
   // KPIs Desktop (4 Cartões Executivos Claros e Diferenciados)
@@ -1298,16 +1298,15 @@ function atualizarTudo() {
   // KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado
   const kpiTetoLabel = document.getElementById("kpiTetoLabel");
   if (kpiTetoLabel) {
-    kpiTetoLabel.textContent = m.estimativaManual || !isEmAndamento ? "Resultado estimado" : m.excessoTetoProjetado > 0
-      ? "Resultado Estimado (Acima do Teto)"
-      : "Lucro se gastar todo o orçamento";
+    kpiTetoLabel.textContent = "Resultado estimado";
   }
 
   const kpiTetoValor = document.getElementById("kpiTetoValor");
-  if (kpiTetoValor) kpiTetoValor.textContent = formatBRL(m.saldoProjetadoFinal);
+  if (kpiTetoValor) kpiTetoValor.textContent = m.receitaContratoTotal > 0 ? formatBRL(m.saldoProjetadoFinal) : "—";
 
   const badgeTeto = document.getElementById("kpiTetoPercBadge");
   if (badgeTeto) {
+    badgeTeto.hidden = m.receitaContratoTotal <= 0;
     badgeTeto.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}%`;
     badgeTeto.className = m.saldoProjetadoFinal >= 0
       ? "text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#14532D] whitespace-nowrap shrink-0"
@@ -1316,15 +1315,7 @@ function atualizarTudo() {
 
   const kpiTetoSub = document.getElementById("kpiTetoSub");
   if (kpiTetoSub) {
-    if (m.estimativaManual || !isEmAndamento) {
-      kpiTetoSub.textContent = "Custo projetado: " + formatBRL(m.custoTotalProjetado);
-    } else if (!(m.tetoTotal > 0)) {
-      kpiTetoSub.textContent = "Defina o teto de custos para calcular o lucro";
-    } else if (m.excessoTetoProjetado > 0) {
-      kpiTetoSub.textContent = `Custo c/ pendências: ${formatBRL(m.custoTotalProjetado)} (+${formatBRL(m.excessoTetoProjetado)} acima do teto de ${formatBRL(m.tetoTotal)})`;
-    } else {
-      kpiTetoSub.textContent = `Cenário gastando todo o teto de ${formatBRL(m.tetoTotal)}`;
-    }
+    kpiTetoSub.textContent = m.receitaContratoTotal > 0 ? "Receita prevista menos custo final" : "Falta informar a receita da obra";
   }
 
   // Preencher Select de Empreitas
@@ -3502,35 +3493,76 @@ function cartoesIndicadoresRelatorio(indicadores) {
     '</span><strong>' + escaparCelula(formatBRL(valor)) + '</strong></div>').join("");
 }
 
-function salvarEstimativaObra(evento) {
-  evento.preventDefault();
+function abrirEstimativaObra() {
+  const obra = getObraAtual();
+  const dialogo = document.getElementById("dialogEstimativaObra");
+  if (!obra || dialogo.open) return;
+  document.getElementById("ajusteEstimativaObra").open = false;
+  const campo = document.getElementById("custoRestantePrevisto");
+  campo.value = campo.defaultValue;
+  renderizarEstimativaObra(obra, calcularMetricasObra(obra));
+  dialogo.showModal();
+}
+
+function aplicarGastosFuturosEstimados(valor) {
   const obra = getObraAtual();
   if (!obra || obra.status === "Concluída") return;
-  const campo = document.getElementById("custoRestantePrevisto");
-  obra.custoRestantePrevisto = campo.value === "" ? null : arredondarMoeda(campo.valueAsNumber);
+  obra.custoRestantePrevisto = valor;
   tocar(obra);
   salvarEstado();
+  document.getElementById("ajusteEstimativaObra").open = false;
+  document.getElementById("custoRestantePrevisto").value = valor === null ? "" : String(valor);
   atualizarTudo();
-  mostrarNotificacaoToast("Estimativa atualizada.");
+  document.getElementById("valorResultadoEstimativa").focus();
+}
+
+function salvarEstimativaObra(evento) {
+  evento.preventDefault();
+  const campo = document.getElementById("custoRestantePrevisto");
+  if (campo.reportValidity()) aplicarGastosFuturosEstimados(arredondarMoeda(campo.valueAsNumber));
+}
+
+function voltarEstimativaAutomatica() {
+  aplicarGastosFuturosEstimados(null);
+}
+
+function renderizarEstimativaObra(obra, m) {
+  const concluida = obra.status === "Concluída";
+  const temReceita = m.receitaContratoTotal > 0;
+  const negativo = m.saldoProjetadoFinal < 0;
+  document.getElementById("nomeEstimativaObra").textContent = obra.nome;
+  document.getElementById("blocoResultadoEstimativa").dataset.situacao = !temReceita ? "sem-receita" : negativo ? "negativo" : "positivo";
+  document.getElementById("rotuloResultadoEstimativa").textContent = !temReceita ? "Falta informar a receita" : negativo ? "Prejuízo previsto" : "Sobra prevista";
+  document.getElementById("valorResultadoEstimativa").textContent = temReceita ? formatBRL(m.saldoProjetadoFinal) : "—";
+  document.getElementById("formulaEstimativaObra").textContent = temReceita
+    ? formatBRL(m.receitaContratoTotal) + " de receita líquida prevista − " + formatBRL(m.custoTotalProjetado) + " de custo previsto"
+    : "Cadastre o valor do contrato ou as medições para calcular o resultado.";
+
+  const parcelas = [["Despesas já lançadas", m.custoTotal]];
+  if (!concluida) parcelas.push(["Empreitas a pagar", m.saldoEmpreitasPendente], ["Outros gastos futuros", m.custoRestanteEstimado]);
+  document.getElementById("resumoEstimativaObra").innerHTML = parcelas.map(([nome, valor]) =>
+    '<div class="estimativa-parcela"><dt>' + nome + '</dt><dd>' + formatBRL(valor) + '</dd></div>'
+  ).join("") + '<div class="estimativa-total"><dt>Custo final previsto</dt><dd>' + formatBRL(m.custoTotalProjetado) + '</dd></div>';
+
+  let criterio = "Os outros gastos são estimados pelo saldo do orçamento, depois de descontar as despesas lançadas e as empreitas a pagar.";
+  if (concluida) criterio = "A obra está concluída. O custo final usa as despesas registradas.";
+  else if (m.estimativaManual) criterio = "Os outros gastos usam o valor informado nesta obra.";
+  else if (m.tetoTotal <= 0) criterio = "Cadastre um orçamento ou informe os outros gastos para incluí-los na projeção.";
+  else if (m.custoRestanteEstimado === 0) criterio = "As despesas e as empreitas já consomem o orçamento de " + formatBRL(m.tetoTotal) + ". Se houver gastos adicionais, informe-os abaixo.";
+  document.getElementById("criterioEstimativaObra").textContent = criterio;
+  document.getElementById("notaReembolsosEstimativa").hidden = m.totalReembolsosPendentes <= 0;
+
+  const campo = document.getElementById("custoRestantePrevisto");
+  const valor = m.estimativaManual ? String(obra.custoRestantePrevisto) : "";
+  if (campo.dataset.obra !== obra.id || campo.value === campo.defaultValue || !document.getElementById("ajusteEstimativaObra").open) campo.value = valor;
+  campo.defaultValue = valor;
+  campo.dataset.obra = obra.id;
+  document.getElementById("ajusteEstimativaObra").hidden = concluida;
+  document.getElementById("btnEstimativaAutomatica").hidden = !m.estimativaManual;
 }
 
 function renderizarResumoRelatorioObra(obra, m) {
-  const formulario = document.getElementById("formEstimativaObra");
-  formulario.hidden = obra.status === "Concluída";
-  const campo = document.getElementById("custoRestantePrevisto");
-  const valor = m.estimativaManual ? String(obra.custoRestantePrevisto) : "";
-  if (campo.dataset.obra !== obra.id || campo.value === campo.defaultValue || campo.value === valor) campo.value = valor;
-  campo.defaultValue = valor;
-  campo.dataset.obra = obra.id;
-  document.getElementById("resumoEstimativaObra").innerHTML = cartoesIndicadoresRelatorio([
-    ["Receita líquida prevista", m.receitaContratoTotal],
-    ["Gastos + empreitas a pagar", arredondarMoeda(m.custoTotal + m.saldoEmpreitasPendente)],
-    ["Custo final projetado", m.custoTotalProjetado],
-    ["Resultado estimado", m.saldoProjetadoFinal]
-  ]);
-  document.getElementById("criterioEstimativaObra").textContent = m.estimativaManual
-    ? "A projeção inclui " + formatBRL(m.custoRestanteEstimado) + " em outros gastos futuros."
-    : "Projeção automática pelo orçamento, considerando " + formatBRL(m.custoRestanteEstimado) + " em outros gastos futuros.";
+  if (document.getElementById("dialogEstimativaObra").open) renderizarEstimativaObra(obra, m);
   document.getElementById("relatorioObraNome").textContent = obra.nome;
   document.getElementById("indicadoresRelatorioObra").innerHTML = cartoesIndicadoresRelatorio([
     ["Recebido líquido", m.medLiquidaRecebida],
