@@ -567,7 +567,7 @@ const REGEX_ALIMENTACAO = /\b(ALMOC|JANTA|REFEI|LANCHE|MARMITA|QUENTINHA|VALE AL
 const REGEX_TRANSPORTE = /\b(GASOLINA|COMBUSTIVEL|ABASTEC|PASSAGE|FRETE|DIESEL|ETANOL|PEDAGIO|ESTACIONAMENTO|OLEO (DA )?MOTO)|\bUBER\b/;
 function detectarSubtipo(desc, tipoEscolhido, subtipoManual = "AUTO") {
   if (tipoEscolhido === "ENTRADA_CAIXA") return "CAIXA";
-  if (tipoEscolhido === "ADM") return "ADM";
+  if (tipoEscolhido === "ADM" || tipoEscolhido?.startsWith("CAT_")) return tipoEscolhido;
   if (subtipoManual && subtipoManual !== "AUTO") return subtipoManual;
   if (tipoEscolhido === "ALIM" || tipoEscolhido === "TRANSP") return tipoEscolhido;
 
@@ -679,7 +679,7 @@ function avaliarSituacaoFinanceira(obra, m) {
   if (m.margemProjetadaFinalPerc < 10) {
     return {
       codigo: "MARGEM_APERTADA",
-      rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
+      rotulo: `Margem Apertada (+${m.margemProjetadaFinalPerc.toFixed(1)}%${m.estimativaManual ? "" : " se gastar o teto"})`,
       rotuloCurto: "Margem Apertada",
       corBadgeDesktop: "bg-[#FEF3C7] text-[#92400E] border-[#FCD34D]",
       corDot: "bg-[#FF8C00]",
@@ -689,7 +689,7 @@ function avaliarSituacaoFinanceira(obra, m) {
 
   return {
     codigo: "OBRA_SAUDAVEL",
-    rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}% se gastar o teto)`,
+    rotulo: `Obra Saudável (+${m.margemProjetadaFinalPerc.toFixed(1)}%${m.estimativaManual ? "" : " se gastar o teto"})`,
     rotuloCurto: "Obra Saudável",
     corBadgeDesktop: "bg-[#DCFCE7] text-[#14532D] border-[#86EFAC]",
     corDot: "bg-[#16A34A]",
@@ -710,8 +710,104 @@ const GRUPOS_CUSTO = [
 ];
 const LIMIAR_ALERTA_CUSTO = 70;
 
+function percentualAlertaOrcamento() {
+  const percentual = estado.alertaOrcamento?.percentual;
+  return Number.isInteger(percentual) && percentual >= 1 && percentual <= 100 ? percentual : LIMIAR_ALERTA_CUSTO;
+}
+
+function abrirEdicaoAlerta() {
+  document.getElementById("percentualAlertaOrcamento").value = percentualAlertaOrcamento();
+  document.getElementById("dialogAlertaOrcamento").showModal();
+}
+
+function salvarAlertaOrcamento(evento) {
+  evento.preventDefault();
+  const campo = document.getElementById("percentualAlertaOrcamento");
+  if (!campo.reportValidity()) return;
+  estado.alertaOrcamento = { percentual: campo.valueAsNumber, atualizadoEm: new Date().toISOString() };
+  salvarEstado();
+  document.getElementById("dialogAlertaOrcamento").close();
+  atualizarTudo();
+  mostrarNotificacaoToast("Alerta atualizado para " + percentualAlertaOrcamento() + "%.");
+}
+
+function categoriasPersonalizadas() {
+  const cadastradas = Array.isArray(estado.categoriasCusto) ? estado.categoriasCusto : [];
+  return cadastradas.filter(categoria => /^CAT_[A-Z0-9_]+$/.test(categoria?.id) && typeof categoria.nome === "string");
+}
+
+function gruposCusto() {
+  return [...GRUPOS_CUSTO, ...categoriasPersonalizadas().map(({ id, nome }) => ({ codigo: id, nome, peso: 0 }))];
+}
+
+function nomeCategoria(codigo) {
+  return categoriasPersonalizadas().find(categoria => categoria.id === codigo)?.nome || codigo || "Outros";
+}
+
+function atualizarCategoriasCusto() {
+  const categorias = categoriasPersonalizadas();
+  const rapido = document.getElementById("lancRapidoCategoriaNova");
+  const instrucao = new Option("Escolher categoria cadastrada", "");
+  instrucao.disabled = true;
+  rapido.replaceChildren(instrucao,
+    ...categorias.map(({ id, nome }) => new Option(nome, id)));
+  rapido.hidden = !categorias.length;
+  rapido.value = categoriaRapidaAtiva || "";
+  if (rapido.selectedIndex < 0) rapido.value = "";
+  for (const id of ["lancTipo", "filtroCategoria"]) {
+    const select = document.getElementById(id);
+    const atual = select.value;
+    select.querySelector("optgroup[data-categorias-novas]")?.remove();
+    if (categorias.length) {
+      const grupo = document.createElement("optgroup");
+      grupo.label = "Categorias cadastradas";
+      grupo.dataset.categoriasNovas = "";
+      grupo.append(...categorias.map(({ id, nome }) => new Option(nome, id)));
+      select.append(grupo);
+    }
+    if (Array.from(select.options).some(opcao => opcao.value === atual)) select.value = atual;
+  }
+}
+
+function abrirCadastroCategoria(origem) {
+  const modal = document.getElementById("dialogCategoriaCusto");
+  modal.dataset.origem = origem;
+  const campo = document.getElementById("nomeCategoriaCusto");
+  campo.value = "";
+  campo.setCustomValidity("");
+  modal.showModal();
+}
+
+function salvarCategoriaCusto(evento) {
+  evento.preventDefault();
+  const campo = document.getElementById("nomeCategoriaCusto");
+  const nome = campo.value.trim().replace(/\s+/g, " ");
+  const chave = texto => semAcento(texto).replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const slug = chave(nome);
+  if (!slug) {
+    campo.setCustomValidity("Informe um nome com letras ou números.");
+    campo.reportValidity();
+    return;
+  }
+  const existentes = gruposCusto();
+  const categoria = existentes.find(grupo => chave(grupo.nome) === slug || grupo.codigo === "CAT_" + slug);
+  const codigo = categoria?.codigo || "CAT_" + slug;
+  if (!categoria) {
+    estado.categoriasCusto = [...categoriasPersonalizadas(), { id: codigo, nome, atualizadoEm: new Date().toISOString() }];
+    salvarEstado();
+    atualizarTudo();
+  }
+  const modal = document.getElementById("dialogCategoriaCusto");
+  modal.close();
+  if (modal.dataset.origem === "rapido") selecionarCategoriaRapida(codigo);
+  else {
+    document.getElementById("lancTipo").value = codigo;
+    atualizarPreviewSubtipoDesktop();
+  }
+}
+
 function distribuirOrcamento(total, anterior = {}) {
-  const grupos = GRUPOS_CUSTO.map(({ codigo, peso }) => [codigo, anterior[codigo] ?? peso]);
+  const grupos = gruposCusto().map(({ codigo, peso }) => [codigo, anterior[codigo] ?? peso]);
   const soma = grupos.reduce((acumulado, [, peso]) => acumulado + peso, 0);
   const centavos = Math.round(total * 100);
   let pesoAcumulado = 0;
@@ -748,8 +844,8 @@ function calcularMetricasObra(obra) {
   const saidas = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento !== "ENTRADA_CAIXA");
   const entradasCaixa = (obra.lancamentos || []).filter(l => !l.deletado && l.movimento === "ENTRADA_CAIXA");
 
-  const porTipoOficial = { MAT: 0, MO: 0, EQUIP: 0, OUTROS: 0, ADM: 0 };
-  const porSubtipoReal = { MAT: 0, MO: 0, EQUIP: 0, ALIM: 0, TRANSP: 0, OUTROS: 0, ADM: 0 };
+  const porTipoOficial = Object.fromEntries(gruposCusto().map(({ codigo }) => [codigo, 0]));
+  const porSubtipoReal = { ...porTipoOficial, ALIM: 0, TRANSP: 0 };
   const porTitular = {};
   const reembolsosPorTitular = {};
 
@@ -760,10 +856,10 @@ function calcularMetricasObra(obra) {
   for (const item of saidas) {
     const v = Number(item.valor || 0);
     custoTotal = arredondarMoeda(custoTotal + v);
-    const tOf = porTipoOficial[item.tipo] !== undefined ? item.tipo : "OUTROS";
+    const tOf = Object.hasOwn(porTipoOficial, item.tipo) ? item.tipo : "OUTROS";
     porTipoOficial[tOf] = arredondarMoeda(porTipoOficial[tOf] + v);
 
-    const sub = item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
+    const sub = tOf.startsWith("CAT_") ? tOf : item.subtipo || detectarSubtipo(item.descricao, item.tipo, item.subtipoManual);
     if (porSubtipoReal[sub] !== undefined) {
       porSubtipoReal[sub] = arredondarMoeda(porSubtipoReal[sub] + v);
     } else {
@@ -860,7 +956,8 @@ function calcularMetricasObra(obra) {
     MO: Number(orc.MO || 0) + Number(orc.ALIM || 0),
     EQUIP: Number(orc.EQUIP || 0),
     OUTROS: Number(orc.OUTROS || 0) + Number(orc.TRANSP || 0),
-    ADM: Number(orc.ADM || 0)
+    ADM: Number(orc.ADM || 0),
+    ...Object.fromEntries(categoriasPersonalizadas().map(({ id }) => [id, Number(orc[id] || 0)]))
   };
   const tetoTotal = arredondarMoeda(Object.values(orcamentoPrevisto).reduce((a, b) => a + Number(b || 0), 0));
   const percOrcamentoConsumido = tetoTotal > 0 ? (custoTotal / tetoTotal) * 100 : 0;
@@ -888,7 +985,9 @@ function calcularMetricasObra(obra) {
 
   // 3. Custos Restantes Estimados para Concluir a Obra (ETC)
   const tetoRestante = arredondarMoeda(Math.max(0, tetoTotal - custoTotal));
-  const custoRestanteEstimado = arredondarMoeda(Math.max(0, tetoRestante - saldoEmpreitasPendente));
+  const estimativaManual = typeof obra.custoRestantePrevisto === "number" && obra.custoRestantePrevisto >= 0;
+  const custoRestanteEstimado = estimativaManual ? obra.custoRestantePrevisto
+    : arredondarMoeda(Math.max(0, tetoRestante - saldoEmpreitasPendente));
 
   // 4. Custo Total Projetado Final na Conclusão (EAC)
   const isEmAndamento = obra.status !== "Concluída";
@@ -939,7 +1038,7 @@ function calcularMetricasObra(obra) {
     tetoTotal,
     orcamentoPrevisto,
     percOrcamentoConsumido,
-    alertaCusto: percOrcamentoConsumido >= LIMIAR_ALERTA_CUSTO,
+    alertaCusto: percOrcamentoConsumido >= percentualAlertaOrcamento(),
     saldoAtual,
     margemRealizadaPerc,
     margemAtualPerc: margemRealizadaPerc,
@@ -948,6 +1047,7 @@ function calcularMetricasObra(obra) {
     saldoEmpreitasPendente,
     pagamentosPendentesTotal,
     custoRestanteEstimado,
+    estimativaManual,
     custoTotalProjetado,
     excessoTetoProjetado,
     lucroNoTetoPuro,
@@ -967,6 +1067,7 @@ function calcularMetricasObra(obra) {
 // 4. ATUALIZAÇÃO GERAL DA INTERFACE (DESKTOP E MOBILE)
 // --------------------------------------------------------------------------
 function atualizarTudo() {
+  atualizarCategoriasCusto();
   renderizarRelatoriosGerenciais();
   const obra = getObraAtual();
   document.getElementById("alertaCustoObra").hidden = true;
@@ -1099,14 +1200,14 @@ function atualizarTudo() {
 
   const mobLucroPrevistoLabel = document.getElementById("mobLucroPrevistoLabel");
   if (mobLucroPrevistoLabel) {
-    mobLucroPrevistoLabel.textContent = m.excessoTetoProjetado > 0
+    mobLucroPrevistoLabel.textContent = m.estimativaManual || !isEmAndamento ? "Resultado estimado:" : m.excessoTetoProjetado > 0
       ? "Resultado Estimado (Acima do Teto):"
       : "Lucro se gastar todo o orçamento:";
   }
 
   const mobCriterioLucroSub = document.getElementById("mobCriterioLucroSub");
   if (mobCriterioLucroSub) {
-    mobCriterioLucroSub.textContent = m.excessoTetoProjetado > 0
+    mobCriterioLucroSub.textContent = m.estimativaManual || !isEmAndamento ? "Custo projetado: " + formatBRL(m.custoTotalProjetado) : m.excessoTetoProjetado > 0
       ? `Se gastasse apenas o teto (${formatBRL(m.tetoTotal)}), o lucro seria ${formatBRL(m.lucroNoTetoPuro)}.`
       : `Calculado sobre o teto planejado de ${formatBRL(m.tetoTotal)}.`;
   }
@@ -1122,7 +1223,7 @@ function atualizarTudo() {
   const mobMargemProj = document.getElementById("mobMargemProj");
   if (mobMargemProj) {
     if (isEmAndamento) {
-      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : " se gastar o teto";
+      const notaTeto = m.excessoTetoProjetado > 0 ? ` • Acima do teto em ${formatBRL(m.excessoTetoProjetado)}` : m.estimativaManual ? "" : " se gastar o teto";
       mobMargemProj.textContent = `${m.margemProjetadaFinalPerc >= 0 ? "+" : ""}${m.margemProjetadaFinalPerc.toFixed(1)}% de margem estimada${notaTeto}`;
       mobMargemProj.className = m.saldoProjetadoFinal >= 0 ? "font-bold text-[#16A34A] leading-snug" : "font-bold text-rose-600 leading-snug";
     } else {
@@ -1197,7 +1298,7 @@ function atualizarTudo() {
   // KPI 4: Lucro se gastar todo o orçamento / Resultado Final Estimado
   const kpiTetoLabel = document.getElementById("kpiTetoLabel");
   if (kpiTetoLabel) {
-    kpiTetoLabel.textContent = m.excessoTetoProjetado > 0
+    kpiTetoLabel.textContent = m.estimativaManual || !isEmAndamento ? "Resultado estimado" : m.excessoTetoProjetado > 0
       ? "Resultado Estimado (Acima do Teto)"
       : "Lucro se gastar todo o orçamento";
   }
@@ -1215,7 +1316,9 @@ function atualizarTudo() {
 
   const kpiTetoSub = document.getElementById("kpiTetoSub");
   if (kpiTetoSub) {
-    if (!(m.tetoTotal > 0)) {
+    if (m.estimativaManual || !isEmAndamento) {
+      kpiTetoSub.textContent = "Custo projetado: " + formatBRL(m.custoTotalProjetado);
+    } else if (!(m.tetoTotal > 0)) {
       kpiTetoSub.textContent = "Defina o teto de custos para calcular o lucro";
     } else if (m.excessoTetoProjetado > 0) {
       kpiTetoSub.textContent = `Custo c/ pendências: ${formatBRL(m.custoTotalProjetado)} (+${formatBRL(m.excessoTetoProjetado)} acima do teto de ${formatBRL(m.tetoTotal)})`;
@@ -1280,14 +1383,17 @@ function renderizarMiniCards(m) {
       val: m.porTipoOficial.ADM,
       sub: "Despesas administrativas",
       dot: "bg-[#23396B]"
-    }
+    },
+    ...categoriasPersonalizadas().filter(c => m.porTipoOficial[c.id] !== 0).map(({ id, nome }) => ({
+      label: nome, val: m.porTipoOficial[id], sub: "", dot: "bg-[#23396B]"
+    }))
   ];
 
   container.innerHTML = cards.map(c => `
     <div class="ed-card p-4 hover:border-[#4395D8] transition">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full ${c.dot}"></span>
-        <span class="text-xs font-bold uppercase tracking-wider text-[#6C757D]">${c.label}</span>
+        <span class="min-w-0 break-words text-xs font-bold uppercase tracking-wider text-[#6C757D]">${escaparCelula(c.label)}</span>
       </div>
       <div class="font-display text-base sm:text-lg font-extrabold text-[#23396B] mt-1.5">${formatBRL(c.val)}</div>
       <div class="text-xs text-[#6C757D] mt-0.5 truncate" title="${c.sub}">${c.sub}</div>
@@ -1448,7 +1554,7 @@ function renderizarUltimasDespesasHome(obra) {
       <div class="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#4395D8] transition shadow-xs space-y-2">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${tagBg}">${item.tipo}${sub !== item.tipo ? ` • ${sub}` : ""}</span>
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${tagBg}">${escaparCelula(nomeCategoria(item.tipo))}${sub !== item.tipo ? ` • ${sub}` : ""}</span>
             <span class="text-xs text-[#64748B] font-semibold">${formatDataBR(item.data)}</span>
             <span class="text-xs font-bold text-[#23396B]">• Pago por: ${nomePagador}</span>
           </div>
@@ -1670,7 +1776,7 @@ function renderizarTabelaLancamentos() {
       if (sub === "TRANSP") tagBg = "bg-[#002E6E]/15 text-[#002E6E]";
       if (isEntrada) tagBg = "bg-[#16A34A]/20 text-[#14532D] font-bold";
 
-      const labelTipo = isEntrada ? "ADIANTAMENTO DE CAIXA" : `${item.tipo}${sub !== item.tipo ? ` (${sub})` : ""}`;
+      const labelTipo = isEntrada ? "ADIANTAMENTO DE CAIXA" : `${escaparCelula(nomeCategoria(item.tipo))}${sub !== item.tipo ? ` (${sub})` : ""}`;
       const nomePagador = getNomeResponsavel(item.titular);
       const badgeReemb = formatarBadgeReembolso(item, false);
 
@@ -1754,7 +1860,7 @@ function renderizarTabelaLancamentos() {
         </td>
         <td class="py-3 px-3 whitespace-nowrap">
           <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${tagCor}">
-            ${isEntrada ? "ADIANTAMENTO" : `${item.tipo} ${sub !== item.tipo ? `(${sub})` : ""}`}
+            ${isEntrada ? "ADIANTAMENTO" : `${escaparCelula(nomeCategoria(item.tipo))} ${sub !== item.tipo ? `(${sub})` : ""}`}
           </span>
         </td>
         <td class="py-3 px-3 text-right font-display text-xs sm:text-sm font-extrabold ${isEntrada ? "text-[#16A34A]" : "text-[#23396B]"} whitespace-nowrap">
@@ -1824,6 +1930,7 @@ function checarDuplicidadeAoDigitar() {
 }
 
 function obterRotuloSubtipo(sub) {
+  if (sub?.startsWith("CAT_")) return nomeCategoria(sub);
   if (sub === "ALIM") return "Alimentação de Equipe (ALIM)";
   if (sub === "TRANSP") return "Combustível / Transporte (TRANSP)";
   if (sub === "MAT") return "Material (MAT)";
@@ -1906,6 +2013,7 @@ function abrirModalLancamentoRapido() {
 
   // Categoria é sugerida pela descrição (ou escolhida em 1 toque); começa sem escolha
   categoriaRapidaAtiva = "";
+  document.getElementById("lancRapidoCategoriaNova").value = "";
   categoriaRapidaManual = false;
   ["MO", "MAT", "EQUIP", "OUTROS", "ADM", "ALIM"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
@@ -2084,6 +2192,7 @@ function sugerirCategoriaRapida() {
 
 function selecionarCategoriaRapida(tipo, manual = true) {
   categoriaRapidaAtiva = tipo;
+  document.getElementById("lancRapidoCategoriaNova").value = tipo.startsWith("CAT_") ? tipo : "";
   if (manual) categoriaRapidaManual = true;
   ["MO", "MAT", "EQUIP", "OUTROS", "ADM", "ALIM"].forEach(cat => {
     const btn = document.getElementById(`btnCatRapida_${cat}`);
@@ -2658,7 +2767,7 @@ function renderizarAbaResumo(obra, m) {
   const container = document.getElementById("orcamentoComparativoLista");
   if (!container) return;
 
-  const categorias = GRUPOS_CUSTO.map(({ codigo, nome }) => ({
+  const categorias = gruposCusto().map(({ codigo, nome }) => ({
     key: codigo,
     nome,
     gasto: m.porTipoOficial[codigo],
@@ -2680,7 +2789,7 @@ function renderizarAbaResumo(obra, m) {
       <div class="p-3.5 rounded-2xl bg-[#F8F9FA] border border-[#DEE2E6]">
         <div class="flex items-center justify-between">
           <div>
-            <span class="text-xs sm:text-sm font-bold text-[#23396B]">${c.nome}</span>
+            <span class="text-xs sm:text-sm font-bold text-[#23396B]" style="overflow-wrap: anywhere;">${escaparCelula(c.nome)}</span>
             <span class="block text-xs text-[#64748B]">${c.nota}</span>
           </div>
           <div class="flex items-center gap-2">
@@ -2721,7 +2830,7 @@ function renderizarAbaResumo(obra, m) {
     chartInstance = new Chart(ctx, {
       type: "doughnut",
       data: {
-        labels: ["Material", "Mão de Obra Direta", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Taxas", "Administração"],
+        labels: ["Material", "Mão de Obra Direta", "Equipamento", "Alimentação", "Combustível/Transp.", "Outros/Taxas", "Administração", ...categoriasPersonalizadas().map(c => c.nome)],
         datasets: [{
           data: [
             m.porSubtipoReal.MAT,
@@ -2730,7 +2839,8 @@ function renderizarAbaResumo(obra, m) {
             m.porSubtipoReal.ALIM,
             m.porSubtipoReal.TRANSP,
             m.porSubtipoReal.OUTROS,
-            m.porSubtipoReal.ADM
+            m.porSubtipoReal.ADM,
+            ...categoriasPersonalizadas().map(c => m.porSubtipoReal[c.id])
           ],
           backgroundColor: ["#23396B", "#4395D8", "#FF8C00", "#16A34A", "#002E6E", "#64748B", "#7C3AED"],
           borderWidth: 2,
@@ -3296,7 +3406,7 @@ function linhasGeralObras(obras = obrasDoRelatorioGeral()) {
       "A reembolsar (R$)": m.totalReembolsosPendentes,
       "Pendências a pagar (R$)": m.pagamentosPendentesTotal,
       "Resultado acumulado (R$)": m.saldoAtual,
-      "Alerta": m.tetoTotal <= 0 ? "Sem orçamento" : m.alertaCusto ? (m.percOrcamentoConsumido > 100 ? "Acima do estimado" : "A partir de 70%") : "—"
+      "Alerta": m.tetoTotal <= 0 ? "Sem orçamento" : m.alertaCusto ? (m.percOrcamentoConsumido > 100 ? "Acima do estimado" : "A partir de " + percentualAlertaOrcamento() + "%") : "—"
     };
   });
   if (!linhas.length) return linhas;
@@ -3309,7 +3419,7 @@ function linhasGeralObras(obras = obrasDoRelatorioGeral()) {
   if (temObraSemOrcamento) total["Saldo do orçamento (R$)"] = null;
   total["Consumo (%)"] = temObraSemOrcamento ? null
     : Number((100 * total["Gasto (R$)"] / total["Estimado (R$)"]).toFixed(2));
-  const alertas = linhas.filter(linha => linha["Consumo (%)"] >= LIMIAR_ALERTA_CUSTO).length;
+  const alertas = linhas.filter(linha => linha.Alerta !== "—" && linha["Consumo (%)"] !== null).length;
   total["Alerta"] = alertas + (alertas === 1 ? " obra em alerta" : " obras em alerta");
   return [...linhas, total];
 }
@@ -3392,7 +3502,35 @@ function cartoesIndicadoresRelatorio(indicadores) {
     '</span><strong>' + escaparCelula(formatBRL(valor)) + '</strong></div>').join("");
 }
 
+function salvarEstimativaObra(evento) {
+  evento.preventDefault();
+  const obra = getObraAtual();
+  if (!obra || obra.status === "Concluída") return;
+  const campo = document.getElementById("custoRestantePrevisto");
+  obra.custoRestantePrevisto = campo.value === "" ? null : arredondarMoeda(campo.valueAsNumber);
+  tocar(obra);
+  salvarEstado();
+  atualizarTudo();
+  mostrarNotificacaoToast("Estimativa atualizada.");
+}
+
 function renderizarResumoRelatorioObra(obra, m) {
+  const formulario = document.getElementById("formEstimativaObra");
+  formulario.hidden = obra.status === "Concluída";
+  const campo = document.getElementById("custoRestantePrevisto");
+  const valor = m.estimativaManual ? String(obra.custoRestantePrevisto) : "";
+  if (campo.dataset.obra !== obra.id || campo.value === campo.defaultValue || campo.value === valor) campo.value = valor;
+  campo.defaultValue = valor;
+  campo.dataset.obra = obra.id;
+  document.getElementById("resumoEstimativaObra").innerHTML = cartoesIndicadoresRelatorio([
+    ["Receita líquida prevista", m.receitaContratoTotal],
+    ["Gastos + empreitas a pagar", arredondarMoeda(m.custoTotal + m.saldoEmpreitasPendente)],
+    ["Custo final projetado", m.custoTotalProjetado],
+    ["Resultado estimado", m.saldoProjetadoFinal]
+  ]);
+  document.getElementById("criterioEstimativaObra").textContent = m.estimativaManual
+    ? "A projeção inclui " + formatBRL(m.custoRestanteEstimado) + " em outros gastos futuros."
+    : "Projeção automática pelo orçamento, considerando " + formatBRL(m.custoRestanteEstimado) + " em outros gastos futuros.";
   document.getElementById("relatorioObraNome").textContent = obra.nome;
   document.getElementById("indicadoresRelatorioObra").innerHTML = cartoesIndicadoresRelatorio([
     ["Recebido líquido", m.medLiquidaRecebida],
@@ -3416,7 +3554,7 @@ function indicadorConsumoObra(linha, percentual) {
   const texto = saldo < 0 ? formatBRL(-saldo) + " acima do orçamento"
     : saldo === 0 ? "Orçamento esgotado" : "Restam " + formatBRL(saldo);
   return '<div class="consumo-obra"><strong>' + escaparCelula(percentual) + '</strong>' +
-    '<div class="consumo-trilho" data-faixa="' + faixa + '" aria-hidden="true" style="--limiar:' + LIMIAR_ALERTA_CUSTO + '%">' +
+    '<div class="consumo-trilho" data-faixa="' + faixa + '" aria-hidden="true" style="--limiar:' + percentualAlertaOrcamento() + '%">' +
     '<span style="width:' + largura + '%"></span></div><small' +
     (saldo <= 0 ? ' class="saldo-estourado"' : '') + '>' + escaparCelula(texto) + '</small></div>';
 }
@@ -3453,6 +3591,8 @@ function resumoRelatorioReembolsos(linhas) {
 function renderizarRelatoriosGerenciais() {
   const aba = document.body.dataset.aba;
   if (aba === "geral") {
+    const percentual = percentualAlertaOrcamento();
+    document.getElementById("legendaAlertaOrcamento").textContent = "A marca na barra indica " + percentual + "% de consumo. O fim indica 100%.";
     const obras = obrasDoRelatorioGeral();
     const linhas = linhasGeralObras(obras);
     const total = linhas.at(-1);
@@ -3620,7 +3760,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam, detalhado = false) {
   const dataEmissao = formatDataBR(dataLocalHoje());
   const horaEmissao = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-  const categorias = GRUPOS_CUSTO.map(({ codigo, nome }) => ({
+  const categorias = gruposCusto().map(({ codigo, nome }) => ({
     codigo, nome, teto: m.orcamentoPrevisto[codigo], real: m.porTipoOficial[codigo]
   }));
 
@@ -3629,7 +3769,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam, detalhado = false) {
     const perc = c.teto > 0 ? ((c.real / c.teto) * 100).toFixed(1) + "%" : "Sem teto";
     return `
       <tr>
-        <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${c.codigo} — ${c.nome}</td>
+        <td style="padding:6px 8px;border:1px solid #CBD5E1;font-weight:700;color:#1E293B;">${escaparCelula(c.nome)}</td>
         <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;">${formatBRL(c.teto)}</td>
         <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(c.real)}</td>
         <td style="padding:6px 8px;border:1px solid #CBD5E1;text-align:right;color:${saldo < 0 ? "#B91C1C" : "#15803D"};font-weight:700;">${formatBRL(saldo)}</td>
@@ -3701,7 +3841,7 @@ function gerarRelatorioImpressaoA4(obraParam, mParam, detalhado = false) {
           <tr>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;white-space:nowrap;">${escaparCelula(formatDataBR(l.data))}</td>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;font-weight:600;">${escaparCelula(l.descricao)}</td>
-            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${escaparCelula(l.tipo + (l.subtipo && l.subtipo !== l.tipo ? " (" + l.subtipo + ")" : ""))}</td>
+            <td style="padding:5px 7px;border:1px solid #CBD5E1;">${escaparCelula(nomeCategoria(l.tipo) + (l.subtipo && l.subtipo !== l.tipo ? " (" + l.subtipo + ")" : ""))}</td>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;">${escaparCelula(getNomeResponsavel(l.titular))}</td>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;color:${l.reembolsoStatus === "PENDENTE" ? "#B91C1C" : "#475569"};">${escaparCelula(reembTxt)}</td>
             <td style="padding:5px 7px;border:1px solid #CBD5E1;text-align:right;font-weight:700;">${formatBRL(l.valor)}</td>
@@ -3886,6 +4026,7 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Equipamentos (EQUIP) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.EQUIP },
     { "INDICADOR DA OBRA": "Outros e Taxas (OUTROS) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.OUTROS },
     { "INDICADOR DA OBRA": "Administração (ADM) (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial.ADM },
+    ...categoriasPersonalizadas().map(({ id, nome }) => ({ "INDICADOR DA OBRA": nome + " (R$)", "VALOR / INFORMAÇÃO": m.porTipoOficial[id] })),
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Alimentação (ALIM) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.ALIM },
     { "INDICADOR DA OBRA": "Detalhamento Analítico: Combustível / Transporte (TRANSP) (R$)", "VALOR / INFORMAÇÃO": m.porSubtipoReal.TRANSP },
     { "INDICADOR DA OBRA": "TOTAL DE DESPESAS REALIZADAS (R$)", "VALOR / INFORMAÇÃO": m.custoTotal },
@@ -3897,13 +4038,14 @@ function exportarExcelObra() {
     { "INDICADOR DA OBRA": "Reembolsos Pendentes a Pagar (R$)", "VALOR / INFORMAÇÃO": m.totalReembolsosPendentes },
     { "INDICADOR DA OBRA": "Total de pendências a pagar (R$)", "VALOR / INFORMAÇÃO": m.pagamentosPendentesTotal },
     { "INDICADOR DA OBRA": "Custo Final Projetado da Obra (R$)", "VALOR / INFORMAÇÃO": m.custoTotalProjetado },
+    { "INDICADOR DA OBRA": "Outros gastos futuros previstos (R$)", "VALOR / INFORMAÇÃO": obra.status === "Concluída" ? 0 : m.custoRestanteEstimado },
     { "INDICADOR DA OBRA": "Limite Orçamentário Planejado (Teto) (R$)", "VALOR / INFORMAÇÃO": m.tetoTotal },
     { "INDICADOR DA OBRA": "Lucro no Cenário do Teto (Receita Líquida - Teto) (R$)", "VALOR / INFORMAÇÃO": m.lucroNoTetoPuro },
     { "INDICADOR DA OBRA": rotuloResultadoFinal, "VALOR / INFORMAÇÃO": m.saldoProjetadoFinal },
     { "INDICADOR DA OBRA": "Margem Final Estimada (%)", "VALOR / INFORMAÇÃO": Number(m.margemProjetadaPerc.toFixed(2)) }
   ];
 
-  const rowsOrcadoVsRealizado = GRUPOS_CUSTO.map(({ codigo, nome }) => {
+  const rowsOrcadoVsRealizado = gruposCusto().map(({ codigo, nome }) => {
     const teto = m.orcamentoPrevisto[codigo];
     const realizado = m.porTipoOficial[codigo];
     return {
@@ -3934,8 +4076,8 @@ function exportarExcelObra() {
       return {
         "DATA": l.data || "",
         "DESCRIÇÃO": l.descricao,
-        "CATEGORIA": l.tipo,
-        "SUBCATEGORIA": l.subtipo || l.tipo,
+        "CATEGORIA": nomeCategoria(l.tipo),
+        "SUBCATEGORIA": nomeCategoria(l.subtipo || l.tipo),
         "VALOR (R$)": Number(l.valor || 0),
         "QUEM PAGOU": getNomeResponsavel(l.titular),
         "STATUS REEMBOLSO": statusReemb,

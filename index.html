@@ -634,6 +634,7 @@
             <div class="font-display text-2xl font-extrabold text-white mt-2" id="kpiTetoValor">R$ 0,00</div>
           </div>
           <div class="text-xs text-white/80 mt-1.5 leading-snug" id="kpiTetoSub">Descontando empreitas e custos previstos</div>
+          <button type="button" onclick="mudarAba('auditoria')" class="text-xs font-bold text-white underline mt-1">Ver cálculo</button>
         </div>
       </div>
     </section>
@@ -758,6 +759,7 @@
             </div>
             <div id="mobMargemProj" class="font-bold text-[#16A34A] leading-snug">+12.7% se gastar o teto</div>
             <div class="text-[#475569] leading-snug" id="mobCriterioLucroSub">Cenário considerando o teto planejado da obra.</div>
+            <button type="button" onclick="mudarAba('auditoria')" class="text-xs font-bold text-[#23396B] underline">Ver cálculo</button>
           </div>
 
           <!-- Botão Gigante de Lançar Despesa (Acesso em 1 Toque) + Atalhos Rápidos da Pilar -->
@@ -865,6 +867,7 @@
 
             <div class="sm:col-span-3">
               <label class="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1">Categoria Principal *</label>
+              <button type="button" onclick="abrirCadastroCategoria('desktop')" class="text-xs font-bold text-[#4395D8] mb-1">+ Nova categoria</button>
               <select id="lancTipo" required onchange="atualizarPreviewSubtipoDesktop()" class="ed-input font-semibold text-[#23396B]">
                 <option value="MO">Mão de Obra (MO)</option>
                 <option value="MAT">Material (MAT)</option>
@@ -1244,6 +1247,18 @@
 
       <div id="indicadoresRelatorioObra" class="relatorio-indicadores"></div>
 
+      <form id="formEstimativaObra" class="ed-card p-4 sm:p-6 space-y-3" onsubmit="salvarEstimativaObra(event)">
+        <h3 class="font-display text-base font-bold text-[#23396B]">Estimativa até o fim da obra</h3>
+        <div id="resumoEstimativaObra" class="relatorio-indicadores"></div>
+        <p id="criterioEstimativaObra" class="text-sm text-[#475569]"></p>
+        <label for="custoRestantePrevisto" class="block text-xs font-bold">Outros gastos que ainda faltam (R$)</label>
+        <div class="flex flex-wrap gap-2">
+          <input id="custoRestantePrevisto" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Usar orçamento da obra" class="ed-input" style="width: min(100%, 16rem);" />
+          <button type="submit" class="ed-btn px-3 py-2 text-sm">Atualizar estimativa</button>
+        </div>
+        <p class="text-xs text-[#475569]">Preencha com os gastos futuros além das empreitas já registradas. Deixe em branco para usar o orçamento ou digite zero se não houver outros gastos previstos.</p>
+      </form>
+
       <!-- Bloco Analítico (Gráfico e Tetos Orçamentários) -->
       <div id="blocoAnalitico" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Gráfico de Rosca -->
@@ -1351,7 +1366,10 @@
           </select>
         </label>
       </div>
-      <p class="text-xs text-[#64748B]">A marca na barra indica 70% de consumo. O fim da barra indica 100%.</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <p id="legendaAlertaOrcamento" class="text-xs text-[#64748B]"></p>
+        <button type="button" onclick="abrirEdicaoAlerta()" class="ed-btn--transparent px-3 py-2 text-xs font-bold">Editar alerta</button>
+      </div>
       <div id="tabelaGeralObras"></div>
       <p id="notaConsumoGeral" class="text-xs text-[#64748B]" hidden>O consumo consolidado fica em branco quando há obras sem orçamento.</p>
     </section>
@@ -1592,6 +1610,10 @@
             </button>
             <button type="button" id="btnCatRapida_ADM" onclick="selecionarCategoriaRapida('ADM')" class="py-2 px-1 rounded-xl text-xs font-bold border">Administração</button>
             <button type="button" id="btnCatRapida_ALIM" onclick="selecionarCategoriaRapida('ALIM')" class="py-2 px-1 rounded-xl text-xs font-bold border">Alimentação</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="abrirCadastroCategoria('rapido')" class="ed-btn--transparent px-3 py-2 text-xs font-bold">+ Nova categoria</button>
+            <select id="lancRapidoCategoriaNova" aria-label="Categoria cadastrada" class="ed-input text-xs" onchange="if(this.value) selecionarCategoriaRapida(this.value)" hidden></select>
           </div>
           <!-- Subcategoria Analítica (Automática para Alimentação/Transporte ou correção manual simples) -->
           <div class="flex items-center gap-2 bg-[#F8FAFC] border border-slate-200 rounded-xl px-3 py-1.5">
@@ -1846,6 +1868,31 @@
   </div>
 
   <!-- ===================================================================== -->
+  <dialog id="dialogAlertaOrcamento" class="dialog-pagamento" aria-labelledby="tituloAlertaOrcamento">
+    <form class="space-y-3" onsubmit="salvarAlertaOrcamento(event)">
+      <h3 id="tituloAlertaOrcamento" class="font-display font-bold text-[#23396B]">Editar alerta de orçamento</h3>
+      <p class="text-xs text-[#64748B]">O percentual vale para todas as obras.</p>
+      <label for="percentualAlertaOrcamento" class="block text-sm">Avisar a partir de (%)</label>
+      <input id="percentualAlertaOrcamento" type="number" inputmode="numeric" min="1" max="100" step="1" required class="ed-input" />
+      <div class="flex flex-wrap justify-end gap-2">
+        <button type="button" class="ed-btn--transparent px-3 py-2" onclick="this.closest('dialog').close()">Cancelar</button>
+        <button type="submit" class="ed-btn px-3 py-2">Salvar alerta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dialogCategoriaCusto" class="dialog-pagamento" aria-labelledby="tituloCategoriaCusto">
+    <form class="space-y-3" onsubmit="salvarCategoriaCusto(event)">
+      <h3 id="tituloCategoriaCusto" class="font-display font-bold text-[#23396B]">Nova categoria</h3>
+      <label for="nomeCategoriaCusto" class="block text-sm">Nome da categoria</label>
+      <input id="nomeCategoriaCusto" class="ed-input" maxlength="40" required oninput="this.setCustomValidity('')" />
+      <div class="flex flex-wrap justify-end gap-2">
+        <button type="button" class="ed-btn--transparent px-3 py-2" onclick="this.closest('dialog').close()">Cancelar</button>
+        <button type="submit" class="ed-btn px-3 py-2">Cadastrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dialogDataPagamento" class="dialog-pagamento" aria-labelledby="tituloDataPagamento">
     <form method="dialog" class="space-y-3">
       <h3 id="tituloDataPagamento" class="font-display font-bold text-[#23396B]"></h3>

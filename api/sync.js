@@ -88,11 +88,19 @@ export function mesclarEstados(payload, nuvem) {
   [...(nuvem.responsaveis || []), ...(payload.responsaveis || [])].forEach(r => {
     if (r && r.id) mapResp.set(r.id, r);
   });
+  const alertaOrcamento = payload.alertaOrcamento && tempo(payload.alertaOrcamento) >= tempo(nuvem.alertaOrcamento)
+    ? payload.alertaOrcamento : nuvem.alertaOrcamento;
 
   return {
     ...nuvem,
     ...payload,
     responsaveis: Array.from(mapResp.values()),
+    ...(alertaOrcamento ? { alertaOrcamento } : {}),
+    ...((Array.isArray(payload.categoriasCusto) || Array.isArray(nuvem.categoriasCusto))
+      ? { categoriasCusto: mesclarColecaoPorId(
+        Array.isArray(payload.categoriasCusto) ? payload.categoriasCusto : [],
+        Array.isArray(nuvem.categoriasCusto) ? nuvem.categoriasCusto : []
+      ) } : {}),
     obras: [...mescladas, ...soNuvem]
   };
 }
