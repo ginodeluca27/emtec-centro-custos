@@ -4238,7 +4238,13 @@ function inicializarApp() {
 
   // Uso sem internet: guarda a página e os scripts no aparelho
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("/sw.js").then(reg => { if (reg && reg.update) reg.update(); }).catch(() => {});
+    const jaControlado = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (jaControlado) document.getElementById("avisoAtualizacaoApp").hidden = false;
+    });
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
+      .then(reg => reg.update())
+      .catch(() => {});
   }
 }
 

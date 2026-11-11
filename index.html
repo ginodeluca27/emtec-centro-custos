@@ -534,6 +534,12 @@
   <!-- MAIN WORKSPACE -->
   <!-- ===================================================================== -->
   <main class="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-3 pb-24 sm:py-6 flex-1 space-y-4 sm:space-y-6">
+    <div id="avisoAtualizacaoApp" class="aviso-custo no-print" hidden>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span role="status">Nova versão disponível. Salve o que estiver preenchendo antes de atualizar.</span>
+        <button type="button" class="ed-btn--navy px-3 py-2 text-xs" onclick="location.reload()">Atualizar aplicativo</button>
+      </div>
+    </div>
 
     <!-- =================================================================== -->
     <!-- HERO EXECUTIVE PANEL (DESKTOP) -->
@@ -1910,6 +1916,6 @@
   <div id="relatorioImpressaoA4" class="p-6 max-w-4xl mx-auto text-[#0F172A] space-y-6"></div>
 
   <!-- SCRIPTS -->
-  <script src="app.js"></script>
+  <script src="/app.js?v=19"></script>
 </body>
 </html>

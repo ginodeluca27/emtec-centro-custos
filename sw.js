@@ -1,10 +1,10 @@
 // Service worker: deixa o app abrir sem internet (canteiro de obra).
 // Estratégia: rede primeiro, cópia guardada como reserva. /api/* nunca é guardado.
-const VERSAO = "emtec-v18";
+const VERSAO = "emtec-v19";
 const ARQUIVOS = [
   "/",
   "/index.html",
-  "/app.js",
+  "/app.js?v=19",
   "/styles.css",
   "/logo-emtec.png",
   "/favicon-emtec.png",
@@ -14,14 +14,16 @@ const ARQUIVOS = [
 
 self.addEventListener("install", (ev) => {
   ev.waitUntil(
-    caches.open(VERSAO).then((c) => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())
+    caches.open(VERSAO)
+      .then(cache => cache.addAll(ARQUIVOS.map(url => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (ev) => {
   ev.waitUntil(
     caches.keys()
-      .then((nomes) => Promise.all(nomes.filter((n) => n !== VERSAO).map((n) => caches.delete(n))))
+      .then(nomes => Promise.all(nomes.filter(n => n.startsWith("emtec-v") && n !== VERSAO).map(n => caches.delete(n))))
       .then(() => self.clients.claim())
   );
 });
@@ -31,17 +33,18 @@ self.addEventListener("fetch", (ev) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // fontes externas: navegador decide
-  if (url.pathname.startsWith("/api/") || url.pathname === "/data.js") return; // dados nunca passam pelo cache
+  const navegacao = req.mode === "navigate" && ["/", "/index.html"].includes(url.pathname);
+  if (!navegacao && !ARQUIVOS.includes(url.pathname + url.search)) return;
 
-  ev.respondWith(
-    fetch(req)
-      .then((resp) => {
-        if (resp && resp.ok) {
-          const copia = resp.clone();
-          caches.open(VERSAO).then((c) => c.put(req, copia));
-        }
-        return resp;
-      })
-      .catch(() => caches.match(req).then((r) => r || caches.match("/index.html")))
-  );
+  ev.respondWith((async () => {
+    const cache = await caches.open(VERSAO);
+    const chave = navegacao ? url.pathname : req;
+    try {
+      const resposta = await fetch(req, { cache: "no-store" });
+      if (resposta.ok) await cache.put(chave, resposta.clone()).catch(() => {});
+      return resposta;
+    } catch {
+      return (await cache.match(chave)) || Response.error();
+    }
+  })());
 });
