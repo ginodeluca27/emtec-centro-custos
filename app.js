@@ -7,7 +7,7 @@ const STORAGE_KEY = "EMTEC_SISTEMA_CUSTOS_V1";
 const PIN_STORAGE_KEY = "emtec_auth_pin";
 const USUARIO_STORAGE_KEY = "emtec_usuario_ativo";
 const PENDENTE_STORAGE_KEY = "EMTEC_PENDENTE_V1";
-const INTERVALO_SYNC_MS = 40000;
+const INTERVALO_MINIMO_SYNC_AO_VOLTAR_MS = 60000;
 
 let estado = carregarEstadoLocal();
 let obraAtualId = estado.obras[0]?.id || "";
@@ -138,7 +138,6 @@ async function confirmarPerfilUsuario() {
   fecharModalPerfil();
   animarEntradaApp();
   mostrarNotificacaoToast(`Conectado como ${perfilAtivo}`);
-  iniciarSincronizacaoPeriodica();
   sincronizarComNuvem();
 }
 
@@ -434,15 +433,20 @@ function atualizarBadgeNuvem(status, dataHora, detalhe = "") {
 // --------------------------------------------------------------------------
 let versaoLocal = 0;
 let novaSincronizacaoSolicitada = false;
-let intervaloSyncAtivo = null;
+let ultimaTentativaSync = -Infinity;
 
 async function sincronizarComNuvem(manual = false) {
   if (!verificarAuth()) return;
+  if (navigator.onLine === false) {
+    atualizarBadgeNuvem(temPendencia() ? "pending" : "offline");
+    return;
+  }
   if (isSincronizando) {
     novaSincronizacaoSolicitada = true;
     return;
   }
   isSincronizando = true;
+  ultimaTentativaSync = performance.now();
   novaSincronizacaoSolicitada = false;
   atualizarBadgeNuvem("syncing");
 
@@ -461,7 +465,9 @@ async function sincronizarComNuvem(manual = false) {
       return;
     }
     if (!res.ok) {
+      const falha = await res.json().catch(() => null);
       const detalhe = res.status === 409 ? "A nuvem está processando outra alteração."
+        : falha?.codigo === "ARMAZENAMENTO_INDISPONIVEL" ? "O armazenamento na nuvem está indisponível."
         : res.status === 503 ? "A nuvem demorou para responder."
           : "O servidor retornou o erro " + res.status + ".";
       atualizarBadgeNuvem("server", undefined, detalhe);
@@ -502,9 +508,10 @@ async function sincronizarComNuvem(manual = false) {
   }
 }
 
-function iniciarSincronizacaoPeriodica() {
-  if (intervaloSyncAtivo) return;
-  intervaloSyncAtivo = setInterval(sincronizarComNuvem, INTERVALO_SYNC_MS);
+function sincronizarAoVoltar() {
+  if (document.visibilityState !== "visible" || isSincronizando) return;
+  if (performance.now() - ultimaTentativaSync < INTERVALO_MINIMO_SYNC_AO_VOLTAR_MS) return;
+  sincronizarComNuvem();
 }
 
 function salvarEstado() {
@@ -4245,14 +4252,11 @@ function inicializarApp() {
   } else {
     if (temPendencia()) atualizarBadgeNuvem("pending");
     sincronizarComNuvem();
-    iniciarSincronizacaoPeriodica();
   }
 
   // Sincronizar ao voltar para o app (ex: reabrir no celular)
-  window.addEventListener("focus", () => sincronizarComNuvem());
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") sincronizarComNuvem();
-  });
+  window.addEventListener("focus", sincronizarAoVoltar);
+  document.addEventListener("visibilitychange", sincronizarAoVoltar);
 
   // Quando a internet volta, enviar o que ficou guardado no aparelho
   window.addEventListener("online", () => sincronizarComNuvem());

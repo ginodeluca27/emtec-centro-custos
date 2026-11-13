@@ -124,6 +124,9 @@ async function lerNuvem(opcoes) {
     url.searchParams.set('sync', crypto.randomUUID());
     const resposta = await fetch(url, { cache: 'no-store', signal: opcoes.abortSignal });
     const etag = resposta.headers.get('etag');
+    if (resposta.status === 403) {
+      throw Object.assign(new Error('Acesso ao Blob público bloqueado.'), { code: 'ARMAZENAMENTO_INDISPONIVEL' });
+    }
     if (!resposta.ok || !etag) throw new Error('Falha na leitura do Blob público: ' + resposta.status);
     const dados = await resposta.json();
     if (!Array.isArray(dados?.obras)) throw new Error('Base na nuvem inválida.');
@@ -218,6 +221,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido.' });
   } catch (error) {
     console.error('Erro na API /api/sync:', error);
+    if (error.code === 'ARMAZENAMENTO_INDISPONIVEL') {
+      return res.status(503).json({ error: 'O armazenamento na nuvem está indisponível.', codigo: error.code });
+    }
     return res.status(500).json({ error: 'Erro interno no servidor de sincronização.' });
   }
 }
