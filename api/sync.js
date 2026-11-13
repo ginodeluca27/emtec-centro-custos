@@ -2,6 +2,13 @@ import { get, head, list, put, BlobError, BlobPreconditionFailedError } from '@v
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 const BLOB_NAME = 'emtec-database.json';
+const REDIS_KEY = 'emtec:database:v1';
+const GRAVAR_REDIS_SE_IGUAL = `
+  local anterior = redis.call('GET', KEYS[1])
+  if (anterior or '') ~= ARGV[1] then return 0 end
+  redis.call('SET', KEYS[1], ARGV[2])
+  return 1
+`;
 // O app já tenta sincronizar novamente. Limita a espera por falhas do Blob.
 process.env.VERCEL_BLOB_RETRIES ??= '1';
 
@@ -114,6 +121,45 @@ function estavel(valor) {
   return JSON.stringify(valor);
 }
 
+function configuracaoRedis() {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+  if (!url && !token) return null;
+  if (!url || !token) throw new Error('Configuração do Redis incompleta.');
+  return { url, token };
+}
+
+async function comandoRedis({ url, token }, comando, signal) {
+  const resposta = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(comando),
+    cache: 'no-store',
+    signal
+  });
+  if (!resposta.ok) throw new Error('Falha no Redis: HTTP ' + resposta.status);
+  const json = await resposta.json();
+  if (json.error || !Object.hasOwn(json, 'result')) throw new Error('O Redis rejeitou a operação.');
+  return json.result;
+}
+
+export async function sincronizarRedis(payload, redis, signal) {
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const anterior = await comandoRedis(redis, ['GET', REDIS_KEY], signal);
+    const nuvem = anterior === null ? null : JSON.parse(anterior);
+    if (anterior !== null && !Array.isArray(nuvem?.obras)) throw new Error('Base no Redis inválida.');
+    if (!nuvem && !payload.obras.length) {
+      throw Object.assign(new Error('A base no Redis aguarda restauração.'), { code: 'ARMAZENAMENTO_INDISPONIVEL' });
+    }
+    const data = mesclarEstados(payload, nuvem);
+    if (nuvem && estavel(nuvem) === estavel(data)) return { data, gravou: false };
+    const gravou = await comandoRedis(redis,
+      ['EVAL', GRAVAR_REDIS_SE_IGUAL, 1, REDIS_KEY, anterior ?? '', JSON.stringify(data)], signal);
+    if (gravou === 1) return { data, gravou: true };
+  }
+  return null;
+}
+
 async function lerNuvem(opcoes) {
   if (opcoes.access === 'public') {
     const { blobs } = await list({ prefix: BLOB_NAME, limit: 1, token: opcoes.token, abortSignal: opcoes.abortSignal });
@@ -202,16 +248,19 @@ export default async function handler(req, res) {
 
       const controle = new AbortController();
       const limite = setTimeout(() => controle.abort(), 12000);
-      const tokenPrivado = process.env.EMTEC_BLOB_PRIVADO_TOKEN;
-      const publico = { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, abortSignal: controle.signal };
-      const opcoes = tokenPrivado ? { access: 'private', token: tokenPrivado, abortSignal: controle.signal } : publico;
       try {
-        const resultado = await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
+        const redis = configuracaoRedis();
+        const tokenPrivado = process.env.EMTEC_BLOB_PRIVADO_TOKEN;
+        const publico = { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, abortSignal: controle.signal };
+        const opcoes = tokenPrivado ? { access: 'private', token: tokenPrivado, abortSignal: controle.signal } : publico;
+        const resultado = redis
+          ? await sincronizarRedis(payload, redis, controle.signal)
+          : await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
         if (!resultado) return res.status(409).json({ error: 'A base mudou durante a sincronização. Tente novamente.', codigo: 'CONFLITO' });
         return res.status(200).json({ success: true, ...resultado, timestamp: new Date().toISOString() });
       } catch (erro) {
         if (!controle.signal.aborted) throw erro;
-        console.warn('Tempo limite ao acessar o Blob durante a sincronização.', erro.name);
+        console.warn('Tempo limite ao acessar o armazenamento durante a sincronização.', erro.name);
         return res.status(503).json({ error: 'Tempo limite na sincronização.', codigo: 'TEMPO_LIMITE' });
       } finally {
         clearTimeout(limite);
