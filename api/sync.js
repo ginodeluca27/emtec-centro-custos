@@ -1,5 +1,7 @@
 import { get, head, list, put, BlobError, BlobPreconditionFailedError } from '@vercel/blob';
 import { timingSafeEqual, createHash } from 'node:crypto';
+import { comandoRedis, configuracaoRedis } from '../lib/redis.js';
+import { lerSessao } from '../lib/sessao.js';
 
 const BLOB_NAME = 'emtec-database.json';
 const REDIS_KEY = 'emtec:database:v1';
@@ -24,7 +26,7 @@ function pinConfere(informado, esperado) {
   return timingSafeEqual(hash(informado), hashEsperado);
 }
 
-async function parseRequestBody(req) {
+export async function parseRequestBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') {
     try { return JSON.parse(req.body); } catch (e) { return null; }
@@ -121,28 +123,6 @@ function estavel(valor) {
   return JSON.stringify(valor);
 }
 
-function configuracaoRedis() {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-  if (!url && !token) return null;
-  if (!url || !token) throw new Error('Configuração do Redis incompleta.');
-  return { url, token };
-}
-
-async function comandoRedis({ url, token }, comando, signal) {
-  const resposta = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(comando),
-    cache: 'no-store',
-    signal
-  });
-  if (!resposta.ok) throw new Error('Falha no Redis: HTTP ' + resposta.status);
-  const json = await resposta.json();
-  if (json.error || !Object.hasOwn(json, 'result')) throw new Error('O Redis rejeitou a operação.');
-  return json.result;
-}
-
 export async function sincronizarRedis(payload, redis, signal) {
   for (let tentativa = 0; tentativa < 4; tentativa++) {
     const anterior = await comandoRedis(redis, ['GET', REDIS_KEY], signal);
@@ -227,17 +207,15 @@ export default async function handler(req, res) {
   // Mesma origem apenas: nenhum cabeçalho CORS aberto.
   res.setHeader('Cache-Control', 'no-store');
 
-  const pin = process.env.EMTEC_PIN;
-  if (!pinConfere(req.headers['x-emtec-pin'], pin)) {
-    // pequena espera para dificultar tentativa em massa
-    await new Promise(r => setTimeout(r, 400));
-    return res.status(401).json({ error: 'PIN de acesso incorreto.', codigo: 'PIN_INVALIDO' });
-  }
-
   try {
+    const pinValido = pinConfere(req.headers['x-emtec-pin'], process.env.EMTEC_PIN);
+    const sessao = await lerSessao(req);
+    if (!pinValido && !sessao) {
+      await new Promise(r => setTimeout(r, 400));
+      return res.status(401).json({ error: 'Entre novamente para sincronizar.', codigo: 'ACESSO_INVALIDO' });
+    }
     if (req.method === 'GET') {
-      // Apenas verifica o PIN (usado na tela de entrada); não expõe dados.
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, perfil: sessao });
     }
 
     if (req.method === 'POST') {
@@ -257,7 +235,7 @@ export default async function handler(req, res) {
           ? await sincronizarRedis(payload, redis, controle.signal)
           : await sincronizarEstado(payload, opcoes, tokenPrivado && publico.token ? publico : null);
         if (!resultado) return res.status(409).json({ error: 'A base mudou durante a sincronização. Tente novamente.', codigo: 'CONFLITO' });
-        return res.status(200).json({ success: true, ...resultado, timestamp: new Date().toISOString() });
+        return res.status(200).json({ success: true, ...resultado, perfil: sessao, timestamp: new Date().toISOString() });
       } catch (erro) {
         if (!controle.signal.aborted) throw erro;
         console.warn('Tempo limite ao acessar o armazenamento durante a sincronização.', erro.name);

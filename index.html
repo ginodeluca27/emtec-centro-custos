@@ -460,17 +460,17 @@
   <!-- ===================================================================== -->
   <!-- MODAL DE IDENTIFICAÇÃO / LOGIN SIMPLES (MELO / PILAR) -->
   <!-- ===================================================================== -->
-  <div id="modalPerfilUsuario" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 border border-[#CBD5E1] shadow-2xl">
+  <div id="modalPerfilUsuario" role="dialog" aria-modal="true" aria-labelledby="tituloAcesso" class="fixed inset-0 bg-[#0F172A]/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 border border-[#CBD5E1] shadow-2xl" style="max-height:calc(100dvh - 2rem);overflow:auto">
       <div class="flex items-center justify-center pt-1">
         <img src="/logo-emtec.png" alt="EMTEC Obras" class="h-10 sm:h-11 w-auto object-contain select-none" />
       </div>
       <div>
-        <h3 class="font-display text-lg font-extrabold text-[#23396B]">Quem está acessando?</h3>
-        <p class="text-xs text-[#64748B] mt-0.5">Selecione para vincular despesas e reembolsos automaticamente</p>
+        <h3 id="tituloAcesso" class="font-display text-lg font-extrabold text-[#23396B]">Entre na EMTEC</h3>
+        <p id="textoAcesso" class="text-xs text-[#64748B] mt-0.5">Escolha seu perfil e digite sua senha.</p>
       </div>
       
-      <div class="grid grid-cols-2 gap-3 pt-1">
+      <div id="perfisAcesso" class="grid grid-cols-2 gap-3 pt-1">
         <button type="button" onclick="selecionarPerfilCard('Pilar')" id="cardPerfilPilar"
           class="p-3.5 rounded-2xl border-2 border-[#FF8C00] bg-[#FF8C00]/10 flex flex-col items-center gap-1 transition">
           <span class="w-9 h-9 rounded-full bg-[#FF8C00] text-[#0F172A] flex items-center justify-center font-extrabold text-sm">P</span>
@@ -487,14 +487,20 @@
       </div>
 
       <div class="pt-1 text-left space-y-1.5">
-        <label for="inputPinPerfil" class="block text-xs font-bold text-[#64748B] uppercase tracking-wider">PIN de acesso</label>
-        <input type="password" id="inputPinPerfil" maxlength="12" inputmode="numeric" autocomplete="current-password" placeholder="Digite o PIN" value=""
+        <label id="labelSenhaAcesso" for="inputPinPerfil" class="block text-xs font-bold text-[#64748B] uppercase tracking-wider">Sua senha</label>
+        <input type="password" id="inputPinPerfil" maxlength="128" autocomplete="current-password" placeholder="Digite sua senha" value=""
           onkeydown="if(event.key==='Enter'){confirmarPerfilUsuario();}"
-          class="w-full text-center tracking-[0.3em] text-lg font-extrabold rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
+          class="w-full px-3 text-base rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
+        <div id="confirmarSenhaAcesso" class="hidden space-y-1.5">
+          <label for="inputConfirmarSenha" class="block text-xs font-bold text-[#64748B] uppercase tracking-wider">Confirme a senha</label>
+          <input type="password" id="inputConfirmarSenha" maxlength="128" autocomplete="new-password"
+            onkeydown="if(event.key==='Enter'){confirmarPerfilUsuario();}"
+            class="w-full px-3 text-base rounded-xl border border-[#CBD5E1] py-2 bg-[#F8FAFC] text-[#23396B] focus:border-[#4395D8] focus:outline-none" />
+        </div>
         <p id="erroPinPerfil" class="hidden text-xs text-rose-600 font-bold text-center" role="alert">PIN incorreto.</p>
       </div>
 
-      <label class="flex items-center justify-center gap-2 text-xs text-[#475569] cursor-pointer">
+      <label id="lembrarAcesso" class="flex items-center justify-center gap-2 text-xs text-[#475569] cursor-pointer">
         <input type="checkbox" id="checkLembrarPerfil" checked class="rounded border-slate-300 text-[#FF8C00]" />
         <span>Lembrar neste aparelho</span>
       </label>
@@ -502,6 +508,15 @@
       <button id="btnEntrarPerfil" onclick="confirmarPerfilUsuario()" class="ed-btn w-full py-2.5 text-sm font-extrabold shadow-md">
         Entrar no Sistema
       </button>
+      <button type="button" id="btnModoLegado" onclick="alternarAcessoLegado()" class="w-full text-xs font-bold text-[#475569] py-2">Entrar com o PIN antigo</button>
+      <button type="button" id="btnSairPerfil" onclick="sairDoAparelho()" class="hidden w-full text-xs font-bold text-[#475569] py-2">Sair deste aparelho</button>
+      <div id="adminConvites" class="hidden text-left space-y-2 border-t border-slate-200 pt-3">
+        <label for="perfilConvite" class="block text-xs font-bold">Convite ou recuperação de senha</label>
+        <select id="perfilConvite" class="w-full rounded-xl border border-slate-200 p-2 text-sm"><option>Melo</option><option>Pilar</option></select>
+        <button type="button" class="ed-btn-secondary w-full py-2 text-sm" onclick="gerarConvite(this)">Gerar link de uso único</button>
+        <input id="linkConvite" class="hidden w-full rounded-xl border border-slate-200 p-2 text-sm" readonly aria-label="Link do convite" onclick="this.select()" />
+        <button type="button" id="copiarLinkConvite" class="hidden w-full text-sm font-bold text-[#23396B] py-2" onclick="copiarConvite()">Copiar link</button>
+      </div>
       <button type="button" id="btnFecharPerfil" onclick="fecharModalPerfil()" class="hidden w-full text-xs font-bold text-[#64748B] py-1.5">Cancelar</button>
     </div>
   </div>
@@ -1968,6 +1983,6 @@
   <div id="relatorioImpressaoA4" class="p-6 max-w-4xl mx-auto text-[#0F172A] space-y-6"></div>
 
   <!-- SCRIPTS -->
-  <script src="/app.js?v=21"></script>
+  <script src="/app.js?v=22"></script>
 </body>
 </html>

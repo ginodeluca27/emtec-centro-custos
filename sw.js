@@ -1,10 +1,10 @@
 // Service worker: deixa o app abrir sem internet (canteiro de obra).
 // Estratégia: rede primeiro, cópia guardada como reserva. /api/* nunca é guardado.
-const VERSAO = "emtec-v21";
+const VERSAO = "emtec-v22";
 const ARQUIVOS = [
   "/",
   "/index.html",
-  "/app.js?v=21",
+  "/app.js?v=22",
   "/styles.css",
   "/logo-emtec.png",
   "/favicon-emtec.png",

@@ -4,6 +4,15 @@
 // ==========================================================================
 
 const STORAGE_KEY = "EMTEC_SISTEMA_CUSTOS_V1";
+const SESSAO_PERFIL_KEY = "emtec_sessao_perfil";
+const parametrosAcesso = new URLSearchParams(location.hash.slice(1));
+let conviteAcesso = parametrosAcesso.get("convite");
+const entradaAdmin = location.hash === "#administrador";
+window.addEventListener("hashchange", () => {
+  const hash = location.hash;
+  if (hash === "#administrador" || new URLSearchParams(hash.slice(1)).has("convite")) location.reload();
+});
+let acessoLegado = false;
 const PIN_STORAGE_KEY = "emtec_auth_pin";
 const USUARIO_STORAGE_KEY = "emtec_usuario_ativo";
 const PENDENTE_STORAGE_KEY = "EMTEC_PENDENTE_V1";
@@ -29,8 +38,8 @@ function carregarPerfilUsuario() {
 
   if (nomePill) nomePill.textContent = perfilAtivo;
   if (avatarPill) {
-    if (perfilAtivo === "Melo") {
-      avatarPill.textContent = "M";
+    if (perfilAtivo === "Melo" || perfilAtivo === "Administrador") {
+      avatarPill.textContent = perfilAtivo[0];
       avatarPill.className = "w-5 h-5 rounded-full bg-[#23396B] text-white font-extrabold text-xs flex items-center justify-center";
     } else {
       avatarPill.textContent = "P";
@@ -44,7 +53,9 @@ function abrirModalPerfil() {
   if (!m) return;
   m.classList.remove("hidden");
   m.classList.add("flex");
-  selecionarPerfilCard(perfilAtivo);
+  const perfilConvite = parametrosAcesso.get("perfil");
+  selecionarPerfilCard(conviteAcesso && ["Melo", "Pilar"].includes(perfilConvite) ? perfilConvite : perfilAtivo === "Melo" ? "Melo" : "Pilar");
+  configurarAcesso();
   const err = document.getElementById("erroPinPerfil");
   if (err) err.classList.add("hidden");
   const btnFechar = document.getElementById("btnFecharPerfil");
@@ -88,57 +99,133 @@ function animarEntradaApp() {
   painel.addEventListener("animationend", () => painel.classList.remove("entrada-app"), { once: true });
 }
 
-async function confirmarPerfilUsuario() {
-  const pinInput = document.getElementById("inputPinPerfil");
-  const pinVal = (pinInput?.value || "").trim();
-  const erroMsg = document.getElementById("erroPinPerfil");
-  const checkLembrar = document.getElementById("checkLembrarPerfil");
-  const btn = document.getElementById("btnEntrarPerfil");
+function perfilDaSessao() {
+  return sessionStorage.getItem(SESSAO_PERFIL_KEY) || localStorage.getItem(SESSAO_PERFIL_KEY);
+}
 
-  const mostrarErro = (txt) => {
-    if (erroMsg) {
-      erroMsg.textContent = txt;
-      erroMsg.classList.remove("hidden");
-    }
-  };
+function configurarAcesso() {
+  const admin = entradaAdmin || perfilDaSessao() === "Administrador";
+  const cadastrando = !!conviteAcesso;
+  const input = document.getElementById("inputPinPerfil");
+  document.getElementById("tituloAcesso").textContent = cadastrando ? "Crie sua senha, " + perfilSelecionadoNoModal
+    : admin ? "Acesso administrativo" : "Entre na EMTEC";
+  document.getElementById("textoAcesso").textContent = cadastrando ? "Use pelo menos 8 caracteres."
+    : admin ? "Use sua senha de administrador." : acessoLegado ? "Selecione seu perfil e digite o PIN antigo." : "Escolha seu perfil e digite sua senha.";
+  document.getElementById("perfisAcesso").classList.toggle("hidden", admin || cadastrando);
+  document.getElementById("lembrarAcesso").classList.toggle("hidden", cadastrando);
+  document.getElementById("btnModoLegado").classList.toggle("hidden", admin || cadastrando);
+  document.getElementById("btnModoLegado").textContent = acessoLegado ? "Entrar com minha senha" : "Entrar com o PIN antigo";
+  document.getElementById("adminConvites").classList.toggle("hidden", cadastrando || perfilDaSessao() !== "Administrador");
+  document.getElementById("btnSairPerfil").classList.toggle("hidden", cadastrando || !verificarAuth());
+  document.getElementById("btnEntrarPerfil").textContent = cadastrando ? "Criar minha senha" : "Entrar";
+  document.getElementById("labelSenhaAcesso").textContent = acessoLegado ? "PIN de acesso" : cadastrando ? "Nova senha" : "Sua senha";
+  document.getElementById("confirmarSenhaAcesso").classList.toggle("hidden", !cadastrando);
+  input.autocomplete = cadastrando ? "new-password" : "current-password";
+  input.placeholder = acessoLegado ? "Digite o PIN" : "Digite sua senha";
+  input.inputMode = acessoLegado ? "numeric" : "text";
+}
 
-  if (!pinVal) {
-    mostrarErro("Digite o PIN de acesso.");
-    pinInput?.focus();
-    return;
-  }
+function alternarAcessoLegado() {
+  acessoLegado = !acessoLegado;
+  document.getElementById("inputPinPerfil").value = "";
+  document.getElementById("erroPinPerfil").classList.add("hidden");
+  configurarAcesso();
+}
 
-  if (btn) btn.disabled = true;
+async function pedirAcesso(dados) {
+  const resposta = await fetch("/api/acesso", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados)
+  });
+  const json = await resposta.json();
+  if (!resposta.ok) throw new Error(json.error);
+  return json;
+}
+
+async function gerarConvite(botao) {
+  botao.disabled = true;
+  const campo = document.getElementById("linkConvite");
+  const copiar = document.getElementById("copiarLinkConvite");
+  campo.classList.add("hidden");
+  copiar.classList.add("hidden");
   try {
-    // Quem confere o PIN é o servidor (a resposta correta não existe no navegador)
-    const res = await fetch("/api/sync", { headers: { "x-emtec-pin": pinVal }, cache: "no-store" });
-    if (res.status === 503) {
-      mostrarErro("O sistema ainda não tem PIN configurado no servidor. Avise o responsável.");
-      return;
-    }
-    if (!res.ok) {
-      mostrarErro("PIN incorreto. Tente novamente.");
-      if (pinInput) pinInput.value = "";
-      return;
-    }
-  } catch (e) {
-    mostrarErro("Sem conexão para conferir o PIN. Conecte-se à internet na primeira entrada.");
-    return;
+    const perfil = document.getElementById("perfilConvite").value;
+    const { convite } = await pedirAcesso({ acao: "convidar", perfil });
+    campo.value = location.origin + "/#" + new URLSearchParams({ convite, perfil });
+    campo.classList.remove("hidden");
+    copiar.classList.remove("hidden");
+    campo.select();
+    mostrarNotificacaoToast("Link criado. Envie apenas para " + perfil + ".");
+  } catch (erro) {
+    mostrarNotificacaoToast(erro.message || "Não foi possível criar o link.");
   } finally {
-    if (btn) btn.disabled = false;
+    botao.disabled = false;
   }
+}
 
-  perfilAtivo = perfilSelecionadoNoModal;
-  localStorage.setItem(USUARIO_STORAGE_KEY, perfilAtivo);
-  salvarPinNoAparelho(pinVal, !!(checkLembrar && checkLembrar.checked));
-  if (pinInput) pinInput.value = "";
-  if (erroMsg) erroMsg.classList.add("hidden");
+async function copiarConvite() {
+  const campo = document.getElementById("linkConvite");
+  try {
+    await navigator.clipboard.writeText(campo.value);
+    mostrarNotificacaoToast("Link copiado.");
+  } catch {
+    campo.select();
+  }
+}
 
-  carregarPerfilUsuario();
-  fecharModalPerfil();
-  animarEntradaApp();
-  mostrarNotificacaoToast(`Conectado como ${perfilAtivo}`);
-  sincronizarComNuvem();
+async function confirmarPerfilUsuario() {
+  const input = document.getElementById("inputPinPerfil");
+  const erro = document.getElementById("erroPinPerfil");
+  const botao = document.getElementById("btnEntrarPerfil");
+  if (botao.disabled) return;
+  const senha = input.value;
+  const confirmacao = document.getElementById("inputConfirmarSenha");
+  const lembrar = document.getElementById("checkLembrarPerfil").checked;
+  const perfil = !conviteAcesso && (entradaAdmin || perfilDaSessao() === "Administrador")
+    ? "Administrador" : perfilSelecionadoNoModal;
+  botao.disabled = true;
+  erro.classList.add("hidden");
+  try {
+    if (!senha) throw new Error("Digite sua senha.");
+    if (conviteAcesso) {
+      if (senha !== confirmacao.value) throw new Error("As senhas precisam ser iguais.");
+      await pedirAcesso({ acao: "cadastrar", perfil, senha, token: conviteAcesso });
+      confirmacao.value = "";
+      conviteAcesso = null;
+      history.replaceState(null, "", location.pathname + location.search);
+      configurarAcesso();
+      mostrarNotificacaoToast("Senha criada. Entre com sua nova senha.");
+      input.value = "";
+      input.focus();
+      return;
+    }
+
+    if (acessoLegado) {
+      const res = await fetch("/api/sync", { headers: { "x-emtec-pin": senha.trim() }, credentials: "omit", cache: "no-store" });
+      if (!res.ok) throw new Error(res.status === 401 ? "PIN incorreto." : "Não foi possível conferir o PIN agora.");
+      if (perfilDaSessao()) await pedirAcesso({ acao: "sair" });
+      limparSessaoLocal();
+      salvarPinNoAparelho(senha.trim(), lembrar);
+    } else {
+      await pedirAcesso({ acao: "entrar", perfil, senha, lembrar });
+      limparSessaoLocal();
+      (lembrar ? localStorage : sessionStorage).setItem(SESSAO_PERFIL_KEY, perfil);
+    }
+
+    localStorage.setItem(USUARIO_STORAGE_KEY, perfil);
+    carregarPerfilUsuario();
+    fecharModalPerfil();
+    animarEntradaApp();
+    mostrarNotificacaoToast("Conectado como " + perfil);
+    sincronizarComNuvem();
+  } catch (falha) {
+    erro.textContent = falha instanceof TypeError ? "Conecte-se à internet para entrar." : falha.message;
+    erro.classList.remove("hidden");
+  } finally {
+    if (!conviteAcesso) input.value = "";
+    botao.disabled = false;
+  }
 }
 
 function salvarPinNoAparelho(pin, lembrar) {
@@ -148,7 +235,7 @@ function salvarPinNoAparelho(pin, lembrar) {
 }
 
 function verificarAuth() {
-  return !!getPinAtual();
+  return !conviteAcesso && !!(getPinAtual() || perfilDaSessao());
 }
 
 function exigirLogin(mensagem) {
@@ -177,11 +264,26 @@ function logout() {
   }
 }
 
-function sairDoAparelho() {
-  if (!confirm("Sair deste aparelho? O PIN será esquecido e será pedido de novo. As despesas continuam salvas.")) return;
-  localStorage.removeItem(PIN_STORAGE_KEY);
-  sessionStorage.removeItem(PIN_STORAGE_KEY);
-  exigirLogin();
+function limparSessaoLocal() {
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem(PIN_STORAGE_KEY);
+    storage.removeItem(SESSAO_PERFIL_KEY);
+  }
+}
+
+async function sairDoAparelho() {
+  if (!confirm("Sair deste aparelho? Os lançamentos locais continuarão guardados.")) return;
+  try {
+    if (perfilDaSessao()) await pedirAcesso({ acao: "sair" });
+    limparSessaoLocal();
+    const link = document.getElementById("linkConvite");
+    link.value = "";
+    link.classList.add("hidden");
+    document.getElementById("copiarLinkConvite").classList.add("hidden");
+    exigirLogin();
+  } catch {
+    mostrarNotificacaoToast("Conecte-se à internet para sair.");
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -393,7 +495,7 @@ function atualizarBadgeNuvem(status, dataHora, detalhe = "") {
     horaHtml = [detalhe || "O servidor não concluiu o envio.", temPendencia() ? "Dados salvos no aparelho." : ""].filter(Boolean).join(" ");
     mobHoraHtml = temPendencia() ? "Salvo no aparelho" : "Toque para tentar de novo";
   } else if (status === "auth") {
-    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">PIN inválido</span>`;
+    statusHtml = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="font-bold text-rose-600">Entre novamente</span>`;
     mobStatusHtml = statusHtml;
     horaHtml = "Entre novamente para sincronizar";
     mobHoraHtml = "Toque para entrar";
@@ -461,7 +563,8 @@ async function sincronizarComNuvem(manual = false) {
 
     if (res.status === 401) {
       atualizarBadgeNuvem("auth");
-      exigirLogin("PIN não confere mais. Digite o PIN novamente.");
+      limparSessaoLocal();
+      exigirLogin("Seu acesso precisa ser confirmado. Entre novamente.");
       return;
     }
     if (!res.ok) {
